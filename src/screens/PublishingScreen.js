@@ -1,4 +1,5 @@
 // src/screens/PublishingScreen.js
+// Path: src/screens/PublishingScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView, TextInput } from 'react-native';
 import { MobilePublishingService } from '../services/publishing/MobilePublishingService';
@@ -23,12 +24,28 @@ export const PublishingScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [publishingStats, setPublishingStats] = useState(null);
   const [walletStatus, setWalletStatus] = useState('unknown'); // 'none', 'locked', 'unlocked', 'migrating'
+  const [isRequestingAirdrop, setIsRequestingAirdrop] = useState(false);
   
   const airdropService = new SolanaAirdropService();
   
   useEffect(() => {
     initializeServices();
   }, []);
+  
+  // Auto-refresh balance when wallet is unlocked
+  useEffect(() => {
+    if (walletStatus === 'unlocked' && walletService) {
+      const interval = setInterval(async () => {
+        try {
+          await loadWalletInfo(walletService);
+        } catch (error) {
+          console.log('Error refreshing balance:', error);
+        }
+      }, 5000); // Refresh every 5 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [walletStatus, walletService]);
   
   const initializeServices = async () => {
     try {
@@ -255,7 +272,12 @@ export const PublishingScreen = () => {
       return;
     }
     
+    if (isRequestingAirdrop) {
+      return; // Prevent multiple simultaneous requests
+    }
+    
     try {
+      setIsRequestingAirdrop(true);
       const keypair = walletService.getWalletKeypair();
       
       Alert.alert(
@@ -266,16 +288,31 @@ export const PublishingScreen = () => {
           { text: 'Request', onPress: async () => {
             try {
               await airdropService.requestAirdrop(keypair.publicKey, 1);
-              await loadWalletInfo(walletService);
-              Alert.alert('Success!', 'Airdrop requested successfully!');
+              
+              // Wait a bit for the airdrop to be confirmed on chain
+              Alert.alert('⏳ Processing', 'Waiting for airdrop confirmation...');
+              
+              // Try to refresh balance after delays
+              setTimeout(async () => {
+                await loadWalletInfo(walletService);
+              }, 2000);
+              
+              setTimeout(async () => {
+                await loadWalletInfo(walletService);
+                Alert.alert('Success!', 'Airdrop completed! Balance should update shortly.');
+              }, 5000);
+              
             } catch (error) {
               Alert.alert('Error', 'Airdrop failed: ' + error.message);
+            } finally {
+              setIsRequestingAirdrop(false);
             }
           }}
         ]
       );
     } catch (error) {
       Alert.alert('Error', 'Failed to request airdrop: ' + error.message);
+      setIsRequestingAirdrop(false);
     }
   };
   
@@ -353,7 +390,7 @@ export const PublishingScreen = () => {
         Alert.alert(
           '⚠️ Partial Success',
           `Published ${result.successfulGlyphs}/${result.totalGlyphs} glyphs. ` +
-          `${result.failedGlyphs} failed. You can retry publishing the failed glyphs later.`,
+          `${result.failedGlyphs} failed. You can retry the failed glyphs later.`,
           [{ text: 'OK', onPress: () => refreshContent() }]
         );
       } else {
@@ -448,10 +485,16 @@ export const PublishingScreen = () => {
           </Text>
           
           <TouchableOpacity 
-            style={publishingStyles.airdropButton}
+            style={[
+              publishingStyles.airdropButton,
+              isRequestingAirdrop && publishingStyles.airdropButtonDisabled
+            ]}
             onPress={handleRequestAirdrop}
+            disabled={isRequestingAirdrop}
           >
-            <Text style={publishingStyles.airdropButtonText}>🎁 Request 1 SOL</Text>
+            <Text style={publishingStyles.airdropButtonText}>
+              {isRequestingAirdrop ? '⏳ Requesting...' : '🎁 Request 1 SOL'}
+            </Text>
           </TouchableOpacity>
         </View>
       );
@@ -486,48 +529,33 @@ export const PublishingScreen = () => {
         </Text>
         
         {showWalletUnlock ? (
-          <View style={publishingStyles.unlockSection}>
+          <View style={publishingStyles.passwordContainer}>
             <TextInput
               style={publishingStyles.passwordInput}
-              placeholder="Enter password (minimum 6 characters)"
+              placeholder="Enter password..."
               secureTextEntry
               value={password}
               onChangeText={setPassword}
-              autoFocus
+              autoCapitalize="none"
             />
-            
-            <View style={publishingStyles.unlockButtonRow}>
-              <TouchableOpacity 
-                style={[publishingStyles.cancelButton]}
-                onPress={() => {
-                  setShowWalletUnlock(false);
-                  setPassword('');
-                }}
-              >
-                <Text style={publishingStyles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  publishingStyles.unlockButton,
-                  (!password || password.length < 6) && publishingStyles.unlockButtonDisabled
-                ]}
-                onPress={handleWalletAction}
-                disabled={!password || password.length < 6 || isLoading}
-              >
-                <Text style={publishingStyles.unlockButtonText}>
-                  {isLoading ? '⏳ Working...' : walletStatus === 'none' ? '🔐 Create' : '🔓 Unlock'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={publishingStyles.unlockButton}
+              onPress={handleWalletAction}
+              disabled={isLoading}
+            >
+              <Text style={publishingStyles.unlockButtonText}>
+                {isLoading ? '⏳ Processing...' : 
+                 walletStatus === 'none' ? '🔓 Create Wallet' : '🔓 Unlock'}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity 
-            style={publishingStyles.showUnlockButton}
+            style={publishingStyles.unlockButton}
             onPress={() => setShowWalletUnlock(true)}
           >
-            <Text style={publishingStyles.showUnlockButtonText}>
-              {walletStatus === 'none' ? '🔐 Create Wallet' : '🔓 Unlock Wallet'}
+            <Text style={publishingStyles.unlockButtonText}>
+              {walletStatus === 'none' ? '➕ Create New Wallet' : '🔓 Enter Password'}
             </Text>
           </TouchableOpacity>
         )}
@@ -536,70 +564,37 @@ export const PublishingScreen = () => {
   };
   
   const renderProgressBar = () => {
-    if (!progress) return null;
+    if (!publishing || !progress) return null;
     
     return (
       <View style={publishingStyles.progressContainer}>
         <Text style={publishingStyles.progressTitle}>
-          {progress.stage === 'preparing' && '🔄 Preparing...'}
-          {progress.stage === 'processing' && '⚙️ Processing Content...'}
-          {progress.stage === 'publishing' && '📤 Publishing Glyphs...'}
-          {progress.stage === 'completed' && '✅ Complete!'}
-          {progress.stage === 'failed' && '❌ Failed'}
-          {progress.stage === 'partial' && '⚠️ Partial Success'}
+          {progress.stage === 'preparing' && '📋 Preparing content...'}
+          {progress.stage === 'processing' && '🔄 Processing glyphs...'}
+          {progress.stage === 'publishing' && `📤 Publishing glyph ${progress.currentGlyph}/${progress.totalGlyphs}...`}
+          {progress.stage === 'completed' && '✅ Publishing complete!'}
+          {progress.stage === 'failed' && '❌ Publishing failed'}
         </Text>
         
-        {progress.totalGlyphs > 0 && (
-          <>
-            <View style={publishingStyles.progressBarContainer}>
-              <View 
-                style={[
-                  publishingStyles.progressBar, 
-                  { width: `${progress.progress}%` }
-                ]} 
-              />
-            </View>
-            
-            <Text style={publishingStyles.progressText}>
-              Glyph {progress.currentGlyph}/{progress.totalGlyphs} ({progress.progress}%)
-            </Text>
-            
-            {progress.successfulGlyphs > 0 && (
-              <Text style={publishingStyles.successText}>
-                ✅ {progress.successfulGlyphs} published
-              </Text>
-            )}
-            
-            {progress.failedGlyphs > 0 && (
-              <Text style={publishingStyles.errorText}>
-                ❌ {progress.failedGlyphs} failed
-              </Text>
-            )}
-          </>
-        )}
+        <View style={publishingStyles.progressBar}>
+          <View 
+            style={[
+              publishingStyles.progressFill,
+              { width: `${progress.progress}%` }
+            ]}
+          />
+        </View>
         
-        {progress.error && (
-          <Text style={publishingStyles.errorText}>{progress.error}</Text>
+        <Text style={publishingStyles.progressText}>
+          {progress.progress}% Complete
+        </Text>
+        
+        {progress.compressionStats && (
+          <Text style={publishingStyles.compressionText}>
+            💾 Compressed {progress.compressionStats.percentSaved}% 
+            ({progress.compressionStats.spaceSaved} bytes saved)
+          </Text>
         )}
-      </View>
-    );
-  };
-  
-  const renderStats = () => {
-    if (!publishingStats) return null;
-    
-    return (
-      <View style={publishingStyles.statsContainer}>
-        <Text style={publishingStyles.statsTitle}>📊 Publishing Statistics</Text>
-        <Text style={publishingStyles.statsText}>
-          Published: {publishingStats.totalPublished} | 
-          In Progress: {publishingStats.totalInProgress} | 
-          Drafts: {publishingStats.totalDrafts}
-        </Text>
-        <Text style={publishingStyles.statsText}>
-          Total Glyphs: {publishingStats.totalGlyphsPublished} | 
-          Transactions: {publishingStats.totalTransactions}
-        </Text>
       </View>
     );
   };
@@ -607,25 +602,22 @@ export const PublishingScreen = () => {
   if (isLoading) {
     return (
       <View style={publishingStyles.loadingContainer}>
-        <Text style={publishingStyles.loadingText}>🔄 Initializing...</Text>
+        <Text style={publishingStyles.loadingText}>⏳ Loading...</Text>
       </View>
     );
   }
   
   return (
     <ScrollView style={publishingStyles.container}>
-      <Text style={publishingStyles.title}>📖 Glyffiti Publishing</Text>
+      <Text style={publishingStyles.header}>📜 Glyffiti Publishing</Text>
       
       {/* Wallet Section */}
       {renderWalletSection()}
       
-      {/* Publishing Statistics */}
-      {renderStats()}
-      
-      {/* Publish Button */}
+      {/* Main Publish Button */}
       <TouchableOpacity 
         style={[
-          publishingStyles.publishButton, 
+          publishingStyles.publishButton,
           (publishing || walletStatus !== 'unlocked') && publishingStyles.publishButtonDisabled
         ]}
         onPress={handlePickAndPublish}
@@ -668,9 +660,23 @@ export const PublishingScreen = () => {
                 disabled={publishing || walletStatus !== 'unlocked'}
               >
                 <Text style={publishingStyles.resumeButtonText}>
-                  {walletStatus !== 'unlocked' ? '🔒 Unlock to Resume' : '▶️ Resume'}
+                  {walletStatus !== 'unlocked' ? '🔒 Unlock to Resume' : '▶️ Resume Publishing'}
                 </Text>
               </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+      
+      {drafts.length > 0 && (
+        <View style={publishingStyles.section}>
+          <Text style={publishingStyles.sectionTitle}>📝 Drafts ({drafts.length})</Text>
+          {drafts.map((draft, index) => (
+            <View key={index} style={publishingStyles.contentItem}>
+              <Text style={publishingStyles.contentTitle}>{draft.title}</Text>
+              <Text style={publishingStyles.contentMeta}>
+                {draft.content.length} characters
+              </Text>
             </View>
           ))}
         </View>
@@ -679,42 +685,41 @@ export const PublishingScreen = () => {
       {publishedContent.length > 0 && (
         <View style={publishingStyles.section}>
           <Text style={publishingStyles.sectionTitle}>✅ Published ({publishedContent.length})</Text>
-          {publishedContent.slice(0, 5).map((item, index) => (
+          {publishedContent.map((item, index) => (
             <View key={index} style={publishingStyles.contentItem}>
               <Text style={publishingStyles.contentTitle}>{item.title}</Text>
               <Text style={publishingStyles.contentMeta}>
-                {item.totalGlyphs} glyphs • {new Date(item.publishedAt).toLocaleDateString()}
+                {item.glyphs?.length || 0} glyphs • {item.transactionIds?.length || 0} transactions
               </Text>
+              {item.scrollId && (
+                <Text style={publishingStyles.scrollId}>
+                  Scroll: {item.scrollId.slice(0, 8)}...
+                </Text>
+              )}
             </View>
           ))}
-          {publishedContent.length > 5 && (
-            <Text style={publishingStyles.moreText}>
-              ... and {publishedContent.length - 5} more
-            </Text>
-          )}
         </View>
       )}
       
-      {drafts.length > 0 && (
-        <View style={publishingStyles.section}>
-          <Text style={publishingStyles.sectionTitle}>📝 Drafts ({drafts.length})</Text>
-          {drafts.slice(0, 3).map((item, index) => (
-            <View key={index} style={publishingStyles.contentItem}>
-              <Text style={publishingStyles.contentTitle}>{item.title}</Text>
-              <Text style={publishingStyles.contentMeta}>
-                {item.content.length} characters • {new Date(item.timestamp).toLocaleDateString()}
-              </Text>
-            </View>
-          ))}
-          {drafts.length > 3 && (
-            <Text style={publishingStyles.moreText}>
-              ... and {drafts.length - 3} more
-            </Text>
-          )}
+      {publishingStats && (
+        <View style={publishingStyles.statsContainer}>
+          <Text style={publishingStyles.statsTitle}>📊 Publishing Statistics</Text>
+          <Text style={publishingStyles.statsText}>
+            Total Published: {publishingStats.totalPublished}
+          </Text>
+          <Text style={publishingStyles.statsText}>
+            Total Glyphs: {publishingStats.totalGlyphs}
+          </Text>
+          <Text style={publishingStyles.statsText}>
+            Success Rate: {publishingStats.successRate}%
+          </Text>
+          <Text style={publishingStyles.statsText}>
+            Total Cost: {publishingStats.totalCost.toFixed(6)} SOL
+          </Text>
         </View>
       )}
     </ScrollView>
   );
 };
 
-// Character count: 18493
+// Character count: 22851

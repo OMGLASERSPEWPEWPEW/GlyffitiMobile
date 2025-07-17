@@ -1,5 +1,44 @@
 // src/services/wallet/BaseWallet.js
-import { EventEmitter } from 'events';
+// Path: src/services/wallet/BaseWallet.js
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+
+// Create a simple EventEmitter for React Native that mimics Node.js EventEmitter
+class SimpleEventEmitter {
+  constructor() {
+    this.events = {};
+  }
+
+  on(event, listener) {
+    if (!this.events[event]) {
+      this.events[event] = [];
+    }
+    this.events[event].push(listener);
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (!this.events[event]) return false;
+    this.events[event].forEach(listener => {
+      listener(...args);
+    });
+    return true;
+  }
+
+  removeListener(event, listenerToRemove) {
+    if (!this.events[event]) return this;
+    this.events[event] = this.events[event].filter(listener => listener !== listenerToRemove);
+    return this;
+  }
+
+  removeAllListeners(event) {
+    if (event) {
+      delete this.events[event];
+    } else {
+      this.events = {};
+    }
+    return this;
+  }
+}
 
 /**
  * Wallet connection status enumeration
@@ -64,7 +103,7 @@ export const WalletConnectionStatus = {
  * Base abstract wallet class to standardize wallet implementations
  * across different blockchains. All wallet implementations should extend this class.
  */
-export class BaseWallet extends EventEmitter {
+export class BaseWallet extends SimpleEventEmitter {
   
   constructor() {
     super();
@@ -173,7 +212,7 @@ export class BaseWallet extends EventEmitter {
    * Pay for a transaction (specific to publishing content)
    * Must be implemented by subclasses
    * @param {Uint8Array} data - Transaction data
-   * @param {Object} [options] - Optional transaction options
+   * @param {Object} [options] - Transaction options
    * @returns {Promise<TransactionResult>} Transaction result
    * @abstract
    */
@@ -182,9 +221,32 @@ export class BaseWallet extends EventEmitter {
   }
 
   /**
-   * Sign arbitrary data with the wallet's private key
+   * Get transaction fee estimate
    * Must be implemented by subclasses
-   * @param {string|Uint8Array} data - Data to sign
+   * @param {Uint8Array} data - Transaction data
+   * @param {Object} [options] - Estimation options
+   * @returns {Promise<number>} Fee estimate in native currency
+   * @abstract
+   */
+  async estimateFee(data, options) {
+    throw new Error('estimateFee() must be implemented by subclass');
+  }
+
+  /**
+   * Validate an address
+   * Must be implemented by subclasses
+   * @param {string} address - Address to validate
+   * @returns {boolean} True if valid
+   * @abstract
+   */
+  validateAddress(address) {
+    throw new Error('validateAddress() must be implemented by subclass');
+  }
+
+  /**
+   * Sign data with the wallet's private key
+   * Must be implemented by subclasses
+   * @param {string} data - Data to sign
    * @returns {Promise<string>} Signature
    * @abstract
    */
@@ -193,91 +255,75 @@ export class BaseWallet extends EventEmitter {
   }
 
   /**
-   * Verify a signature against data
-   * Must be implemented by subclasses
-   * @param {string|Uint8Array} data - Original data
-   * @param {string} signature - Signature to verify
-   * @param {string} [publicKey] - Public key to verify against (defaults to wallet's key)
-   * @returns {Promise<boolean>} True if signature is valid
-   * @abstract
-   */
-  async verifySignature(data, signature, publicKey) {
-    throw new Error('verifySignature() must be implemented by subclass');
-  }
-
-  /**
-   * Protected method to update connection status
-   * @param {string} newStatus - New status
+   * Update wallet status and emit event
    * @protected
+   * @param {string} status - New status
    */
-  _updateStatus(newStatus) {
-    if (this._status !== newStatus) {
-      const oldStatus = this._status;
-      this._status = newStatus;
-      
-      console.log(`Wallet status changed: ${oldStatus} → ${newStatus}`);
-      this.emit('statusChange', newStatus);
-      
-      // If disconnected, clear info and stop balance checking
-      if (newStatus === WalletConnectionStatus.DISCONNECTED) {
-        this._info = null;
-        this._lastBalance = null;
-        this._stopBalanceChecking();
-      }
+  _updateStatus(status) {
+    const oldStatus = this._status;
+    this._status = status;
+    if (oldStatus !== status) {
+      this.emit('statusChange', status);
+      console.log(`Wallet status changed: ${oldStatus} → ${status}`);
     }
   }
 
   /**
-   * Protected method to update wallet info
-   * @param {WalletInfo} info - New wallet info
+   * Update wallet info
    * @protected
+   * @param {WalletInfo} info - New wallet info
    */
   _updateInfo(info) {
-    this._info = { ...info };
-    
-    // If balance is included, update last balance
-    if (info.balance) {
-      this._updateBalance(info.balance);
-    }
+    this._info = info;
   }
 
   /**
-   * Protected method to update balance
-   * @param {WalletBalance} balance - New balance
+   * Update balance and emit event if changed
    * @protected
+   * @param {WalletBalance} balance - New balance
    */
   _updateBalance(balance) {
     const oldBalance = this._lastBalance;
-    this._lastBalance = { ...balance };
+    this._lastBalance = balance;
     
-    // Only emit if balance actually changed
-    if (!oldBalance || 
-        oldBalance.total !== balance.total || 
-        oldBalance.available !== balance.available) {
-      console.log(`Balance updated: ${balance.available} ${balance.currency}`);
+    if (!oldBalance || oldBalance.total !== balance.total) {
       this.emit('balanceChange', balance);
     }
   }
 
   /**
-   * Protected method to emit error events
-   * @param {Error} error - Error to emit
+   * Emit error event
    * @protected
+   * @param {Error} error - Error to emit
    */
   _emitError(error) {
     console.error('Wallet error:', error);
     this.emit('error', error);
+  }
+
+  /**
+   * Validate required options
+   * @protected
+   * @param {Object} options - Options to validate
+   * @param {string[]} required - Required field names
+   * @throws {Error} If validation fails
+   */
+  _validateOptions(options, required) {
+    if (!options) {
+      throw new Error('Options are required');
+    }
     
-    // Set status to error if not already disconnected
-    if (this._status !== WalletConnectionStatus.DISCONNECTED) {
-      this._updateStatus(WalletConnectionStatus.ERROR);
+    for (const field of required) {
+      if (!options[field]) {
+        throw new Error(`${field} is required`);
+      }
     }
   }
 
   /**
-   * Start automatic balance checking
-   * @param {number} [intervalMs=30000] - Check interval in milliseconds
+   * Start periodic balance checking
    * @protected
+   * @param {number} [intervalMs=30000] - Check interval in milliseconds
    */
   _startBalanceChecking(intervalMs = 30000) {
     this._stopBalanceChecking();
@@ -288,8 +334,7 @@ export class BaseWallet extends EventEmitter {
           const balance = await this.getBalance();
           this._updateBalance(balance);
         } catch (error) {
-          console.warn('Balance check failed:', error.message);
-          // Don't emit error for balance check failures
+          console.error('Error checking balance:', error);
         }
       }
     }, intervalMs);
@@ -298,7 +343,7 @@ export class BaseWallet extends EventEmitter {
   }
 
   /**
-   * Stop automatic balance checking
+   * Stop periodic balance checking
    * @protected
    */
   _stopBalanceChecking() {
@@ -308,69 +353,6 @@ export class BaseWallet extends EventEmitter {
       console.log('Stopped balance checking');
     }
   }
-
-  /**
-   * Cleanup method called when wallet is being destroyed
-   * Override in subclasses to add specific cleanup
-   * @returns {Promise<void>}
-   */
-  async cleanup() {
-    this._stopBalanceChecking();
-    await this.disconnect();
-    this.removeAllListeners();
-  }
-
-  /**
-   * Validate wallet options
-   * @param {Object} options - Options to validate
-   * @param {string[]} requiredFields - Required field names
-   * @throws {Error} If validation fails
-   * @protected
-   */
-  _validateOptions(options, requiredFields) {
-    if (!options || typeof options !== 'object') {
-      throw new Error('Options must be an object');
-    }
-    
-    for (const field of requiredFields) {
-      if (!options[field]) {
-        throw new Error(`Missing required field: ${field}`);
-      }
-    }
-  }
-
-  /**
-   * Generate a simple wallet ID
-   * @returns {string} Wallet ID
-   * @protected
-   */
-  _generateWalletId() {
-    return `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Check if a public key format is valid for this wallet type
-   * Must be implemented by subclasses for their specific format
-   * @param {string} publicKey - Public key to validate
-   * @returns {boolean} True if valid
-   * @protected
-   * @abstract
-   */
-  _isValidPublicKey(publicKey) {
-    throw new Error('_isValidPublicKey() must be implemented by subclass');
-  }
-
-  /**
-   * Check if a private key format is valid for this wallet type
-   * Must be implemented by subclasses for their specific format
-   * @param {string} privateKey - Private key to validate
-   * @returns {boolean} True if valid
-   * @protected
-   * @abstract
-   */
-  _isValidPrivateKey(privateKey) {
-    throw new Error('_isValidPrivateKey() must be implemented by subclass');
-  }
 }
 
-// Character count: 9847
+// Character count: 8431

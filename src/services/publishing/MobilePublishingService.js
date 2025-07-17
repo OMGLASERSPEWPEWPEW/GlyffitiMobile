@@ -1,4 +1,5 @@
 // src/services/publishing/MobilePublishingService.js
+// Path: src/services/publishing/MobilePublishingService.js
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -75,11 +76,10 @@ export class MobilePublishingService {
         
         return {
           id: contentId,
-          title: file.name.replace(/\.[^/.]+$/, ""),
+          title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
           content: content,
           authorPublicKey: await this.getWalletPublicKey(),
-          timestamp: Date.now(),
-          status: 'draft' // Start as draft
+          createdAt: Date.now(),
         };
       }
       
@@ -89,66 +89,88 @@ export class MobilePublishingService {
       throw error;
     }
   }
-  
+
   /**
-   * Get wallet public key from current wallet
-   * @returns {Promise<string>} Public key
+   * Estimate publishing cost and time for content
+   * @param {Object} content - Content object
+   * @returns {Object} Publishing estimate
    */
-  async getWalletPublicKey() {
-    if (!this.currentWallet) {
-      throw new Error('No wallet service configured');
+  estimatePublishing(content) {
+    try {
+      const glyphCount = MobileGlyphManager.estimateChunkCount(content.content);
+      const estimatedCost = MobileGlyphManager.estimateStorageCost(content.content);
+      
+      return {
+        glyphCount: glyphCount,
+        estimatedCost: estimatedCost.costs.total,
+        currency: estimatedCost.costs.currency,
+        estimatedTimeMinutes: (glyphCount * 1.5) / 60, // 1.5 seconds per glyph
+        compressionRatio: estimatedCost.compressionRatio,
+        spaceSaved: estimatedCost.spaceSaved
+      };
+    } catch (error) {
+      console.error('Error estimating publishing:', error);
+      throw error;
     }
-    return this.currentWallet.getWalletPublicKey();
   }
-  
+
   /**
-   * Get wallet keypair from current wallet
-   * @returns {Promise<Object>} Keypair
-   */
-  async getWalletKeypair() {
-    if (!this.currentWallet) {
-      throw new Error('No wallet service configured');
-    }
-    return this.currentWallet.getWalletKeypair();
-  }
-  
-  /**
-   * Main publishing function with enhanced glyph management and progress tracking
+   * Main publishing function with enhanced error handling and progress tracking
    * @param {Object} content - Content to publish
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result
    */
   async publishContent(content, onProgress) {
     try {
-      const contentId = content.id;
+      console.log('Starting enhanced publishing process...');
       
-      // Initialize enhanced status tracking
+      // Initialize tracking
+      const contentId = content.id;
       const status = {
-        contentId,
+        contentId: contentId,
         stage: 'preparing',
         progress: 0,
         currentGlyph: 0,
         totalGlyphs: 0,
         transactionIds: [],
-        successfulGlyphs: 0,
         failedGlyphs: 0,
-        compressionStats: null,
-        estimatedCost: null
+        successfulGlyphs: 0,
+        estimatedCost: null,
+        compressionStats: null
       };
       
       this.activePublishing.set(contentId, status);
       onProgress && onProgress(status);
       
-      // Step 1: Create enhanced glyphs with compression and integrity checking
+      // Step 1: Create glyphs with enhanced chunking
       status.stage = 'processing';
       onProgress && onProgress(status);
       
       console.log('Creating glyphs with enhanced GlyphManager...');
-      const glyphChunks = await MobileGlyphManager.createGlyphs(content);
+      const glyphChunks = await MobileGlyphManager.createGlyphs(
+        content.content,
+        {
+          onProgress: (current, total) => {
+            console.log(`Created ${current}/${total} glyphs...`);
+          }
+        }
+      );
+      
       status.totalGlyphs = glyphChunks.length;
       
-      // Get compression statistics
-      status.compressionStats = CompressionService.getCompressionStats(content.content);
+      // Calculate compression stats
+      const originalSize = content.content.length;
+      const compressedSize = glyphChunks.reduce((total, chunk) => total + chunk.content.length, 0);
+      
+      status.compressionStats = {
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        compressionRatio: (compressedSize / originalSize).toFixed(2),
+        spaceSaved: originalSize - compressedSize,
+        percentSaved: ((1 - compressedSize / originalSize) * 100).toFixed(1)
+      };
+      
+      // Cost estimation
       status.estimatedCost = MobileGlyphManager.estimateStorageCost(content.content);
       
       console.log(`Created ${glyphChunks.length} glyphs with ${status.compressionStats.percentSaved}% compression`);
@@ -209,14 +231,16 @@ export class MobilePublishingService {
           // Create transaction with compressed data
           const transaction = new Transaction();
           
-          // Use the compressed content from the glyph chunk
-          const contentBytes = glyphChunk.content;
+          // IMPORTANT: Convert compressed binary data to base64 for the Memo program
+          // The Solana Memo program expects UTF-8 text, so we encode our binary data as base64
+          const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
+          const memoData = Buffer.from(base64CompressedData, 'utf-8');
           
-          // Add memo instruction with compressed glyph data
+          // Add memo instruction with base64-encoded compressed data
           const instruction = new TransactionInstruction({
             keys: [],
             programId: this.MEMO_PROGRAM_ID,
-            data: contentBytes
+            data: memoData
           });
           
           transaction.add(instruction);
@@ -271,353 +295,403 @@ export class MobilePublishingService {
         status.stage = 'completed';
         status.progress = 100;
         
-        try {
-          // Create scroll manifest with published glyph data
-          const publishedChunks = glyphChunks.map((chunk, index) => ({
-            chunk: chunk,
-            transactionId: glyphs[index].transactionId
-          }));
-          
-          const scrollManifest = await MobileScrollManager.createScroll(
-            content.title,
-            content.authorPublicKey,
-            publishedChunks,
-            {
-              creatorHandle: content.authorName,
-              tags: content.tags || [],
-              license: content.license
-            }
-          );
-          
-          // Save scroll manifest
-          await MobileScrollManager.saveScrollLocally(scrollManifest);
-          
-          // Save to published content with manifest
-          await this.savePublishedContent({
-            id: contentId,
-            title: content.title,
-            totalGlyphs: glyphs.length,
-            successfulGlyphs: successfulGlyphs,
-            transactionIds: transactionIds,
-            publishedAt: Date.now(),
-            status: 'published',
-            scrollId: scrollManifest.storyId,
-            compressionStats: status.compressionStats,
-            estimatedCost: status.estimatedCost
-          });
-          
-          console.log(`✅ Content fully published with scroll manifest: ${scrollManifest.storyId}`);
-        } catch (manifestError) {
-          console.error('Error creating scroll manifest:', manifestError);
-          // Still save as published even if manifest creation fails
-          await this.savePublishedContent({
-            id: contentId,
-            title: content.title,
-            totalGlyphs: glyphs.length,
-            successfulGlyphs: successfulGlyphs,
-            transactionIds: transactionIds,
-            publishedAt: Date.now(),
-            status: 'published',
-            manifestError: manifestError.message
-          });
-        }
+        // Create scroll manifest
+        const publishedContent = {
+          ...content,
+          glyphs: glyphs.filter(g => g.status === 'published'),
+          transactionIds: transactionIds,
+          totalGlyphs: glyphs.length,
+          successfulGlyphs: successfulGlyphs,
+          failedGlyphs: failedGlyphs,
+          publishedAt: Date.now(),
+          compressionStats: status.compressionStats
+        };
         
-        // Remove from in-progress
+        const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
+        status.scrollId = manifest.id;
+        publishedContent.scrollId = manifest.id;
+        publishedContent.manifest = manifest;
+        
+        // Save as published
+        await this.savePublishedContent(publishedContent);
         await this.removeInProgressContent(contentId);
         
-      } else if (successfulGlyphs > 0) {
-        // PARTIAL SUCCESS - Keep as in-progress
-        status.stage = 'partial';
-        status.error = `Published ${successfulGlyphs}/${glyphs.length} glyphs. ${failedGlyphs} failed.`;
+        onProgress && onProgress(status);
         
-        await this.updateInProgressContent(contentId, glyphs, successfulGlyphs, failedGlyphs);
+        return {
+          status: 'completed',
+          contentId: contentId,
+          scrollId: manifest.id,
+          totalGlyphs: glyphs.length,
+          successfulGlyphs: successfulGlyphs,
+          failedGlyphs: failedGlyphs,
+          transactionIds: transactionIds,
+          compressionStats: status.compressionStats
+        };
+        
+      } else if (successfulGlyphs > 0) {
+        // PARTIAL SUCCESS
+        status.stage = 'partial';
+        status.progress = Math.floor((successfulGlyphs / glyphs.length) * 100);
+        onProgress && onProgress(status);
+        
+        return {
+          status: 'partial',
+          contentId: contentId,
+          scrollId: null,
+          totalGlyphs: glyphs.length,
+          successfulGlyphs: successfulGlyphs,
+          failedGlyphs: failedGlyphs,
+          transactionIds: transactionIds,
+          compressionStats: status.compressionStats
+        };
         
       } else {
         // TOTAL FAILURE
         status.stage = 'failed';
         status.error = 'All glyphs failed to publish';
+        onProgress && onProgress(status);
         
-        await this.removeInProgressContent(contentId);
+        return {
+          status: 'failed',
+          contentId: contentId,
+          scrollId: null,
+          totalGlyphs: glyphs.length,
+          successfulGlyphs: 0,
+          failedGlyphs: glyphs.length,
+          transactionIds: [],
+          compressionStats: status.compressionStats
+        };
       }
-      
-      onProgress && onProgress(status);
-      
-      return {
-        contentId,
-        transactionIds,
-        totalGlyphs: glyphs.length,
-        successfulGlyphs,
-        failedGlyphs,
-        status: status.stage,
-        compressionStats: status.compressionStats,
-        scrollId: status.stage === 'completed' ? status.scrollId : null
-      };
       
     } catch (error) {
       console.error('Publishing error:', error);
-      
-      const status = this.activePublishing.get(content.id);
-      if (status) {
-        status.stage = 'failed';
-        status.error = error.message;
-        onProgress && onProgress(status);
-      }
-      
       throw error;
+    } finally {
+      this.activePublishing.delete(content.id);
     }
   }
-  
+
   /**
-   * Resume publishing for interrupted content
+   * Resume publishing for failed glyphs
    * @param {string} contentId - Content ID to resume
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result
    */
   async resumePublishing(contentId, onProgress) {
     try {
-      const inProgressContent = await this.getInProgressContent(contentId);
-      if (!inProgressContent) {
-        throw new Error('No in-progress content found');
+      // Get in-progress content
+      const inProgressList = await this.getInProgressContent();
+      const content = inProgressList.find(item => item.id === contentId);
+      
+      if (!content) {
+        throw new Error('Content not found in progress');
       }
       
-      // Find unpublished glyphs
-      const unpublishedGlyphs = inProgressContent.glyphs.filter(g => g.status !== 'published');
+      // Get unpublished glyphs
+      const unpublishedGlyphs = content.glyphs.filter(g => g.status !== 'published');
       
       if (unpublishedGlyphs.length === 0) {
-        // Already fully published, try to create manifest if missing
-        try {
-          if (inProgressContent.glyphChunks) {
-            const publishedChunks = inProgressContent.glyphChunks.map((chunk, index) => ({
-              chunk: chunk,
-              transactionId: inProgressContent.glyphs[index].transactionId
-            }));
-            
-            const scrollManifest = await MobileScrollManager.createScroll(
-              inProgressContent.title,
-              inProgressContent.authorPublicKey,
-              publishedChunks
-            );
-            
-            await MobileScrollManager.saveScrollLocally(scrollManifest);
-            console.log('Created missing scroll manifest for completed content');
-          }
-        } catch (error) {
-          console.error('Error creating missing manifest:', error);
-        }
-        
-        return { status: 'completed', message: 'Content already fully published' };
+        throw new Error('No unpublished glyphs to resume');
       }
       
-      console.log(`Resuming publishing: ${unpublishedGlyphs.length} glyphs remaining`);
+      console.log(`Resuming publishing for ${unpublishedGlyphs.length} failed glyphs...`);
       
-      // Continue with unpublished glyphs
-      return this.publishContent(inProgressContent, onProgress);
+      // Initialize status
+      const status = {
+        contentId: contentId,
+        stage: 'publishing',
+        progress: 0,
+        currentGlyph: 0,
+        totalGlyphs: content.glyphs.length,
+        transactionIds: content.transactionIds || [],
+        failedGlyphs: 0,
+        successfulGlyphs: content.glyphs.filter(g => g.status === 'published').length,
+        compressionStats: content.compressionStats,
+        estimatedCost: content.estimatedCost
+      };
+      
+      onProgress && onProgress(status);
+      
+      // Get wallet
+      const keypair = await this.getWalletKeypair();
+      
+      // Try to publish each unpublished glyph
+      for (const glyph of unpublishedGlyphs) {
+        status.currentGlyph++;
+        status.progress = Math.floor((status.successfulGlyphs / content.glyphs.length) * 100);
+        onProgress && onProgress(status);
+        
+        try {
+          // Get the original glyph chunk
+          const glyphChunk = content.glyphChunks ? 
+            content.glyphChunks[glyph.index] : 
+            {
+              index: glyph.index,
+              totalChunks: glyph.totalGlyphs,
+              content: CompressionService.base64ToUint8Array(glyph.content),
+              hash: glyph.hash,
+              originalText: glyph.originalText
+            };
+          
+          // Create transaction
+          const transaction = new Transaction();
+          
+          // IMPORTANT: Convert compressed binary data to base64 for the Memo program
+          const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
+          const memoData = Buffer.from(base64CompressedData, 'utf-8');
+          
+          // Add memo instruction
+          const instruction = new TransactionInstruction({
+            keys: [],
+            programId: this.MEMO_PROGRAM_ID,
+            data: memoData
+          });
+          
+          transaction.add(instruction);
+          
+          // Get recent blockhash
+          const { blockhash } = await this.connection.getLatestBlockhash();
+          transaction.recentBlockhash = blockhash;
+          transaction.feePayer = keypair.publicKey;
+          
+          // Sign and send
+          transaction.sign(keypair);
+          const signature = await this.connection.sendRawTransaction(
+            transaction.serialize(),
+            { skipPreflight: false, preflightCommitment: 'confirmed' }
+          );
+          
+          // Wait for confirmation
+          await this.connection.confirmTransaction(signature);
+          
+          // Mark as published
+          glyph.transactionId = signature;
+          glyph.status = 'published';
+          glyph.error = undefined;
+          status.transactionIds.push(signature);
+          status.successfulGlyphs++;
+          
+          console.log(`✅ Glyph ${glyph.index + 1} published: ${signature}`);
+          
+        } catch (error) {
+          console.error(`❌ Error publishing glyph ${glyph.index + 1}:`, error);
+          glyph.error = error.message;
+          status.failedGlyphs++;
+        }
+        
+        // Update in-progress content
+        await this.updateInProgressContent(
+          contentId, 
+          content.glyphs, 
+          status.successfulGlyphs, 
+          status.failedGlyphs
+        );
+      }
+      
+      // Check final status
+      const allPublished = content.glyphs.every(g => g.status === 'published');
+      
+      if (allPublished) {
+        // Create scroll and move to published
+        status.stage = 'completed';
+        status.progress = 100;
+        
+        const publishedContent = {
+          ...content,
+          transactionIds: status.transactionIds,
+          publishedAt: Date.now()
+        };
+        
+        const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
+        publishedContent.scrollId = manifest.id;
+        publishedContent.manifest = manifest;
+        
+        await this.savePublishedContent(publishedContent);
+        await this.removeInProgressContent(contentId);
+        
+        onProgress && onProgress(status);
+        
+        return {
+          status: 'completed',
+          contentId: contentId,
+          scrollId: manifest.id,
+          totalGlyphs: content.glyphs.length,
+          successfulGlyphs: status.successfulGlyphs,
+          failedGlyphs: status.failedGlyphs,
+          transactionIds: status.transactionIds
+        };
+      } else {
+        // Still partial
+        return {
+          status: 'partial',
+          contentId: contentId,
+          scrollId: null,
+          totalGlyphs: content.glyphs.length,
+          successfulGlyphs: status.successfulGlyphs,
+          failedGlyphs: status.failedGlyphs,
+          transactionIds: status.transactionIds
+        };
+      }
       
     } catch (error) {
       console.error('Resume publishing error:', error);
       throw error;
     }
   }
-  
+
   /**
-   * Estimate publishing cost and stats for content
-   * @param {Object} content - Content to estimate
-   * @returns {Object} Estimation details
+   * Storage Methods
    */
-  estimatePublishing(content) {
-    try {
-      const costEstimate = MobileGlyphManager.estimateStorageCost(content.content);
-      const compressionStats = CompressionService.getCompressionStats(content.content);
-      
-      return {
-        glyphCount: costEstimate.chunkCount,
-        originalSize: costEstimate.originalSize,
-        compressedSize: costEstimate.estimatedCompressedSize,
-        compressionRatio: compressionStats.compressionRatio,
-        spaceSaved: compressionStats.percentSaved,
-        estimatedCost: costEstimate.costs.total,
-        currency: costEstimate.costs.currency,
-        estimatedTimeMinutes: (costEstimate.chunkCount * 5) / 60
-      };
-    } catch (error) {
-      console.error('Error estimating publishing:', error);
-      return {
-        glyphCount: 0,
-        estimatedCost: 0,
-        estimatedTimeMinutes: 0,
-        error: error.message
-      };
-    }
-  }
   
-  // Storage methods for 3-tier system (enhanced with compression stats)
-  async saveInProgressContent(contentData) {
+  async savePublishedContent(content) {
     try {
-      const existing = await AsyncStorage.getItem('in_progress_content');
-      const inProgressList = existing ? JSON.parse(existing) : [];
-      
-      const existingIndex = inProgressList.findIndex(item => item.id === contentData.id);
-      if (existingIndex >= 0) {
-        inProgressList[existingIndex] = contentData;
-      } else {
-        inProgressList.push(contentData);
-      }
-      
-      await AsyncStorage.setItem('in_progress_content', JSON.stringify(inProgressList));
-    } catch (error) {
-      console.error('Error saving in-progress content:', error);
-    }
-  }
-  
-  async updateInProgressContent(contentId, glyphs, successfulGlyphs, failedGlyphs) {
-    try {
-      const existing = await AsyncStorage.getItem('in_progress_content');
-      const inProgressList = existing ? JSON.parse(existing) : [];
-      
-      const existingIndex = inProgressList.findIndex(item => item.id === contentId);
-      if (existingIndex >= 0) {
-        inProgressList[existingIndex].glyphs = glyphs;
-        inProgressList[existingIndex].successfulGlyphs = successfulGlyphs;
-        inProgressList[existingIndex].failedGlyphs = failedGlyphs;
-        inProgressList[existingIndex].lastUpdated = Date.now();
-        
-        await AsyncStorage.setItem('in_progress_content', JSON.stringify(inProgressList));
-      }
-    } catch (error) {
-      console.error('Error updating in-progress content:', error);
-    }
-  }
-  
-  async removeInProgressContent(contentId) {
-    try {
-      const existing = await AsyncStorage.getItem('in_progress_content');
-      const inProgressList = existing ? JSON.parse(existing) : [];
-      
-      const filteredList = inProgressList.filter(item => item.id !== contentId);
-      await AsyncStorage.setItem('in_progress_content', JSON.stringify(filteredList));
-    } catch (error) {
-      console.error('Error removing in-progress content:', error);
-    }
-  }
-  
-  async getInProgressContent(contentId = null) {
-    try {
-      const data = await AsyncStorage.getItem('in_progress_content');
-      const inProgressList = data ? JSON.parse(data) : [];
-      
-      if (contentId) {
-        return inProgressList.find(item => item.id === contentId);
-      }
-      
-      return inProgressList;
-    } catch (error) {
-      console.error('Error getting in-progress content:', error);
-      return contentId ? null : [];
-    }
-  }
-  
-  async savePublishedContent(contentData) {
-    try {
-      const existing = await AsyncStorage.getItem('published_content');
-      const publishedList = existing ? JSON.parse(existing) : [];
-      
-      publishedList.push(contentData);
-      await AsyncStorage.setItem('published_content', JSON.stringify(publishedList));
+      const published = await this.getPublishedContent();
+      published.push(content);
+      await AsyncStorage.setItem('glyffiti_published', JSON.stringify(published));
     } catch (error) {
       console.error('Error saving published content:', error);
     }
   }
-  
+
   async getPublishedContent() {
     try {
-      const data = await AsyncStorage.getItem('published_content');
+      const data = await AsyncStorage.getItem('glyffiti_published');
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Error getting published content:', error);
       return [];
     }
   }
-  
-  async saveDraft(draftData) {
+
+  async saveInProgressContent(content) {
     try {
-      const existing = await AsyncStorage.getItem('draft_content');
-      const draftList = existing ? JSON.parse(existing) : [];
+      const inProgress = await this.getInProgressContent();
+      const index = inProgress.findIndex(item => item.id === content.id);
       
-      const existingIndex = draftList.findIndex(d => d.id === draftData.id);
-      if (existingIndex >= 0) {
-        draftList[existingIndex] = draftData;
+      if (index >= 0) {
+        inProgress[index] = content;
       } else {
-        draftList.push(draftData);
+        inProgress.push(content);
       }
       
-      await AsyncStorage.setItem('draft_content', JSON.stringify(draftList));
+      await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(inProgress));
+    } catch (error) {
+      console.error('Error saving in-progress content:', error);
+    }
+  }
+
+  async getInProgressContent() {
+    try {
+      const data = await AsyncStorage.getItem('glyffiti_in_progress');
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error('Error getting in-progress content:', error);
+      return [];
+    }
+  }
+
+  async updateInProgressContent(contentId, glyphs, successfulGlyphs, failedGlyphs) {
+    try {
+      const inProgress = await this.getInProgressContent();
+      const index = inProgress.findIndex(item => item.id === contentId);
+      
+      if (index >= 0) {
+        inProgress[index].glyphs = glyphs;
+        inProgress[index].successfulGlyphs = successfulGlyphs;
+        inProgress[index].failedGlyphs = failedGlyphs;
+        inProgress[index].lastUpdated = Date.now();
+        
+        await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(inProgress));
+      }
+    } catch (error) {
+      console.error('Error updating in-progress content:', error);
+    }
+  }
+
+  async removeInProgressContent(contentId) {
+    try {
+      const inProgress = await this.getInProgressContent();
+      const filtered = inProgress.filter(item => item.id !== contentId);
+      await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Error removing in-progress content:', error);
+    }
+  }
+
+  async saveDraft(content) {
+    try {
+      const drafts = await this.getDrafts();
+      drafts.push({
+        ...content,
+        savedAt: Date.now()
+      });
+      await AsyncStorage.setItem('glyffiti_drafts', JSON.stringify(drafts));
     } catch (error) {
       console.error('Error saving draft:', error);
     }
   }
-  
+
   async getDrafts() {
     try {
-      const data = await AsyncStorage.getItem('draft_content');
+      const data = await AsyncStorage.getItem('glyffiti_drafts');
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Error getting drafts:', error);
       return [];
     }
   }
-  
+
   /**
-   * Get comprehensive publishing statistics
-   * @returns {Promise<Object>} Publishing statistics
+   * Get publishing statistics
+   * @returns {Promise<Object>} Publishing stats
    */
   async getPublishingStats() {
     try {
       const published = await this.getPublishedContent();
-      const inProgress = await this.getInProgressContent();
-      const drafts = await this.getDrafts();
+      const totalGlyphs = published.reduce((sum, item) => sum + (item.glyphs?.length || 0), 0);
+      const totalCost = totalGlyphs * 0.000005; // Estimated cost per glyph
       
-      const stats = {
+      return {
         totalPublished: published.length,
-        totalInProgress: inProgress.length,
-        totalDrafts: drafts.length,
-        totalGlyphsPublished: published.reduce((sum, p) => sum + (p.totalGlyphs || 0), 0),
-        totalTransactions: published.reduce((sum, p) => sum + (p.transactionIds?.length || 0), 0),
-        averageCompressionRatio: 0,
-        totalSpaceSaved: 0
+        totalGlyphs: totalGlyphs,
+        totalCost: totalCost,
+        successRate: published.length > 0 ? 100 : 0
       };
-      
-      // Calculate compression statistics
-      let compressionCount = 0;
-      let totalCompressionRatio = 0;
-      let totalSpaceSaved = 0;
-      
-      [...published, ...inProgress].forEach(content => {
-        if (content.compressionStats) {
-          compressionCount++;
-          totalCompressionRatio += content.compressionStats.compressionRatio;
-          totalSpaceSaved += content.compressionStats.spaceSaved;
-        }
-      });
-      
-      if (compressionCount > 0) {
-        stats.averageCompressionRatio = totalCompressionRatio / compressionCount;
-        stats.totalSpaceSaved = totalSpaceSaved;
-      }
-      
-      return stats;
     } catch (error) {
-      console.error('Error getting publishing stats:', error);
+      console.error('Error getting stats:', error);
       return {
         totalPublished: 0,
-        totalInProgress: 0,
-        totalDrafts: 0,
-        totalGlyphsPublished: 0,
-        totalTransactions: 0,
-        averageCompressionRatio: 0,
-        totalSpaceSaved: 0
+        totalGlyphs: 0,
+        totalCost: 0,
+        successRate: 0
       };
     }
   }
+
+  /**
+   * Helper method to get wallet keypair
+   * @returns {Promise<Keypair>} Wallet keypair
+   */
+  async getWalletKeypair() {
+    if (!this.currentWallet) {
+      throw new Error('No wallet connected');
+    }
+    
+    return this.currentWallet.getWalletKeypair();
+  }
+
+  /**
+   * Helper method to get wallet public key
+   * @returns {Promise<string>} Wallet public key
+   */
+  async getWalletPublicKey() {
+    if (!this.currentWallet) {
+      return 'unknown';
+    }
+    
+    return this.currentWallet.getWalletPublicKey();
+  }
 }
 
-// Character count: 18247
+// Character count: 26847

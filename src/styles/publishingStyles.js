@@ -1,6 +1,7 @@
 // src/styles/publishingStyles.js
 import { StyleSheet } from 'react-native';
 
+
 // Add these styles to your publishingStyles.js file
 
 const additionalWalletStyles = {
@@ -115,6 +116,26 @@ const additionalWalletStyles = {
 // Additional styles to add to src/styles/publishingStyles.js
 
 const additionalStyles = {
+
+  // Add these styles to your publishingStyles.js file
+// Path: src/styles/publishingStyles.js (additions)
+
+// Add these button disabled styles to your existing publishingStyles object:
+
+  airdropButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#999',
+  },
+  
+  publishButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#999',
+  },
+  
+  resumeButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#666',
+  },  
   // Password Input Styles
   passwordContainer: {
     backgroundColor: '#f8f9fa',
