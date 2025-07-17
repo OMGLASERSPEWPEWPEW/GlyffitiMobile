@@ -1,4 +1,4 @@
-// src/services/publishing/UpdatedMobilePublishingService.js
+// src/services/publishing/MobilePublishingService.js
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,7 +13,7 @@ import { CompressionService } from '../compression/CompressionService';
  * Mobile Publishing Service with proper encryption, compression, and integrity verification
  * Replaces the old MobilePublishingService with better security and features
  */
-export class UpdatedMobilePublishingService {
+export class MobilePublishingService {
   constructor() {
     this.connection = new Connection('https://api.devnet.solana.com', 'confirmed');
     this.MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
