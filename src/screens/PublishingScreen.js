@@ -33,19 +33,21 @@ export const PublishingScreen = () => {
   }, []);
   
   // Auto-refresh balance when wallet is unlocked
-  useEffect(() => {
+  // And update the useEffect to not log on auto-refresh:
+    useEffect(() => {
     if (walletStatus === 'unlocked' && walletService) {
-      const interval = setInterval(async () => {
+        const interval = setInterval(async () => {
         try {
-          await loadWalletInfo(walletService);
+            // Don't pass logContext - this will be silent balance checking
+            await loadWalletInfo(walletService);
         } catch (error) {
-          console.log('Error refreshing balance:', error);
+            console.log('Error refreshing balance:', error);
         }
-      }, 5000); // Refresh every 5 seconds
-      
-      return () => clearInterval(interval);
+        }, 5000);
+        
+        return () => clearInterval(interval);
     }
-  }, [walletStatus, walletService]);
+    }, [walletStatus, walletService]);
   
   const initializeServices = async () => {
     try {
@@ -170,7 +172,7 @@ export const PublishingScreen = () => {
         publishingService.setWallet(wallet);
       }
       
-      await loadWalletInfo(wallet);
+      await loadWalletInfo(wallet, 'wallet-unlock');
       
       setShowWalletUnlock(false);
       setPassword('');
@@ -205,7 +207,7 @@ export const PublishingScreen = () => {
         publishingService.setWallet(wallet);
       }
       
-      await loadWalletInfo(wallet);
+      await loadWalletInfo(wallet, 'wallet-created');
       
       setShowWalletUnlock(false);
       setPassword('');
@@ -233,14 +235,15 @@ export const PublishingScreen = () => {
     }
   };
   
-  const loadWalletInfo = async (wallet) => {
-    try {
-      const balance = await wallet.getBalance();
-      setWalletBalance(balance.available);
-    } catch (error) {
-      console.error('Error loading wallet info:', error);
-    }
-  };
+const loadWalletInfo = async (wallet, logContext = null) => {
+  try {
+    // Pass logContext to getBalance to control when it logs
+    const balance = await wallet.getBalance(logContext);
+    setWalletBalance(balance.available);
+  } catch (error) {
+    console.error('Error loading wallet info:', error);
+  }
+};
   
   const loadContent = async (pubService) => {
     try {
@@ -294,11 +297,11 @@ export const PublishingScreen = () => {
               
               // Try to refresh balance after delays
               setTimeout(async () => {
-                await loadWalletInfo(walletService);
+                await loadWalletInfo(walletService, 'post-airdrop');
               }, 2000);
               
               setTimeout(async () => {
-                await loadWalletInfo(walletService);
+                await loadWalletInfo(walletService, 'post-airdrop-final');
                 Alert.alert('Success!', 'Airdrop completed! Balance should update shortly.');
               }, 5000);
               

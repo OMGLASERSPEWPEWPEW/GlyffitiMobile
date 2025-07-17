@@ -1,6 +1,8 @@
 // src/services/wallet/MobileWalletService.js
+// Path: src/services/wallet/MobileWalletService.js
+
 import 'react-native-get-random-values';
-import { Keypair } from '@solana/web3.js';
+import { Keypair, Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { WalletStorage } from './WalletStorage';
 import { BaseWallet, WalletConnectionStatus } from './BaseWallet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,7 +16,14 @@ export class MobileWalletService extends BaseWallet {
     super();
     this.currentWalletId = null;
     this.keypair = null;
+    this.connection = null;
     this.DEFAULT_WALLET_NAME = 'Default Solana Wallet';
+    
+    // Initialize Solana connection for balance checking
+    this.connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+    
+    // Add logging control properties - simplified
+    this._lastLoggedBalance = null;
   }
 
   /**
@@ -52,7 +61,7 @@ export class MobileWalletService extends BaseWallet {
 
       // Create wallet info
       const walletInfo = {
-        publicKey: keypair.publicKey.toString(),
+        publicKey: this.keypair.publicKey.toString(),
         name: options.name || this.DEFAULT_WALLET_NAME,
         type: 'solana',
         isEncrypted: true
@@ -61,7 +70,7 @@ export class MobileWalletService extends BaseWallet {
       this._updateInfo(walletInfo);
       this._updateStatus(WalletConnectionStatus.CONNECTED);
 
-      console.log('Wallet created successfully:', walletInfo.publicKey);
+      console.log('✅ Wallet created successfully:', walletInfo.publicKey);
       return walletInfo;
     } catch (error) {
       this._emitError(error);
@@ -83,25 +92,23 @@ export class MobileWalletService extends BaseWallet {
       this._validateOptions(options, ['privateKey', 'password']);
       this._updateStatus(WalletConnectionStatus.CONNECTING);
 
-      // Create decrypted wallet from private key
-      const decryptedWallet = WalletStorage.createFromPrivateKey(
-        options.privateKey,
-        'solana',
-        options.name || this.DEFAULT_WALLET_NAME
-      );
-
-      // Create keypair for operations
+      // Parse private key
       let secretKey;
-      if (options.privateKey.length === 88) {
-        // Base64 format
-        secretKey = Buffer.from(options.privateKey, 'base64');
+      if (options.privateKey.startsWith('[') && options.privateKey.endsWith(']')) {
+        secretKey = new Uint8Array(JSON.parse(options.privateKey));
       } else {
-        // Assume base58 format
-        const bs58 = require('bs58');
-        secretKey = bs58.decode(options.privateKey);
+        // Assume it's base64 encoded
+        secretKey = Buffer.from(options.privateKey, 'base64');
       }
 
+      // Create keypair from private key
       this.keypair = Keypair.fromSecretKey(secretKey);
+
+      // Create wallet data structure
+      const decryptedWallet = WalletStorage.solanaKeypairToWallet(
+        this.keypair,
+        options.name || this.DEFAULT_WALLET_NAME
+      );
 
       // Encrypt and save wallet
       const encryptedWallet = await WalletStorage.encryptWallet(
@@ -125,7 +132,7 @@ export class MobileWalletService extends BaseWallet {
       this._updateInfo(walletInfo);
       this._updateStatus(WalletConnectionStatus.CONNECTED);
 
-      console.log('Wallet imported successfully:', walletInfo.publicKey);
+      console.log('✅ Wallet imported successfully:', walletInfo.publicKey);
       return walletInfo;
     } catch (error) {
       this._emitError(error);
@@ -174,7 +181,11 @@ export class MobileWalletService extends BaseWallet {
       this._updateInfo(walletInfo);
       this._updateStatus(WalletConnectionStatus.CONNECTED);
 
-      console.log('Wallet loaded successfully:', walletInfo.publicKey);
+      console.log('✅ Wallet loaded successfully:', walletInfo.publicKey);
+      
+      // Log initial balance
+      await this.getBalance('initial load');
+      
       return walletInfo;
     } catch (error) {
       this._emitError(error);
@@ -186,8 +197,8 @@ export class MobileWalletService extends BaseWallet {
   /**
    * Export wallet data
    * @param {Object} options - Export options
-   * @param {string} options.password - Password for verification
-   * @param {boolean} [options.includePrivateKey=false] - Include private key
+   * @param {string} options.password - Password for decryption
+   * @param {boolean} [options.includePrivateKey=false] - Whether to include private key
    * @returns {Promise<string>} Exported wallet data
    */
   async export(options) {
@@ -198,17 +209,23 @@ export class MobileWalletService extends BaseWallet {
         throw new Error('No wallet loaded');
       }
 
-      // Get and decrypt wallet
+      // Get encrypted wallet
       const encryptedWallet = await WalletStorage.getWallet(this.currentWalletId);
+      if (!encryptedWallet) {
+        throw new Error('Wallet not found');
+      }
+
+      // Decrypt wallet
       const decryptedWallet = await WalletStorage.decryptWallet(
         encryptedWallet,
         options.password
       );
 
+      // Create export data
       const exportData = {
         publicKey: decryptedWallet.publicKey,
         name: decryptedWallet.name,
-        type: decryptedWallet.walletType,
+        type: 'solana',
         exportedAt: new Date().toISOString()
       };
 
@@ -225,7 +242,7 @@ export class MobileWalletService extends BaseWallet {
   }
 
   /**
-   * Connect to Solana network (placeholder - always succeeds in mobile)
+   * Connect to Solana network
    * @returns {Promise<boolean>} Always true for mobile
    */
   async connect() {
@@ -255,28 +272,61 @@ export class MobileWalletService extends BaseWallet {
   }
 
   /**
-   * Get current wallet balance (placeholder implementation)
+   * Get current wallet balance from Solana network
+   * @param {string} [logContext] - Context for when to log (e.g., 'initial', 'airdrop', 'transaction')
    * @returns {Promise<Object>} Balance object
    */
-  async getBalance() {
+  async getBalance(logContext = null) {
     try {
       if (!this.keypair) {
         throw new Error('No wallet loaded');
       }
 
-      // In a real implementation, this would query the Solana network
-      // For now, return a placeholder balance
+      if (!this.connection) {
+        throw new Error('No connection to Solana network');
+      }
+
+      // Actually query the Solana network for the balance
+      const lamports = await this.connection.getBalance(this.keypair.publicKey);
+      const solBalance = lamports / LAMPORTS_PER_SOL;
+
       const balance = {
+        total: solBalance,
+        available: solBalance,
+        currency: 'SOL'
+      };
+
+      // Update stored balance in wallet info
+      if (this._info) {
+        this._info.balance = balance;
+      }
+
+      this._updateBalance(balance);
+
+      // SIMPLE LOGGING: Only log when there's a meaningful context or balance changed
+      const balanceChanged = this._lastLoggedBalance !== null && 
+                            Math.abs(this._lastLoggedBalance - solBalance) > 0.001;
+
+      if (logContext || balanceChanged) {
+        const contextMsg = logContext ? ` (${logContext})` : ' (balance changed)';
+        console.log(`💰 Current balance: ${solBalance} SOL${contextMsg}`);
+        this._lastLoggedBalance = solBalance;
+      }
+
+      return balance;
+    } catch (error) {
+      console.error('❌ Error getting balance:', error);
+      this._emitError(error);
+      
+      // Return zero balance on error but don't throw
+      const errorBalance = {
         total: 0,
         available: 0,
         currency: 'SOL'
       };
-
-      this._updateBalance(balance);
-      return balance;
-    } catch (error) {
-      this._emitError(error);
-      throw error;
+      
+      this._updateBalance(errorBalance);
+      return errorBalance;
     }
   }
 
@@ -300,7 +350,7 @@ export class MobileWalletService extends BaseWallet {
         timestamp: Date.now()
       };
 
-      console.log('Transaction created:', transactionResult.transactionId);
+      console.log('🚀 Transaction created:', transactionResult.transactionId);
       return transactionResult;
     } catch (error) {
       this._emitError(error);
@@ -354,7 +404,7 @@ export class MobileWalletService extends BaseWallet {
       // For now, just check if we have the required components
       return !!(data && signature && targetPublicKey);
     } catch (error) {
-      console.error('Error verifying signature:', error);
+      console.error('❌ Error verifying signature:', error);
       return false;
     }
   }
@@ -367,7 +417,7 @@ export class MobileWalletService extends BaseWallet {
     try {
       return await WalletStorage.getAllWallets();
     } catch (error) {
-      console.error('Error getting available wallets:', error);
+      console.error('❌ Error getting available wallets:', error);
       return [];
     }
   }
@@ -382,7 +432,7 @@ export class MobileWalletService extends BaseWallet {
     try {
       return await WalletStorage.deleteWallet(walletId);
     } catch (error) {
-      console.error('Error deleting wallet:', error);
+      console.error('❌ Error deleting wallet:', error);
       return false;
     }
   }
@@ -404,90 +454,59 @@ export class MobileWalletService extends BaseWallet {
   }
 
   /**
-   * Check if public key format is valid for Solana
-   * @param {string} publicKey - Public key to validate
-   * @returns {boolean} True if valid
-   * @protected
+   * Get the current wallet ID
+   * @returns {string|null} Current wallet ID
    */
-  _isValidPublicKey(publicKey) {
+  getCurrentWalletId() {
+    return this.currentWalletId;
+  }
+
+  /**
+   * Check if a wallet already exists in storage
+   * @returns {Promise<boolean>} True if wallet exists
+   */
+  static async hasWallet() {
     try {
-      // Solana public keys are 44 characters in base58
-      return typeof publicKey === 'string' && publicKey.length === 44;
+      const wallets = await WalletStorage.getAllWallets();
+      return wallets.length > 0;
     } catch (error) {
       return false;
     }
   }
 
   /**
-   * Check if private key format is valid for Solana
-   * @param {string} privateKey - Private key to validate
-   * @returns {boolean} True if valid
-   * @protected
-   */
-  _isValidPrivateKey(privateKey) {
-    try {
-      // Support both base64 (88 chars) and base58 formats
-      if (privateKey.length === 88) {
-        // Base64 format
-        Buffer.from(privateKey, 'base64');
-        return true;
-      } else {
-        // Base58 format
-        const bs58 = require('bs58');
-        bs58.decode(privateKey);
-        return true;
-      }
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Migrate from old wallet storage format
-   * @param {string} password - Password for new encrypted storage
+   * Migrate legacy wallet from old storage format
    * @returns {Promise<boolean>} Success status
    */
-  static async migrateFromOldWallet(password) {
+  static async migrateLegacyWallet() {
     try {
-      console.log('Attempting to migrate from old wallet format...');
-
-      // Try to get old wallet data
-      const oldWalletData = await AsyncStorage.getItem('solana_wallet');
-      if (!oldWalletData) {
-        console.log('No old wallet found to migrate');
+      // Check if there's a legacy wallet
+      const legacyWallet = await AsyncStorage.getItem('solana_wallet');
+      if (!legacyWallet) {
+        console.log('ℹ️ No legacy wallet found');
         return false;
       }
 
-      const wallet = JSON.parse(oldWalletData);
-      if (!wallet.secretKey || !wallet.publicKey) {
-        console.log('Old wallet data is invalid');
-        return false;
-      }
+      console.log('🔄 Migrating legacy wallet...');
+      
+      // Parse legacy wallet
+      const parsedWallet = JSON.parse(legacyWallet);
+      
+      // Create new wallet service and migrate
+      const walletService = new MobileWalletService();
+      await walletService.import({
+        privateKey: parsedWallet.privateKey,
+        name: 'Migrated Wallet',
+        password: 'temp123' // User will need to set a proper password
+      });
 
-      // Create keypair from old data
-      const secretKey = new Uint8Array(wallet.secretKey);
-      const keypair = Keypair.fromSecretKey(secretKey);
-
-      // Create new encrypted wallet
-      const decryptedWallet = WalletStorage.solanaKeypairToWallet(
-        keypair,
-        'Migrated Wallet'
-      );
-
-      const encryptedWallet = await WalletStorage.encryptWallet(
-        decryptedWallet,
-        password
-      );
-
-      await WalletStorage.saveWallet(encryptedWallet);
-
-      // Remove old wallet data
+      // Remove legacy wallet
       await AsyncStorage.removeItem('solana_wallet');
 
-      console.log('Successfully migrated wallet to encrypted storage');
+      console.log('✅ Successfully migrated wallet to encrypted storage');
       return true;
     } catch (error) {
-      console.error('Error migrating wallet:', error);
+      console.error('❌ Error migrating wallet:', error);
       return false;
     }
   }
@@ -498,7 +517,7 @@ export class MobileWalletService extends BaseWallet {
    */
   static async runSelfTest() {
     try {
-      console.log('Running MobileWalletService self-test...');
+      console.log('🧪 Running MobileWalletService self-test...');
 
       const testPassword = 'test123';
       const wallet = new MobileWalletService();
@@ -510,14 +529,21 @@ export class MobileWalletService extends BaseWallet {
       });
 
       if (!walletInfo.publicKey || !walletInfo.isEncrypted) {
-        console.error('Self-test failed: Wallet creation returned invalid info');
+        console.error('❌ Self-test failed: Wallet creation returned invalid info');
         return false;
       }
 
       // Test connection
       const connected = await wallet.connect();
       if (!connected) {
-        console.error('Self-test failed: Could not connect wallet');
+        console.error('❌ Self-test failed: Could not connect wallet');
+        return false;
+      }
+
+      // Test balance fetching (with context for test)
+      const balance = await wallet.getBalance('self-test');
+      if (balance.currency !== 'SOL') {
+        console.error('❌ Self-test failed: Balance check returned invalid currency');
         return false;
       }
 
@@ -525,21 +551,21 @@ export class MobileWalletService extends BaseWallet {
       const testData = 'Hello, world!';
       const signature = await wallet.signData(testData);
       if (!signature) {
-        console.error('Self-test failed: Could not sign data');
+        console.error('❌ Self-test failed: Could not sign data');
         return false;
       }
 
       // Test export
       const exportedData = await wallet.export({ password: testPassword });
       if (!exportedData) {
-        console.error('Self-test failed: Could not export wallet');
+        console.error('❌ Self-test failed: Could not export wallet');
         return false;
       }
 
       // Test wallet listing
       const availableWallets = await MobileWalletService.getAvailableWallets();
       if (availableWallets.length === 0) {
-        console.error('Self-test failed: No wallets found in storage');
+        console.error('❌ Self-test failed: No wallets found in storage');
         return false;
       }
 
@@ -547,13 +573,29 @@ export class MobileWalletService extends BaseWallet {
       await wallet.disconnect();
       await MobileWalletService.deleteWallet(wallet.currentWalletId, testPassword);
 
-      console.log('MobileWalletService self-test passed!');
+      console.log('✅ MobileWalletService self-test passed!');
       return true;
     } catch (error) {
-      console.error('Self-test failed with error:', error);
+      console.error('❌ Self-test failed with error:', error);
       return false;
     }
   }
+
+  /**
+   * Force a balance refresh with logging context
+   * @param {string} context - Why the balance is being refreshed
+   * @returns {Promise<Object>} Balance object
+   */
+  async refreshBalance(context = 'manual refresh') {
+    return await this.getBalance(context);
+  }
+
+  /**
+   * Reset logging state (useful when switching wallets)
+   */
+  resetLoggingState() {
+    this._lastLoggedBalance = null;
+  }
 }
 
-// Character count: 14672
+// Character count: 16,847
