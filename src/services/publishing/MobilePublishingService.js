@@ -148,7 +148,7 @@ export class MobilePublishingService {
       
       console.log('Creating glyphs with enhanced GlyphManager...');
       const glyphChunks = await MobileGlyphManager.createGlyphs(
-        content.content,
+        content,
         {
           onProgress: (current, total) => {
             console.log(`Created ${current}/${total} glyphs...`);
