@@ -1,5 +1,8 @@
 // App.js
 import 'react-native-get-random-values'; // MUST be first import!
+import { Buffer } from 'buffer';
+global.Buffer = Buffer;
+
 
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
