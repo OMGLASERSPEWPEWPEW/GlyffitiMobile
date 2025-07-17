@@ -1,90 +1,119 @@
 // src/screens/HomeScreen.js
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  SafeAreaView,
+import React from 'react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ScrollView,
+  Dimensions 
 } from 'react-native';
-import { useUser } from '../hooks/useUser';
-import { useFeed } from '../hooks/useFeed';
-import Header from '../components/common/Header';
-import FeedItem from '../components/feed/FeedItem';
-import Loading from '../components/common/Loading';
-import { colors, spacing } from '../styles';
+import { homeStyles } from '../styles/homeStyles';
 
-const HomeScreen = ({ navigation }) => {
-  const { user } = useUser();
-  const { feed, loading, refreshFeed } = useFeed();
-  const [refreshing, setRefreshing] = useState(false);
+const { width } = Dimensions.get('window');
 
-  useEffect(() => {
-    if (user) {
-      loadInitialFeed();
-    }
-  }, [user]);
-
-  const loadInitialFeed = async () => {
-    try {
-      await refreshFeed();
-    } catch (error) {
-      console.error('Error loading feed:', error);
-    }
+export const HomeScreen = ({ navigation }) => {
+  const handlePublishing = () => {
+    navigation?.navigate('Publishing');
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refreshFeed();
-    setRefreshing(false);
+  const handlePlaceholderPress = (feature) => {
+    // Placeholder for future features
+    console.log(`${feature} pressed - coming soon!`);
   };
-
-  const renderFeedItem = ({ item }) => (
-    <FeedItem 
-      item={item} 
-      onPress={() => navigation.navigate('StoryDetail', { story: item })}
-    />
-  );
-
-  if (loading && !feed.length) {
-    return <Loading />;
-  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Header 
-        title="Glyffiti"
-        rightAction={() => navigation.navigate('Profile')}
-      />
-      
-      <FlatList
-        data={feed}
-        renderItem={renderFeedItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.feedContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-          />
-        }
+    <SafeAreaView style={homeStyles.container}>
+      <ScrollView 
+        contentContainerStyle={homeStyles.scrollContainer}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        {/* Header */}
+        <View style={homeStyles.header}>
+          <Text style={homeStyles.appTitle}>Glyffiti</Text>
+          <Text style={homeStyles.tagline}>Decentralized storytelling on Solana</Text>
+        </View>
+
+        {/* Main Action Section */}
+        <View style={homeStyles.mainSection}>
+          <Text style={homeStyles.sectionTitle}>What would you like to do?</Text>
+          
+          {/* Publishing Button - Main Feature */}
+          <TouchableOpacity 
+            style={homeStyles.primaryButton}
+            onPress={handlePublishing}
+            activeOpacity={0.7}
+          >
+            <Text style={homeStyles.primaryButtonIcon}>📤</Text>
+            <View style={homeStyles.primaryButtonContent}>
+              <Text style={homeStyles.primaryButtonTitle}>Publishing</Text>
+              <Text style={homeStyles.primaryButtonSubtitle}>
+                Write and publish your stories to the blockchain
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Secondary Actions - Placeholders */}
+        <View style={homeStyles.secondarySection}>
+          <Text style={homeStyles.sectionTitle}>Explore</Text>
+          
+          <View style={homeStyles.buttonRow}>
+            <TouchableOpacity 
+              style={homeStyles.secondaryButton}
+              onPress={() => handlePlaceholderPress('Library')}
+              activeOpacity={0.7}
+            >
+              <Text style={homeStyles.secondaryButtonIcon}>📚</Text>
+              <Text style={homeStyles.secondaryButtonText}>Library</Text>
+              <Text style={homeStyles.comingSoon}>Coming Soon</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={homeStyles.secondaryButton}
+              onPress={() => handlePlaceholderPress('Discover')}
+              activeOpacity={0.7}
+            >
+              <Text style={homeStyles.secondaryButtonIcon}>🔍</Text>
+              <Text style={homeStyles.secondaryButtonText}>Discover</Text>
+              <Text style={homeStyles.comingSoon}>Coming Soon</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={homeStyles.buttonRow}>
+            <TouchableOpacity 
+              style={homeStyles.secondaryButton}
+              onPress={() => handlePlaceholderPress('Community')}
+              activeOpacity={0.7}
+            >
+              <Text style={homeStyles.secondaryButtonIcon}>👥</Text>
+              <Text style={homeStyles.secondaryButtonText}>Community</Text>
+              <Text style={homeStyles.comingSoon}>Coming Soon</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={homeStyles.secondaryButton}
+              onPress={() => handlePlaceholderPress('Profile')}
+              activeOpacity={0.7}
+            >
+              <Text style={homeStyles.secondaryButtonIcon}>👤</Text>
+              <Text style={homeStyles.secondaryButtonText}>Profile</Text>
+              <Text style={homeStyles.comingSoon}>Coming Soon</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={homeStyles.footer}>
+          <Text style={homeStyles.footerText}>
+            Secure • Decentralized • Permanent
+          </Text>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  feedContainer: {
-    paddingHorizontal: spacing.medium,
-    paddingBottom: spacing.large,
-  },
-});
-
 export default HomeScreen;
+
+// Character count: 3012
