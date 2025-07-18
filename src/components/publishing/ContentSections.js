@@ -1,4 +1,5 @@
 // src/components/publishing/ContentSections.js
+// Path: src/components/publishing/ContentSections.js
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { publishingStyles } from '../../styles/publishingStyles';
@@ -22,14 +23,14 @@ export const ContentSections = ({
             <View key={index} style={publishingStyles.contentItem}>
               <Text style={publishingStyles.contentTitle}>{item.title}</Text>
               <Text style={publishingStyles.contentMeta}>
-                {item.successfulGlyphs || 0}/{item.totalGlyphs} glyphs published
+                {item.successfulGlyphs || 0}/{item.totalGlyphs || item.glyphs?.length || 0} glyphs published
               </Text>
               <TouchableOpacity 
                 style={[
                   publishingStyles.resumeButton,
                   walletStatus !== 'unlocked' && publishingStyles.resumeButtonDisabled
                 ]}
-                onPress={() => handleResumePublishing(item.id)}
+                onPress={() => handleResumePublishing(item.contentId || item.id)}
                 disabled={publishing || walletStatus !== 'unlocked'}
               >
                 <Text style={publishingStyles.resumeButtonText}>
@@ -49,7 +50,7 @@ export const ContentSections = ({
             <View key={index} style={publishingStyles.contentItem}>
               <Text style={publishingStyles.contentTitle}>{draft.title}</Text>
               <Text style={publishingStyles.contentMeta}>
-                {draft.content.length} characters
+                {draft.content?.length || 0} characters
               </Text>
             </View>
           ))}
@@ -64,11 +65,16 @@ export const ContentSections = ({
             <View key={index} style={publishingStyles.contentItem}>
               <Text style={publishingStyles.contentTitle}>{item.title}</Text>
               <Text style={publishingStyles.contentMeta}>
-                {item.glyphs?.length || 0} glyphs • {item.transactionIds?.length || 0} transactions
+                {item.glyphs?.length || item.totalGlyphs || 0} glyphs • {item.transactionIds?.length || 0} transactions
               </Text>
               {item.scrollId && (
                 <Text style={publishingStyles.scrollId}>
                   Scroll: {item.scrollId.slice(0, 8)}...
+                </Text>
+              )}
+              {item.publishedAt && (
+                <Text style={publishingStyles.publishedDate}>
+                  Published: {new Date(item.publishedAt).toLocaleDateString()}
                 </Text>
               )}
             </View>
@@ -98,4 +104,4 @@ export const ContentSections = ({
   );
 };
 
-// Character count: 2796
+// Character count: 3005

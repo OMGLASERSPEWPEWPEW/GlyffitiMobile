@@ -1,25 +1,18 @@
 // src/services/publishing/MobilePublishingService.js
 // Path: src/services/publishing/MobilePublishingService.js
-import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { MobileWalletService } from '../wallet/MobileWalletService';
-import { MobileGlyphManager } from './MobileGlyphManager';
-import { MobileScrollManager } from './MobileScrollManager';
-import { HashingService } from '../hashing/HashingService';
-import { CompressionService } from '../compression/CompressionService';
+import { MobileContentManager } from './MobileContentManager';
+import { MobileStorageManager } from './MobileStorageManager';
+import { MobileBlockchainPublisher } from './MobileBlockchainPublisher';
 
 /**
- * Mobile Publishing Service with proper encryption, compression, and integrity verification
- * Replaces the old MobilePublishingService with better security and features
+ * Mobile Publishing Service - Main orchestrator for publishing content
+ * Refactored to use separate managers for better organization and maintainability
  */
 export class MobilePublishingService {
   constructor() {
-    this.connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-    this.MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-    this.activePublishing = new Map();
     this.currentWallet = null;
+    this.blockchainPublisher = new MobileBlockchainPublisher();
   }
 
   /**
@@ -31,667 +24,532 @@ export class MobilePublishingService {
   }
 
   /**
+   * Get current wallet if available
+   * @returns {MobileWalletService|null} Current wallet or null
+   */
+  getCurrentWallet() {
+    return this.currentWallet;
+  }
+
+  // ==================== CONTENT MANAGEMENT ====================
+
+  /**
    * File picker with expanded format support
    * @returns {Promise<Object|null>} Content object or null
    */
   async pickAndLoadFile() {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/plain',           // .txt
-          'text/markdown',        // .md
-          'text/rtf',            // .rtf
-          'application/pdf',      // .pdf (we'll handle text extraction)
-          'application/msword',   // .doc
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-          'text/*',              // Any text file
-          '*/*'                  // Allow all files as fallback
-        ],
-        copyToCacheDirectory: true,
-      });
-      
-      if (result.assets && result.assets[0]) {
-        const file = result.assets[0];
-        let content;
-        
-        try {
-          // Try to read as text
-          content = await FileSystem.readAsStringAsync(file.uri);
-          
-          // Basic validation
-          if (!content || content.trim().length < 10) {
-            throw new Error('File content is too short or empty');
-          }
-          
-        } catch (readError) {
-          throw new Error(`Cannot read file as text. Please select a text file (.txt, .md, etc.)`);
-        }
-        
-        // Generate content ID using enhanced hashing
-        const contentId = await HashingService.generateContentId(
-          file.name,
-          await this.getWalletPublicKey(),
-          Date.now()
-        );
-        
-        return {
-          id: contentId,
-          title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-          content: content,
-          authorPublicKey: await this.getWalletPublicKey(),
-          createdAt: Date.now(),
-        };
-      }
-      
+    const fileContent = await MobileContentManager.pickAndLoadFile();
+    if (!fileContent) {
       return null;
+    }
+
+    // Return in the format expected by existing code
+    return {
+      id: `content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      title: fileContent.filename ? fileContent.filename.replace(/\.[^/.]+$/, '') : 'Untitled',
+      content: fileContent.content,
+      filename: fileContent.filename,
+      size: fileContent.size,
+      type: fileContent.type,
+      authorPublicKey: this.currentWallet ? this.currentWallet.getWalletPublicKey() : 'unknown',
+      createdAt: Date.now()
+    };
+  }
+
+  /**
+   * Manual text entry
+   * @param {string} text - Text content
+   * @param {string} title - Content title
+   * @returns {Object} Content object
+   */
+  createTextContent(text, title = 'Manual Entry') {
+    return MobileContentManager.createTextContent(text, title);
+  }
+
+  /**
+   * Prepare content for publishing with enhanced validation
+   * @param {Object} contentData - Content from file or manual entry
+   * @param {string} title - Publishing title
+   * @param {Object} options - Publishing options
+   * @returns {Promise<Object>} Prepared content ready for publishing
+   */
+  async prepareContent(contentData, title, options = {}) {
+    try {
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected. Please connect a wallet first.');
+      }
+
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
+      }
+
+      return await MobileContentManager.prepareContent(
+        contentData,
+        title,
+        keypair.publicKey.toString(),
+        {
+          ...options,
+          authorName: options.authorName || `User_${keypair.publicKey.toString().substring(0, 8)}`
+        }
+      );
     } catch (error) {
-      console.error('Error picking file:', error);
+      console.error('Error preparing content:', error);
       throw error;
     }
   }
 
   /**
    * Estimate publishing cost and time for content
-   * @param {Object} content - Content object
+   * @param {string|Object} content - Content text or content object
    * @returns {Object} Publishing estimate
    */
   estimatePublishing(content) {
     try {
-      const glyphCount = MobileGlyphManager.estimateChunkCount(content.content);
-      const estimatedCost = MobileGlyphManager.estimateStorageCost(content.content);
+      // Handle both string content and content objects
+      let contentText = '';
       
-      return {
-        glyphCount: glyphCount,
-        estimatedCost: estimatedCost.costs.total,
-        currency: estimatedCost.costs.currency,
-        estimatedTimeMinutes: (glyphCount * 1.5) / 60, // 1.5 seconds per glyph
-        compressionRatio: estimatedCost.compressionRatio,
-        spaceSaved: estimatedCost.spaceSaved
-      };
-    } catch (error) {
-      console.error('Error estimating publishing:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Main publishing function with enhanced error handling and progress tracking
-   * @param {Object} content - Content to publish
-   * @param {Function} onProgress - Progress callback
-   * @returns {Promise<Object>} Publishing result
-   */
-  async publishContent(content, onProgress) {
-    try {
-      console.log('Starting enhanced publishing process...');
-      
-      // Initialize tracking
-      const contentId = content.id;
-      const status = {
-        contentId: contentId,
-        stage: 'preparing',
-        progress: 0,
-        currentGlyph: 0,
-        totalGlyphs: 0,
-        transactionIds: [],
-        failedGlyphs: 0,
-        successfulGlyphs: 0,
-        estimatedCost: null,
-        compressionStats: null
-      };
-      
-      this.activePublishing.set(contentId, status);
-      onProgress && onProgress(status);
-      
-      // Step 1: Create glyphs with enhanced chunking
-      status.stage = 'processing';
-      onProgress && onProgress(status);
-      
-      console.log('Creating glyphs with enhanced GlyphManager...');
-      const glyphChunks = await MobileGlyphManager.createGlyphs(
-        content,
-        {
-          onProgress: (current, total) => {
-            console.log(`Created ${current}/${total} glyphs...`);
-          }
-        }
-      );
-      
-      status.totalGlyphs = glyphChunks.length;
-      
-      // Calculate compression stats
-      const originalSize = content.content.length;
-      const compressedSize = glyphChunks.reduce((total, chunk) => total + chunk.content.length, 0);
-      
-      status.compressionStats = {
-        originalSize: originalSize,
-        compressedSize: compressedSize,
-        compressionRatio: (compressedSize / originalSize).toFixed(2),
-        spaceSaved: originalSize - compressedSize,
-        percentSaved: ((1 - compressedSize / originalSize) * 100).toFixed(1)
-      };
-      
-      // Cost estimation
-      status.estimatedCost = MobileGlyphManager.estimateStorageCost(content.content);
-      
-      console.log(`Created ${glyphChunks.length} glyphs with ${status.compressionStats.percentSaved}% compression`);
-      onProgress && onProgress(status);
-      
-      // Convert glyph chunks to old format for compatibility
-      const glyphs = glyphChunks.map(chunk => ({
-        id: `glyph_${chunk.index}_${Date.now()}`,
-        index: chunk.index,
-        content: CompressionService.uint8ArrayToBase64(chunk.content), // Convert to base64 for storage
-        hash: chunk.hash,
-        totalGlyphs: chunk.totalChunks,
-        transactionId: null,
-        status: 'pending',
-        originalText: chunk.originalText
-      }));
-      
-      // Save as in-progress immediately
-      await this.saveInProgressContent({
-        ...content,
-        glyphs: glyphs,
-        glyphChunks: glyphChunks, // Keep enhanced chunks for later use
-        status: 'processing',
-        startedAt: Date.now(),
-        compressionStats: status.compressionStats,
-        estimatedCost: status.estimatedCost
-      });
-      
-      // Step 2: Get wallet
-      const keypair = await this.getWalletKeypair();
-      
-      // Step 3: Publish each glyph with enhanced error handling
-      status.stage = 'publishing';
-      onProgress && onProgress(status);
-      
-      const transactionIds = [];
-      let successfulGlyphs = 0;
-      let failedGlyphs = 0;
-      
-      for (let i = 0; i < glyphs.length; i++) {
-        const glyph = glyphs[i];
-        const glyphChunk = glyphChunks[i];
-        
-        // Update progress
-        status.currentGlyph = i + 1;
-        status.progress = Math.floor((i / glyphs.length) * 100);
-        status.successfulGlyphs = successfulGlyphs;
-        status.failedGlyphs = failedGlyphs;
-        onProgress && onProgress(status);
-        
-        try {
-          // Verify glyph integrity before publishing
-          const isIntegrityValid = await MobileGlyphManager.verifyGlyphIntegrity(glyphChunk);
-          if (!isIntegrityValid) {
-            throw new Error(`Glyph ${i + 1} failed integrity check`);
-          }
-          
-          // Create transaction with compressed data
-          const transaction = new Transaction();
-          
-          // IMPORTANT: Convert compressed binary data to base64 for the Memo program
-          // The Solana Memo program expects UTF-8 text, so we encode our binary data as base64
-          const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
-          const memoData = Buffer.from(base64CompressedData, 'utf-8');
-          
-          // Add memo instruction with base64-encoded compressed data
-          const instruction = new TransactionInstruction({
-            keys: [],
-            programId: this.MEMO_PROGRAM_ID,
-            data: memoData
-          });
-          
-          transaction.add(instruction);
-          
-          // Get recent blockhash
-          const { blockhash } = await this.connection.getLatestBlockhash();
-          transaction.recentBlockhash = blockhash;
-          transaction.feePayer = keypair.publicKey;
-          
-          // Sign and send
-          transaction.sign(keypair);
-          const signature = await this.connection.sendRawTransaction(
-            transaction.serialize(),
-            { skipPreflight: false, preflightCommitment: 'confirmed' }
-          );
-          
-          // Wait for confirmation
-          await this.connection.confirmTransaction(signature);
-          
-          // SUCCESS - Mark glyph as published
-          glyph.transactionId = signature;
-          glyph.status = 'published';
-          transactionIds.push(signature);
-          successfulGlyphs++;
-          
-          console.log(`✅ Glyph ${i + 1}/${glyphs.length} published: ${signature}`);
-          
-        } catch (error) {
-          // FAILURE - Mark glyph as failed
-          console.error(`❌ Error publishing glyph ${i + 1}:`, error);
-          glyph.status = 'failed';
-          glyph.error = error.message;
-          failedGlyphs++;
-        }
-        
-        // Update in-progress content after each glyph
-        await this.updateInProgressContent(contentId, glyphs, successfulGlyphs, failedGlyphs);
-        
-        // Small delay between transactions
-        if (i < glyphs.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      // Final status determination
-      status.successfulGlyphs = successfulGlyphs;
-      status.failedGlyphs = failedGlyphs;
-      status.transactionIds = transactionIds;
-      
-      if (successfulGlyphs === glyphs.length) {
-        // ALL GLYPHS PUBLISHED SUCCESSFULLY - Create scroll manifest
-        status.stage = 'completed';
-        status.progress = 100;
-        
-        // Create scroll manifest
-        const publishedContent = {
-          ...content,
-          glyphs: glyphs.filter(g => g.status === 'published'),
-          transactionIds: transactionIds,
-          totalGlyphs: glyphs.length,
-          successfulGlyphs: successfulGlyphs,
-          failedGlyphs: failedGlyphs,
-          publishedAt: Date.now(),
-          compressionStats: status.compressionStats
-        };
-        
-        const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
-        status.scrollId = manifest.id;
-        publishedContent.scrollId = manifest.id;
-        publishedContent.manifest = manifest;
-        
-        // Save as published
-        await this.savePublishedContent(publishedContent);
-        await this.removeInProgressContent(contentId);
-        
-        onProgress && onProgress(status);
-        
-        return {
-          status: 'completed',
-          contentId: contentId,
-          scrollId: manifest.id,
-          totalGlyphs: glyphs.length,
-          successfulGlyphs: successfulGlyphs,
-          failedGlyphs: failedGlyphs,
-          transactionIds: transactionIds,
-          compressionStats: status.compressionStats
-        };
-        
-      } else if (successfulGlyphs > 0) {
-        // PARTIAL SUCCESS
-        status.stage = 'partial';
-        status.progress = Math.floor((successfulGlyphs / glyphs.length) * 100);
-        onProgress && onProgress(status);
-        
-        return {
-          status: 'partial',
-          contentId: contentId,
-          scrollId: null,
-          totalGlyphs: glyphs.length,
-          successfulGlyphs: successfulGlyphs,
-          failedGlyphs: failedGlyphs,
-          transactionIds: transactionIds,
-          compressionStats: status.compressionStats
-        };
-        
+      if (typeof content === 'string') {
+        contentText = content;
+      } else if (content && content.content) {
+        contentText = content.content;
       } else {
-        // TOTAL FAILURE
-        status.stage = 'failed';
-        status.error = 'All glyphs failed to publish';
-        onProgress && onProgress(status);
-        
+        console.warn('Invalid content type for estimation, using empty string');
+        contentText = '';
+      }
+      
+      if (!contentText || contentText.trim().length === 0) {
         return {
-          status: 'failed',
-          contentId: contentId,
-          scrollId: null,
-          totalGlyphs: glyphs.length,
-          successfulGlyphs: 0,
-          failedGlyphs: glyphs.length,
-          transactionIds: [],
-          compressionStats: status.compressionStats
+          glyphCount: 0,
+          estimatedCost: 0,
+          currency: 'SOL',
+          estimatedTimeMinutes: 0,
+          compressionRatio: 1,
+          spaceSaved: 0,
+          error: 'Content is empty'
         };
       }
       
+      return MobileContentManager.estimatePublishing(contentText);
     } catch (error) {
-      console.error('Publishing error:', error);
-      throw error;
-    } finally {
-      this.activePublishing.delete(content.id);
+      console.error('Error in publishing estimation:', error);
+      return {
+        glyphCount: 0,
+        estimatedCost: 0,
+        currency: 'SOL',
+        estimatedTimeMinutes: 0,
+        compressionRatio: 1,
+        spaceSaved: 0,
+        error: error.message
+      };
     }
   }
 
   /**
-   * Resume publishing for failed glyphs
+   * Validate content structure
+   * @param {Object} content - Content to validate
+   * @returns {boolean} True if valid
+   */
+  validateContent(content) {
+    return MobileContentManager.validateContent(content);
+  }
+
+  /**
+   * Get content statistics
+   * @param {Object} content - Content to analyze
+   * @returns {Object} Content statistics
+   */
+  getContentStats(content) {
+    return MobileContentManager.getContentStats(content);
+  }
+
+  // ==================== PUBLISHING OPERATIONS ====================
+
+  /**
+   * Publish prepared content to blockchain with enhanced error handling and scroll creation
+   * @param {Object} content - Content object (raw or prepared)
+   * @param {Function} onProgress - Progress callback
+   * @returns {Promise<Object>} Publishing result with scroll information
+   */
+  async publishContent(content, onProgress = null) {
+    try {
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected');
+      }
+
+      if (!content || !content.content) {
+        throw new Error('No valid content to publish');
+      }
+
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
+      }
+
+      // Check if content is already prepared (has glyphs) or needs preparation
+      let preparedContent;
+      if (content.glyphs && content.glyphs.length > 0) {
+        // Content is already prepared
+        preparedContent = content;
+      } else {
+        // Content needs to be prepared first
+        console.log('📝 Preparing content for publishing...');
+        
+        const contentData = {
+          content: content.content,
+          filename: content.filename || `${content.title}.txt`,
+          size: content.content.length,
+          type: content.type || 'text/plain'
+        };
+
+        preparedContent = await this.prepareContent(
+          contentData,
+          content.title || 'Untitled',
+          {
+            authorName: content.authorName
+          }
+        );
+      }
+
+      return await this.blockchainPublisher.publishContent(preparedContent, keypair, onProgress);
+    } catch (error) {
+      console.error('❌ Publishing error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resume publishing from a failed or partial state
    * @param {string} contentId - Content ID to resume
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result
    */
-  async resumePublishing(contentId, onProgress) {
+  async resumePublishing(contentId, onProgress = null) {
     try {
-      // Get in-progress content
-      const inProgressList = await this.getInProgressContent();
-      const content = inProgressList.find(item => item.id === contentId);
-      
-      if (!content) {
-        throw new Error('Content not found in progress');
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected');
       }
-      
-      // Get unpublished glyphs
-      const unpublishedGlyphs = content.glyphs.filter(g => g.status !== 'published');
-      
-      if (unpublishedGlyphs.length === 0) {
-        throw new Error('No unpublished glyphs to resume');
+
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
       }
-      
-      console.log(`Resuming publishing for ${unpublishedGlyphs.length} failed glyphs...`);
-      
-      // Initialize status
-      const status = {
-        contentId: contentId,
-        stage: 'publishing',
-        progress: 0,
-        currentGlyph: 0,
-        totalGlyphs: content.glyphs.length,
-        transactionIds: content.transactionIds || [],
-        failedGlyphs: 0,
-        successfulGlyphs: content.glyphs.filter(g => g.status === 'published').length,
-        compressionStats: content.compressionStats,
-        estimatedCost: content.estimatedCost
-      };
-      
-      onProgress && onProgress(status);
-      
-      // Get wallet
-      const keypair = await this.getWalletKeypair();
-      
-      // Try to publish each unpublished glyph
-      for (const glyph of unpublishedGlyphs) {
-        status.currentGlyph++;
-        status.progress = Math.floor((status.successfulGlyphs / content.glyphs.length) * 100);
-        onProgress && onProgress(status);
-        
-        try {
-          // Get the original glyph chunk
-          const glyphChunk = content.glyphChunks ? 
-            content.glyphChunks[glyph.index] : 
-            {
-              index: glyph.index,
-              totalChunks: glyph.totalGlyphs,
-              content: CompressionService.base64ToUint8Array(glyph.content),
-              hash: glyph.hash,
-              originalText: glyph.originalText
-            };
-          
-          // Create transaction
-          const transaction = new Transaction();
-          
-          // IMPORTANT: Convert compressed binary data to base64 for the Memo program
-          const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
-          const memoData = Buffer.from(base64CompressedData, 'utf-8');
-          
-          // Add memo instruction
-          const instruction = new TransactionInstruction({
-            keys: [],
-            programId: this.MEMO_PROGRAM_ID,
-            data: memoData
-          });
-          
-          transaction.add(instruction);
-          
-          // Get recent blockhash
-          const { blockhash } = await this.connection.getLatestBlockhash();
-          transaction.recentBlockhash = blockhash;
-          transaction.feePayer = keypair.publicKey;
-          
-          // Sign and send
-          transaction.sign(keypair);
-          const signature = await this.connection.sendRawTransaction(
-            transaction.serialize(),
-            { skipPreflight: false, preflightCommitment: 'confirmed' }
-          );
-          
-          // Wait for confirmation
-          await this.connection.confirmTransaction(signature);
-          
-          // Mark as published
-          glyph.transactionId = signature;
-          glyph.status = 'published';
-          glyph.error = undefined;
-          status.transactionIds.push(signature);
-          status.successfulGlyphs++;
-          
-          console.log(`✅ Glyph ${glyph.index + 1} published: ${signature}`);
-          
-        } catch (error) {
-          console.error(`❌ Error publishing glyph ${glyph.index + 1}:`, error);
-          glyph.error = error.message;
-          status.failedGlyphs++;
-        }
-        
-        // Update in-progress content
-        await this.updateInProgressContent(
-          contentId, 
-          content.glyphs, 
-          status.successfulGlyphs, 
-          status.failedGlyphs
-        );
-      }
-      
-      // Check final status
-      const allPublished = content.glyphs.every(g => g.status === 'published');
-      
-      if (allPublished) {
-        // Create scroll and move to published
-        status.stage = 'completed';
-        status.progress = 100;
-        
-        const publishedContent = {
-          ...content,
-          transactionIds: status.transactionIds,
-          publishedAt: Date.now()
-        };
-        
-        const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
-        publishedContent.scrollId = manifest.id;
-        publishedContent.manifest = manifest;
-        
-        await this.savePublishedContent(publishedContent);
-        await this.removeInProgressContent(contentId);
-        
-        onProgress && onProgress(status);
-        
-        return {
-          status: 'completed',
-          contentId: contentId,
-          scrollId: manifest.id,
-          totalGlyphs: content.glyphs.length,
-          successfulGlyphs: status.successfulGlyphs,
-          failedGlyphs: status.failedGlyphs,
-          transactionIds: status.transactionIds
-        };
-      } else {
-        // Still partial
-        return {
-          status: 'partial',
-          contentId: contentId,
-          scrollId: null,
-          totalGlyphs: content.glyphs.length,
-          successfulGlyphs: status.successfulGlyphs,
-          failedGlyphs: status.failedGlyphs,
-          transactionIds: status.transactionIds
-        };
-      }
-      
+
+      return await this.blockchainPublisher.resumePublishing(contentId, keypair, onProgress);
     } catch (error) {
-      console.error('Resume publishing error:', error);
+      console.error('❌ Error resuming publishing:', error);
       throw error;
     }
   }
 
   /**
-   * Storage Methods
+   * Get publishing status for active publishing operations
+   * @param {string} contentId - Content ID to check
+   * @returns {Object|null} Current status or null
    */
-  
-  async savePublishedContent(content) {
-    try {
-      const published = await this.getPublishedContent();
-      published.push(content);
-      await AsyncStorage.setItem('glyffiti_published', JSON.stringify(published));
-    } catch (error) {
-      console.error('Error saving published content:', error);
-    }
+  getPublishingStatus(contentId) {
+    return this.blockchainPublisher.getPublishingStatus(contentId);
   }
 
-  async getPublishedContent() {
-    try {
-      const data = await AsyncStorage.getItem('glyffiti_published');
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error getting published content:', error);
-      return [];
-    }
+  /**
+   * Cancel an active publishing operation
+   * @param {string} contentId - Content ID to cancel
+   * @returns {Promise<boolean>} Success status
+   */
+  async cancelPublishing(contentId) {
+    return await this.blockchainPublisher.cancelPublishing(contentId);
   }
 
-  async saveInProgressContent(content) {
-    try {
-      const inProgress = await this.getInProgressContent();
-      const index = inProgress.findIndex(item => item.id === content.id);
-      
-      if (index >= 0) {
-        inProgress[index] = content;
-      } else {
-        inProgress.push(content);
-      }
-      
-      await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(inProgress));
-    } catch (error) {
-      console.error('Error saving in-progress content:', error);
-    }
+  /**
+   * Get all active publishing operations
+   * @returns {Array} Array of active publishing statuses
+   */
+  getActivePublishing() {
+    return this.blockchainPublisher.getActivePublishing();
   }
 
+  // ==================== STORAGE OPERATIONS ====================
+
+  /**
+   * Get in-progress content as array (fixed to use new storage manager)
+   * @returns {Promise<Array>} Array of in-progress content
+   */
   async getInProgressContent() {
-    try {
-      const data = await AsyncStorage.getItem('glyffiti_in_progress');
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error getting in-progress content:', error);
-      return [];
-    }
+    return await MobileStorageManager.getInProgressContentArray();
   }
 
-  async updateInProgressContent(contentId, glyphs, successfulGlyphs, failedGlyphs) {
-    try {
-      const inProgress = await this.getInProgressContent();
-      const index = inProgress.findIndex(item => item.id === contentId);
-      
-      if (index >= 0) {
-        inProgress[index].glyphs = glyphs;
-        inProgress[index].successfulGlyphs = successfulGlyphs;
-        inProgress[index].failedGlyphs = failedGlyphs;
-        inProgress[index].lastUpdated = Date.now();
-        
-        await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(inProgress));
-      }
-    } catch (error) {
-      console.error('Error updating in-progress content:', error);
-    }
+  /**
+   * Get in-progress content as array
+   * @returns {Promise<Array>} Array of in-progress content
+   */
+  async getInProgressContentArray() {
+    return await MobileStorageManager.getInProgressContentArray();
   }
 
-  async removeInProgressContent(contentId) {
-    try {
-      const inProgress = await this.getInProgressContent();
-      const filtered = inProgress.filter(item => item.id !== contentId);
-      await AsyncStorage.setItem('glyffiti_in_progress', JSON.stringify(filtered));
-    } catch (error) {
-      console.error('Error removing in-progress content:', error);
-    }
+  /**
+   * Get all published content
+   * @returns {Promise<Array>} Array of published content (fixed to use new storage manager)
+   */
+  async getPublishedContent() {
+    return await MobileStorageManager.getPublishedContentArray();
   }
 
+  /**
+   * Get published content as array sorted by date
+   * @returns {Promise<Array>} Array of published content
+   */
+  async getPublishedContentArray() {
+    return await MobileStorageManager.getPublishedContentArray();
+  }
+
+  /**
+   * Get published content by ID
+   * @param {string} contentId - Content ID to retrieve
+   * @returns {Promise<Object|null>} Published content or null
+   */
+  async getPublishedContentById(contentId) {
+    return await MobileStorageManager.getPublishedContentById(contentId);
+  }
+
+  /**
+   * Delete published content
+   * @param {string} contentId - Content ID to delete
+   * @returns {Promise<boolean>} Success status
+   */
+  async deletePublishedContent(contentId) {
+    return await MobileStorageManager.deletePublishedContent(contentId);
+  }
+
+  /**
+   * Find content by search criteria
+   * @param {string} searchTerm - Search term
+   * @param {Object} options - Search options
+   * @returns {Promise<Object>} Search results
+   */
+  async searchContent(searchTerm, options = {}) {
+    return await MobileStorageManager.searchContent(searchTerm, options);
+  }
+
+  /**
+   * Get storage statistics
+   * @returns {Promise<Object>} Storage statistics
+   */
+  async getStorageStats() {
+    return await MobileStorageManager.getStorageStats();
+  }
+
+  /**
+   * Clear all storage (for testing/debugging)
+   * @returns {Promise<boolean>} Success status
+   */
+  async clearAllStorage() {
+    return await MobileStorageManager.clearAllStorage();
+  }
+
+  /**
+   * Export all data for backup
+   * @returns {Promise<string>} JSON string of all data
+   */
+  async exportAllData() {
+    return await MobileStorageManager.exportAllData();
+  }
+
+  /**
+   * Import data from backup
+   * @param {string} jsonData - JSON string of backup data
+   * @param {boolean} merge - Whether to merge with existing data
+   * @returns {Promise<Object>} Import results
+   */
+  async importData(jsonData, merge = true) {
+    return await MobileStorageManager.importData(jsonData, merge);
+  }
+
+  // ==================== LEGACY COMPATIBILITY METHODS ====================
+
+  /**
+   * Get drafts (for compatibility with existing code)
+   * @returns {Promise<Array>} Array of draft content
+   */
+  async getDrafts() {
+    // Map in-progress content to draft format for compatibility
+    const inProgress = await this.getInProgressContentArray();
+    return inProgress.map(content => ({
+      id: content.contentId,
+      title: content.title,
+      content: content.originalContent,
+      savedAt: content.lastUpdated || content.createdAt,
+      ...content
+    }));
+  }
+
+  /**
+   * Save draft (for compatibility with existing code)
+   * @param {Object} content - Content to save as draft
+   * @returns {Promise<boolean>} Success status
+   */
   async saveDraft(content) {
     try {
-      const drafts = await this.getDrafts();
-      drafts.push({
-        ...content,
-        savedAt: Date.now()
-      });
-      await AsyncStorage.setItem('glyffiti_drafts', JSON.stringify(drafts));
+      // Convert draft format to in-progress format
+      const inProgressContent = {
+        contentId: content.id || `draft_${Date.now()}`,
+        title: content.title,
+        originalContent: content.content,
+        authorPublicKey: content.authorPublicKey || 'unknown',
+        glyphs: content.glyphs || [],
+        createdAt: content.savedAt || Date.now(),
+        status: 'draft'
+      };
+      
+      return await MobileStorageManager.saveInProgressContent(inProgressContent);
     } catch (error) {
       console.error('Error saving draft:', error);
+      return false;
     }
   }
 
-  async getDrafts() {
+  // ==================== BLOCKCHAIN OPERATIONS ====================
+
+  /**
+   * Check blockchain connection status
+   * @returns {Promise<Object>} Connection status
+   */
+  async checkConnection() {
+    return await this.blockchainPublisher.checkConnection();
+  }
+
+  /**
+   * Estimate transaction costs
+   * @param {number} glyphCount - Number of glyphs to publish
+   * @returns {Promise<Object>} Cost estimation
+   */
+  async estimateTransactionCosts(glyphCount) {
+    return await this.blockchainPublisher.estimateTransactionCosts(glyphCount);
+  }
+
+  // ==================== UTILITY METHODS ====================
+
+  /**
+   * Get service health status
+   * @returns {Promise<Object>} Health status of all components
+   */
+  async getHealthStatus() {
     try {
-      const data = await AsyncStorage.getItem('glyffiti_drafts');
-      return data ? JSON.parse(data) : [];
+      const [storageStats, connectionStatus] = await Promise.all([
+        this.getStorageStats(),
+        this.checkConnection()
+      ]);
+
+      return {
+        wallet: {
+          connected: !!this.currentWallet,
+          hasKeypair: this.currentWallet ? !!(await this.currentWallet.getKeypair()) : false
+        },
+        storage: {
+          ...storageStats,
+          accessible: true
+        },
+        blockchain: connectionStatus,
+        activePublishing: this.getActivePublishing().length,
+        timestamp: Date.now()
+      };
     } catch (error) {
-      console.error('Error getting drafts:', error);
-      return [];
+      console.error('Error getting health status:', error);
+      return {
+        wallet: { connected: false, hasKeypair: false },
+        storage: { accessible: false, error: error.message },
+        blockchain: { connected: false, error: error.message },
+        activePublishing: 0,
+        timestamp: Date.now(),
+        error: error.message
+      };
     }
   }
 
   /**
-   * Get publishing statistics
-   * @returns {Promise<Object>} Publishing stats
+   * Run comprehensive self-test of all components
+   * @returns {Promise<Object>} Test results
    */
-  async getPublishingStats() {
+  async runSelfTest() {
     try {
-      const published = await this.getPublishedContent();
-      const totalGlyphs = published.reduce((sum, item) => sum + (item.glyphs?.length || 0), 0);
-      const totalCost = totalGlyphs * 0.000005; // Estimated cost per glyph
+      console.log('Running MobilePublishingService comprehensive self-test...');
       
-      return {
-        totalPublished: published.length,
-        totalGlyphs: totalGlyphs,
-        totalCost: totalCost,
-        successRate: published.length > 0 ? 100 : 0
+      const results = {
+        contentManager: false,
+        storageManager: false,
+        blockchainPublisher: false,
+        overallSuccess: false,
+        errors: []
       };
+
+      // Test ContentManager
+      try {
+        results.contentManager = await MobileContentManager.runSelfTest();
+      } catch (error) {
+        results.errors.push(`ContentManager test failed: ${error.message}`);
+      }
+
+      // Test StorageManager
+      try {
+        results.storageManager = await MobileStorageManager.runSelfTest();
+      } catch (error) {
+        results.errors.push(`StorageManager test failed: ${error.message}`);
+      }
+
+      // Test BlockchainPublisher
+      try {
+        results.blockchainPublisher = await this.blockchainPublisher.runSelfTest();
+      } catch (error) {
+        results.errors.push(`BlockchainPublisher test failed: ${error.message}`);
+      }
+
+      // Overall success
+      results.overallSuccess = results.contentManager && results.storageManager && results.blockchainPublisher;
+
+      if (results.overallSuccess) {
+        console.log('🎉 MobilePublishingService comprehensive self-test passed!');
+      } else {
+        console.log('❌ MobilePublishingService self-test failed. See errors for details.');
+      }
+
+      return results;
     } catch (error) {
-      console.error('Error getting stats:', error);
+      console.error('Self-test failed with error:', error);
       return {
-        totalPublished: 0,
-        totalGlyphs: 0,
-        totalCost: 0,
-        successRate: 0
+        contentManager: false,
+        storageManager: false,
+        blockchainPublisher: false,
+        overallSuccess: false,
+        errors: [`Self-test execution failed: ${error.message}`]
       };
     }
   }
 
   /**
-   * Helper method to get wallet keypair
-   * @returns {Promise<Keypair>} Wallet keypair
+   * Get service information
+   * @returns {Object} Service information
    */
-  async getWalletKeypair() {
-    if (!this.currentWallet) {
-      throw new Error('No wallet connected');
-    }
-    
-    return this.currentWallet.getWalletKeypair();
-  }
-
-  /**
-   * Helper method to get wallet public key
-   * @returns {Promise<string>} Wallet public key
-   */
-  async getWalletPublicKey() {
-    if (!this.currentWallet) {
-      return 'unknown';
-    }
-    
-    return this.currentWallet.getWalletPublicKey();
+  getServiceInfo() {
+    return {
+      name: 'MobilePublishingService',
+      version: '2.0.0',
+      components: [
+        'MobileContentManager',
+        'MobileStorageManager', 
+        'MobileBlockchainPublisher',
+        'MobileScrollManager'
+      ],
+      capabilities: [
+        'File loading and text entry',
+        'Content preparation and validation',
+        'Blockchain publishing with compression',
+        'Scroll manifest creation and storage',
+        'Progress tracking and error handling',
+        'Data backup and import',
+        'Content search and statistics'
+      ],
+      storageKeys: MobileStorageManager.STORAGE_KEYS
+    };
   }
 }
 
-// Character count: 26847
+// Character count: 9821
