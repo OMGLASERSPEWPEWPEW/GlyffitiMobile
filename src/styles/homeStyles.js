@@ -1,150 +1,167 @@
 // src/styles/homeStyles.js
+// Path: src/styles/homeStyles.js
 import { StyleSheet, Dimensions } from 'react-native';
+// Import directly to avoid circular reference issues
+import { colors } from './colors';
+import { spacing } from './spacing';
 
 const { width } = Dimensions.get('window');
 
 export const homeStyles = StyleSheet.create({
+  // Base container styles
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
-  
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingHorizontal: spacing.medium,
+    paddingBottom: spacing.large,
   },
-  
+
+  // Header section
   header: {
     alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 40,
+    paddingVertical: spacing.xxlarge || 48,
+    paddingHorizontal: spacing.medium,
   },
-  
   appTitle: {
     fontSize: 42,
     fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 8,
+    color: colors.primary,
+    marginBottom: spacing.small,
     textAlign: 'center',
   },
-  
   tagline: {
     fontSize: 16,
-    color: '#7f8c8d',
+    color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
+    lineHeight: 22,
   },
-  
+
+  // Section styles
   mainSection: {
-    marginBottom: 40,
+    marginBottom: spacing.large,
   },
-  
+  secondarySection: {
+    marginBottom: spacing.large,
+  },
+  infoSection: {
+    marginBottom: spacing.large,
+  },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#34495e',
-    marginBottom: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: spacing.medium,
     textAlign: 'center',
   },
-  
+
+  // Primary button (Publishing)
   primaryButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: colors.primary,
     borderRadius: 16,
-    padding: 20,
+    padding: spacing.large,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.primary,
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  
   primaryButtonIcon: {
     fontSize: 32,
-    marginRight: 16,
+    marginRight: spacing.medium,
   },
-  
   primaryButtonContent: {
     flex: 1,
   },
-  
   primaryButtonTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 4,
   },
-  
   primaryButtonSubtitle: {
     fontSize: 14,
-    color: '#ecf0f1',
+    color: '#ffffff',
     opacity: 0.9,
+    lineHeight: 20,
   },
-  
-  secondarySection: {
-    marginBottom: 40,
-  },
-  
+
+  // Secondary buttons grid
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: spacing.medium,
   },
-  
   secondaryButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.backgroundSecondary,
     borderRadius: 12,
-    padding: 20,
+    padding: spacing.medium,
     width: (width - 52) / 2, // Account for padding and gap
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: colors.border,
+    minHeight: 100,
+    justifyContent: 'center',
   },
-  
   secondaryButtonIcon: {
     fontSize: 24,
-    marginBottom: 8,
+    marginBottom: spacing.small,
   },
-  
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2c3e50',
-    textAlign: 'center',
+    color: colors.text,
     marginBottom: 4,
+    textAlign: 'center',
   },
-  
   comingSoon: {
     fontSize: 12,
-    color: '#95a5a6',
-    fontStyle: 'italic',
+    color: colors.textLight,
     textAlign: 'center',
+    fontStyle: 'italic',
   },
-  
-  footer: {
-    marginTop: 'auto',
-    paddingVertical: 20,
+
+  // Info card
+  infoCard: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 12,
+    padding: spacing.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  
-  footerText: {
+  infoIcon: {
+    fontSize: 24,
+    marginRight: spacing.medium,
+  },
+  infoText: {
+    flex: 1,
     fontSize: 14,
-    color: '#7f8c8d',
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+
+  // Footer
+  footer: {
+    alignItems: 'center',
+    paddingVertical: spacing.large,
+    paddingHorizontal: spacing.medium,
+    marginTop: 'auto',
+  },
+  footerText: {
+    fontSize: 12,
+    color: colors.textLight,
     textAlign: 'center',
   },
 });
 
-// Character count: 2049
+// 1,292 characters

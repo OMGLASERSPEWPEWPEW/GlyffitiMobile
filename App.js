@@ -1,4 +1,5 @@
 // App.js
+// Path: App.js
 import 'react-native-get-random-values'; // MUST be first import!
 import { Buffer } from 'buffer';
 global.Buffer = Buffer;
@@ -10,6 +11,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PublishingScreen } from './src/screens/PublishingScreen';
+import { StoryViewScreen } from './src/screens/StoryViewScreen';
+import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
 
 const Stack = createStackNavigator();
 
@@ -52,6 +55,21 @@ export default function App() {
               title: 'Publishing',
             }}
           />
+          <Stack.Screen 
+            name="StoryView" 
+            component={StoryViewScreen}
+            options={{
+              title: 'Story Viewer',
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen 
+            name="StoryDiscovery" 
+            component={StoryDiscoveryScreen}
+            options={{
+              title: 'Discover Stories',
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />
@@ -59,4 +77,4 @@ export default function App() {
   );
 }
 
-// Character count: 1319
+// 1,675 characters
