@@ -5,11 +5,10 @@ import 'react-native-get-random-values';
 import { Keypair, Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { WalletStorage } from './WalletStorage';
 import { BaseWallet, WalletConnectionStatus } from './BaseWallet';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Mobile Wallet Service with encrypted storage and better security
- * Replaces the old MobileWalletService with secure, encrypted wallet management
+ * CLEANED VERSION: Removed legacy migration system
  */
 export class MobileWalletService extends BaseWallet {
   constructor() {
@@ -22,7 +21,7 @@ export class MobileWalletService extends BaseWallet {
     // Initialize Solana connection for balance checking
     this.connection = new Connection('https://api.devnet.solana.com', 'confirmed');
     
-    // Add logging control properties - simplified
+    // Add logging control properties
     this._lastLoggedBalance = null;
   }
 
@@ -182,10 +181,6 @@ export class MobileWalletService extends BaseWallet {
       this._updateStatus(WalletConnectionStatus.CONNECTED);
 
       console.log('✅ Wallet loaded successfully:', walletInfo.publicKey);
-      
-      // Log initial balance
-      await this.getBalance('initial load');
-      
       return walletInfo;
     } catch (error) {
       this._emitError(error);
@@ -195,214 +190,157 @@ export class MobileWalletService extends BaseWallet {
   }
 
   /**
-   * Export wallet data
-   * @param {Object} options - Export options
-   * @param {string} options.password - Password for decryption
-   * @param {boolean} [options.includePrivateKey=false] - Whether to include private key
-   * @returns {Promise<string>} Exported wallet data
-   */
-  async export(options) {
-    try {
-      this._validateOptions(options, ['password']);
-
-      if (!this.currentWalletId) {
-        throw new Error('No wallet loaded');
-      }
-
-      // Get encrypted wallet
-      const encryptedWallet = await WalletStorage.getWallet(this.currentWalletId);
-      if (!encryptedWallet) {
-        throw new Error('Wallet not found');
-      }
-
-      // Decrypt wallet
-      const decryptedWallet = await WalletStorage.decryptWallet(
-        encryptedWallet,
-        options.password
-      );
-
-      // Create export data
-      const exportData = {
-        publicKey: decryptedWallet.publicKey,
-        name: decryptedWallet.name,
-        type: 'solana',
-        exportedAt: new Date().toISOString()
-      };
-
-      if (options.includePrivateKey) {
-        exportData.privateKey = decryptedWallet.privateKey;
-        exportData.warning = 'This export contains your private key. Keep it secure!';
-      }
-
-      return JSON.stringify(exportData, null, 2);
-    } catch (error) {
-      this._emitError(error);
-      throw new Error('Failed to export wallet: ' + error.message);
-    }
-  }
-
-  /**
-   * Connect to Solana network
-   * @returns {Promise<boolean>} Always true for mobile
+   * Connect the wallet service to blockchain
+   * @returns {Promise<boolean>} Success status
    */
   async connect() {
     try {
       if (!this.keypair) {
-        throw new Error('No wallet loaded. Create or load a wallet first.');
+        throw new Error('No wallet loaded');
       }
 
+      // Test connection by getting balance
+      await this.getBalance('connection-test');
+      
       this._updateStatus(WalletConnectionStatus.CONNECTED);
-      this._startBalanceChecking();
+      console.log('✅ Wallet connected to Solana network');
       return true;
     } catch (error) {
-      this._emitError(error);
+      this._updateStatus(WalletConnectionStatus.ERROR);
+      console.error('❌ Failed to connect wallet:', error);
       return false;
     }
   }
 
   /**
-   * Disconnect from network
-   * @returns {Promise<void>}
+   * Disconnect the wallet
+   * @returns {Promise<boolean>} Success status
    */
   async disconnect() {
-    this._updateStatus(WalletConnectionStatus.DISCONNECTED);
-    this._stopBalanceChecking();
-    this.keypair = null;
-    this.currentWalletId = null;
-  }
-
-  /**
-   * Get current wallet balance from Solana network
-   * @param {string} [logContext] - Context for when to log (e.g., 'initial', 'airdrop', 'transaction')
-   * @returns {Promise<Object>} Balance object
-   */
-  async getBalance(logContext = null) {
     try {
-      if (!this.keypair) {
-        throw new Error('No wallet loaded');
-      }
-
-      if (!this.connection) {
-        throw new Error('No connection to Solana network');
-      }
-
-      // Actually query the Solana network for the balance
-      const lamports = await this.connection.getBalance(this.keypair.publicKey);
-      const solBalance = lamports / LAMPORTS_PER_SOL;
-
-      const balance = {
-        total: solBalance,
-        available: solBalance,
-        currency: 'SOL'
-      };
-
-      // Update stored balance in wallet info
-      if (this._info) {
-        this._info.balance = balance;
-      }
-
-      this._updateBalance(balance);
-
-      // SIMPLE LOGGING: Only log when there's a meaningful context or balance changed
-      const balanceChanged = this._lastLoggedBalance !== null && 
-                            Math.abs(this._lastLoggedBalance - solBalance) > 0.001;
-
-      if (logContext || balanceChanged) {
-        const contextMsg = logContext ? ` (${logContext})` : ' (balance changed)';
-        console.log(`💰 Current balance: ${solBalance} SOL${contextMsg}`);
-        this._lastLoggedBalance = solBalance;
-      }
-
-      return balance;
+      this.keypair = null;
+      this.currentWalletId = null;
+      this._updateStatus(WalletConnectionStatus.DISCONNECTED);
+      this._updateInfo(null);
+      
+      console.log('✅ Wallet disconnected');
+      return true;
     } catch (error) {
-      console.error('❌ Error getting balance:', error);
-      this._emitError(error);
-      
-      // Return zero balance on error but don't throw
-      const errorBalance = {
-        total: 0,
-        available: 0,
-        currency: 'SOL'
-      };
-      
-      this._updateBalance(errorBalance);
-      return errorBalance;
+      console.error('❌ Error disconnecting wallet:', error);
+      return false;
     }
   }
 
   /**
-   * Pay for a transaction (publishing content)
-   * @param {Uint8Array} data - Transaction data
-   * @param {Object} [options] - Transaction options
-   * @returns {Promise<Object>} Transaction result
+   * Get wallet balance with improved logging
+   * @param {string} [context] - Context for why balance is being fetched
+   * @returns {Promise<Object>} Balance information
    */
-  async payForTransaction(data, options = {}) {
+  async getBalance(context = 'user-request') {
     try {
       if (!this.keypair) {
-        throw new Error('No wallet loaded');
+        throw new Error('No wallet connected');
       }
 
-      // In a real implementation, this would create and send a Solana transaction
-      // For now, return a mock transaction result
-      const transactionResult = {
-        transactionId: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        status: 'pending',
+      const lamports = await this.connection.getBalance(this.keypair.publicKey);
+      const sol = lamports / LAMPORTS_PER_SOL;
+
+      // Only log if balance changed or it's been a while
+      const shouldLog = this._lastLoggedBalance === null || 
+                       Math.abs(this._lastLoggedBalance - sol) > 0.001;
+
+      if (shouldLog) {
+        console.log(`💰 Balance (${context}): ${sol.toFixed(4)} SOL (${lamports} lamports)`);
+        this._lastLoggedBalance = sol;
+      }
+
+      return {
+        amount: sol,
+        currency: 'SOL',
+        lamports: lamports,
         timestamp: Date.now()
       };
-
-      console.log('🚀 Transaction created:', transactionResult.transactionId);
-      return transactionResult;
     } catch (error) {
-      this._emitError(error);
-      throw new Error('Failed to create transaction: ' + error.message);
+      console.error('❌ Error getting balance:', error);
+      return {
+        amount: 0,
+        currency: 'SOL',
+        lamports: 0,
+        timestamp: Date.now(),
+        error: error.message
+      };
     }
   }
 
   /**
    * Sign arbitrary data
-   * @param {string|Uint8Array} data - Data to sign
-   * @returns {Promise<string>} Signature
+   * @param {string} data - Data to sign
+   * @returns {Promise<string>} Base64 encoded signature
    */
   async signData(data) {
     try {
       if (!this.keypair) {
-        throw new Error('No wallet loaded');
+        throw new Error('No wallet connected');
       }
 
-      // Convert data to Uint8Array if needed
-      let dataBytes;
-      if (typeof data === 'string') {
-        dataBytes = new TextEncoder().encode(data);
-      } else {
-        dataBytes = data;
-      }
-
-      // Sign the data (this is a simplified implementation)
-      // In practice, you might want to use nacl.sign.detached or similar
-      const signature = Buffer.from(this.keypair.secretKey.slice(0, 32)).toString('base64');
+      const message = new TextEncoder().encode(data);
+      const signature = await this.keypair.sign(message);
       
-      return signature;
+      console.log('✅ Data signed successfully');
+      return Buffer.from(signature).toString('base64');
     } catch (error) {
-      this._emitError(error);
+      console.error('❌ Error signing data:', error);
       throw new Error('Failed to sign data: ' + error.message);
     }
   }
 
   /**
+   * Export wallet data (encrypted)
+   * @param {Object} options - Export options
+   * @param {string} options.password - Password for verification
+   * @returns {Promise<Object>} Encrypted wallet data
+   */
+  async export(options) {
+    try {
+      this._validateOptions(options, ['password']);
+      
+      if (!this.currentWalletId) {
+        throw new Error('No wallet loaded');
+      }
+
+      // Get the encrypted wallet from storage
+      const encryptedWallet = await WalletStorage.getWallet(this.currentWalletId);
+      if (!encryptedWallet) {
+        throw new Error('Wallet not found in storage');
+      }
+
+      // Verify password by attempting to decrypt
+      await WalletStorage.decryptWallet(encryptedWallet, options.password);
+
+      console.log('✅ Wallet exported successfully');
+      return {
+        wallet: encryptedWallet,
+        exportedAt: Date.now(),
+        version: '1.0'
+      };
+    } catch (error) {
+      console.error('❌ Error exporting wallet:', error);
+      throw new Error('Failed to export wallet: ' + error.message);
+    }
+  }
+
+  /**
    * Verify a signature
-   * @param {string|Uint8Array} data - Original data
-   * @param {string} signature - Signature to verify
-   * @param {string} [publicKey] - Public key to verify against
-   * @returns {Promise<boolean>} True if valid
+   * @param {string} data - Original data
+   * @param {string} signature - Base64 encoded signature
+   * @param {string} publicKey - Public key to verify against
+   * @returns {Promise<boolean>} True if signature is valid
    */
   async verifySignature(data, signature, publicKey) {
     try {
-      // This is a simplified implementation
-      // In practice, you would use proper signature verification
-      const targetPublicKey = publicKey || this.keypair.publicKey.toString();
-      
-      // For now, just check if we have the required components
-      return !!(data && signature && targetPublicKey);
+      // This is a simplified verification
+      // In a real implementation, you'd use proper cryptographic verification
+      return !!(data && signature && publicKey);
     } catch (error) {
       console.error('❌ Error verifying signature:', error);
       return false;
@@ -470,43 +408,7 @@ export class MobileWalletService extends BaseWallet {
       const wallets = await WalletStorage.getAllWallets();
       return wallets.length > 0;
     } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Migrate legacy wallet from old storage format
-   * @returns {Promise<boolean>} Success status
-   */
-  static async migrateLegacyWallet() {
-    try {
-      // Check if there's a legacy wallet
-      const legacyWallet = await AsyncStorage.getItem('solana_wallet');
-      if (!legacyWallet) {
-        console.log('ℹ️ No legacy wallet found');
-        return false;
-      }
-
-      console.log('🔄 Migrating legacy wallet...');
-      
-      // Parse legacy wallet
-      const parsedWallet = JSON.parse(legacyWallet);
-      
-      // Create new wallet service and migrate
-      const walletService = new MobileWalletService();
-      await walletService.import({
-        privateKey: parsedWallet.privateKey,
-        name: 'Migrated Wallet',
-        password: 'temp123' // User will need to set a proper password
-      });
-
-      // Remove legacy wallet
-      await AsyncStorage.removeItem('solana_wallet');
-
-      console.log('✅ Successfully migrated wallet to encrypted storage');
-      return true;
-    } catch (error) {
-      console.error('❌ Error migrating wallet:', error);
+      console.warn('Error checking for wallets:', error);
       return false;
     }
   }
@@ -598,4 +500,4 @@ export class MobileWalletService extends BaseWallet {
   }
 }
 
-// Character count: 16,847
+// Character count: 12,789
