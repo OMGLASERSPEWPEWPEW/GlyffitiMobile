@@ -1,6 +1,7 @@
 // src/services/story/ChunkReaderService.js
 // Path: src/services/story/ChunkReaderService.js
-import { Connection, clusterApiUrl } from '@solana/web3.js';
+import { Connection, clusterApiUrl, PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 
 /**
  * Service for reading individual chunks from blockchain transactions
@@ -13,6 +14,9 @@ export class ChunkReaderService {
       process.env.REACT_APP_SOLANA_RPC_URL || clusterApiUrl('devnet'),
       'confirmed'
     );
+    
+    // Memo program ID for finding memo instructions
+    this.MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
     
     // Rate limiting configuration
     this.rateLimitConfig = {
@@ -108,16 +112,21 @@ export class ChunkReaderService {
       try {
         console.log(`Fetching transaction ${transactionId} (attempt ${attempt + 1})`);
         
-        // Fetch the transaction from Solana with the correct parameters
-        const transaction = await this.connection.getTransaction(transactionId, {
-          encoding: 'base64',
-          commitment: 'confirmed',
+        // Use getParsedTransaction like the working TypeScript version
+        const transaction = await this.connection.getParsedTransaction(transactionId, {
           maxSupportedTransactionVersion: 0
         });
 
         if (!transaction) {
           throw new Error(`Transaction not found: ${transactionId}`);
         }
+
+        console.log('Transaction structure:', {
+          version: transaction.version,
+          hasMeta: !!transaction.meta,
+          hasInstructions: !!transaction.transaction.message.instructions,
+          instructionCount: transaction.transaction.message.instructions.length
+        });
 
         // Extract the chunk data from the memo instruction
         const chunkData = this.extractChunkDataFromTransaction(transaction);
@@ -131,6 +140,16 @@ export class ChunkReaderService {
 
       } catch (error) {
         console.error(`Attempt ${attempt + 1} failed for ${transactionId}:`, error.message);
+        
+        // Handle rate limiting with exponential backoff
+        if (error?.message?.includes('429') || error?.statusCode === 429 || error?.status === 429) {
+          if (attempt < this.retryConfig.maxRetries) {
+            const backoff = this.retryConfig.baseDelay * Math.pow(2, attempt);
+            console.warn(`Server responded with 429 (rate limit). Retrying after ${backoff}ms delay...`);
+            await this.sleep(backoff);
+            continue;
+          }
+        }
         
         if (attempt === this.retryConfig.maxRetries) {
           throw new Error(`Failed to fetch transaction after ${this.retryConfig.maxRetries + 1} attempts: ${error.message}`);
@@ -149,7 +168,7 @@ export class ChunkReaderService {
   }
 
   /**
-   * Extract chunk data from a Solana transaction
+   * Extract chunk data from a Solana transaction (matching TypeScript implementation)
    * @param {Object} transaction - Solana transaction object
    * @returns {string|null} Extracted chunk data or null
    */
@@ -161,60 +180,86 @@ export class ChunkReaderService {
         hasTransaction: !!transaction.transaction
       });
 
-      // Handle both legacy and versioned transactions
-      const message = transaction.transaction.message;
-      const instructions = message.instructions || [];
-      
-      console.log(`Found ${instructions.length} instructions`);
+      const instructions = transaction.transaction.message.instructions;
+      console.log('All instructions:', instructions.map((ix, index) => ({
+        index,
+        programId: ix.programId,
+        hasData: !!ix.data,
+        dataLength: ix.data ? ix.data.length : 0,
+        keys: ix.keys || []
+      })));
 
-      // Find memo instruction
+      // Find the memo instruction with more detailed logging
+      let memoInstruction = null;
       for (let i = 0; i < instructions.length; i++) {
-        const instruction = instructions[i];
-        
-        // Get the program ID from the account keys
-        let programId;
-        if (message.accountKeys) {
-          // Legacy transaction format
-          programId = message.accountKeys[instruction.programIdIndex];
-        } else if (message.staticAccountKeys) {
-          // Versioned transaction format
-          programId = message.staticAccountKeys[instruction.programIdIndex];
-        }
-        
-        console.log(`Instruction ${i}: programId=${programId}`);
-        
-        // Check if this is a memo instruction
-        const memoProgramId = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
-        if (programId === memoProgramId && instruction.data) {
-          console.log('Found memo instruction with data');
-          
-          // The data is base64 encoded, decode it to get the chunk content
-          try {
-            const chunkData = Buffer.from(instruction.data, 'base64').toString('utf8');
-            console.log(`Extracted chunk data (${chunkData.length} chars):`, chunkData.substring(0, 100) + '...');
-            return chunkData;
-          } catch (decodeError) {
-            console.error('Error decoding instruction data:', decodeError);
-          }
+        const ix = instructions[i];
+        console.log(`Checking instruction ${i}:`, {
+          programId: ix.programId,
+          memoProgramId: this.MEMO_PROGRAM_ID.toString(),
+          isMatch: ix.programId === this.MEMO_PROGRAM_ID.toString(),
+          hasData: !!ix.data
+        });
+
+        // Check both string comparison and PublicKey comparison
+        if (ix.programId === this.MEMO_PROGRAM_ID.toString() || 
+            (ix.programId && new PublicKey(ix.programId).equals(this.MEMO_PROGRAM_ID))) {
+          memoInstruction = ix;
+          console.log('Found memo instruction at index:', i);
+          break;
         }
       }
+
+      // Handle both raw data and parsed memo instructions
+      let memoData = null;
       
-      // Alternative: Check meta.logMessages for memo data
-      if (transaction.meta && transaction.meta.logMessages) {
-        console.log('Checking log messages for memo data');
-        for (const log of transaction.meta.logMessages) {
-          if (log.startsWith('Program log: ')) {
-            const memoData = log.substring('Program log: '.length);
-            if (memoData && memoData.length > 0) {
-              console.log('Found memo data in logs:', memoData.substring(0, 100) + '...');
-              return memoData;
-            }
-          }
-        }
+      if (memoInstruction.data) {
+        // Raw instruction data (using bs58 decode like TypeScript)
+        console.log('Using raw data field');
+        memoData = new TextDecoder().decode(Buffer.from(bs58.decode(memoInstruction.data)));
+      } else if (memoInstruction.parsed) {
+        // Parsed memo instruction - data is already base64 decoded
+        console.log('Using parsed field');
+        memoData = memoInstruction.parsed;
+      } else {
+        console.error('No memo instruction data found. Instruction:', memoInstruction);
+        throw new Error('No memo instruction or data found');
       }
-      
-      console.warn('No memo data found in transaction');
-      return null;
+
+      if (!memoData) {
+        console.error('No memo data extracted. Instructions:', instructions);
+        throw new Error('No memo data found');
+      }
+
+      console.log('Found memo data:', {
+        source: memoInstruction.data ? 'raw data' : 'parsed field',
+        dataLength: memoData.length,
+        dataPreview: memoData.substring(0, 50) + '...'
+      });
+
+      // Check if this appears to be base64 encoded compressed data
+      const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(memoData.trim());
+      console.log('Appears to be base64 encoded:', isBase64);
+
+      // The decompression service expects Uint8Array, so convert base64 string to Uint8Array
+      if (isBase64) {
+        try {
+          // Convert base64 string to Uint8Array (matching TypeScript implementation)
+          const binaryData = atob(memoData.trim());
+          const uint8Array = new Uint8Array(binaryData.length);
+          for (let i = 0; i < binaryData.length; i++) {
+            uint8Array[i] = binaryData.charCodeAt(i);
+          }
+          console.log('Converted base64 to Uint8Array, length:', uint8Array.length);
+          return uint8Array;
+        } catch (error) {
+          console.error('Error converting base64 to Uint8Array:', error);
+          throw new Error('Failed to convert base64 data to Uint8Array');
+        }
+      } else {
+        // If not base64, convert string to Uint8Array
+        console.log('Converting string to Uint8Array');
+        return new TextEncoder().encode(memoData);
+      }
       
     } catch (error) {
       console.error('Error extracting chunk data from transaction:', error);
@@ -305,5 +350,7 @@ export class ChunkReaderService {
   }
 }
 
+// Export singleton instance for use across the app
+export const chunkReaderService = new ChunkReaderService();
 
-// Character count: 8789
+// Character count: 9853
