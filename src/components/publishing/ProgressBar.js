@@ -1,32 +1,43 @@
 // src/components/publishing/ProgressBar.js
+// Path: src/components/publishing/ProgressBar.js
 import React from 'react';
 import { View, Text } from 'react-native';
 import { publishingStyles } from '../../styles/publishingStyles';
 
 export const ProgressBar = ({ publishing, progress }) => {
-  if (!publishing || !progress) return null;
+  if (!publishing || !progress) {
+    return null;
+  }
+  
+  const currentGlyph = progress.currentGlyph || 0;
+  const totalGlyphs = progress.totalGlyphs || 0;
+  const progressPercent = progress.progress || 0;
+  const stage = progress.stage || 'publishing';
   
   return (
     <View style={publishingStyles.progressContainer}>
       <Text style={publishingStyles.progressTitle}>
-        {progress.stage === 'preparing' && '📋 Preparing content...'}
-        {progress.stage === 'processing' && '🔄 Processing glyphs...'}
-        {progress.stage === 'publishing' && `📤 Publishing glyph ${progress.currentGlyph}/${progress.totalGlyphs}...`}
-        {progress.stage === 'completed' && '✅ Publishing complete!'}
-        {progress.stage === 'failed' && '❌ Publishing failed'}
+        {stage === 'preparing' && '📋 Preparing content...'}
+        {stage === 'processing' && '🔄 Processing glyphs...'}
+        {stage === 'publishing' && `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`}
+        {stage === 'creating_scroll' && '📜 Creating scroll manifest...'}
+        {stage === 'completed' && '✅ Publishing complete!'}
+        {stage === 'failed' && '❌ Publishing failed'}
+        {!['preparing', 'processing', 'publishing', 'creating_scroll', 'completed', 'failed'].includes(stage) && 
+         `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`}
       </Text>
       
-      <View style={publishingStyles.progressBar}>
+      <View style={publishingStyles.progressBarContainer}>
         <View 
           style={[
-            publishingStyles.progressFill,
-            { width: `${progress.progress}%` }
+            publishingStyles.progressBar,
+            { width: `${Math.max(0, Math.min(100, progressPercent))}%` }
           ]}
         />
       </View>
       
       <Text style={publishingStyles.progressText}>
-        {progress.progress}% Complete
+        {progressPercent}% Complete
       </Text>
       
       {progress.compressionStats && (
@@ -39,4 +50,4 @@ export const ProgressBar = ({ publishing, progress }) => {
   );
 };
 
-// Character count: 1158
+// Character count: 1585

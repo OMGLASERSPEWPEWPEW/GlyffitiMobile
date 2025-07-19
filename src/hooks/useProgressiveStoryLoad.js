@@ -6,6 +6,7 @@ import { storyViewerService } from '../services/story/StoryViewerService';
 /**
  * React hook for progressive story loading
  * Manages state for loading stories chunk by chunk with user feedback
+ * Updated to work with mobile-compatible StoryViewerService
  * 
  * @param {string} storyId - The story identifier  
  * @param {Object} manifest - Story manifest (optional, will fetch if not provided)
@@ -50,12 +51,13 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   const handleChunkLoaded = useCallback((chunkIndex, assembledContent, complete) => {
     // Only update if this is still the current story being loaded
     if (storyIdRef.current === storyId && isLoadingRef.current) {
+      console.log(`📖 Chunk ${chunkIndex} loaded, content length: ${assembledContent.length}, complete: ${complete}`);
       setContent(assembledContent);
       setIsComplete(complete);
       
       if (complete) {
         setIsLoading(false);
-        console.log(`Story loading completed: ${storyId}`);
+        console.log(`✅ Story loading completed: ${storyId}`);
       }
     }
   }, [storyId]);
@@ -64,6 +66,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   const handleProgress = useCallback((loaded, total, percentage) => {
     // Only update if this is still the current story being loaded
     if (storyIdRef.current === storyId && isLoadingRef.current) {
+      console.log(`📊 Progress: ${loaded}/${total} (${percentage}%)`);
       setProgress({ loaded, total, percentage });
       
       // Calculate estimated time remaining based on current progress
@@ -81,7 +84,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   // Callback for errors
   const handleError = useCallback((error) => {
     if (storyIdRef.current === storyId) {
-      console.error(`Error loading story ${storyId}:`, error);
+      console.error(`❌ Error loading story ${storyId}:`, error);
       setError(error.message || 'Failed to load story');
       setIsLoading(false);
     }
@@ -93,6 +96,8 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
       setError('No story ID provided');
       return;
     }
+
+    console.log(`🚀 Starting to load story: ${storyId}`);
 
     // Reset state
     setIsLoading(true);
@@ -116,9 +121,14 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
         setStoryManifest(manifestToLoad);
       }
 
-      console.log(`Starting progressive load for story: ${storyId}`);
+      console.log(`📋 Using manifest:`, {
+        storyId: manifestToLoad.storyId,
+        title: manifestToLoad.title,
+        totalChunks: manifestToLoad.totalChunks,
+        chunksCount: manifestToLoad.chunks?.length
+      });
       
-      // Start the progressive loading
+      // Start the progressive loading using updated story viewer service
       await storyViewerService.loadStoryProgressively(
         storyId,
         manifestToLoad,
@@ -128,6 +138,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
       );
       
     } catch (error) {
+      console.error(`❌ Error starting story load:`, error);
       handleError(error);
     }
   }, [storyId, storyManifest, handleChunkLoaded, handleError, handleProgress]);
@@ -135,7 +146,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   // Function to stop/cancel loading
   const stopLoading = useCallback(() => {
     if (storyId && isLoading) {
-      console.log(`Cancelling story loading: ${storyId}`);
+      console.log(`⏹️ Cancelling story loading: ${storyId}`);
       storyViewerService.cancelStoryLoading(storyId);
       setIsLoading(false);
     }
@@ -143,6 +154,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
 
   // Function to restart loading
   const restartLoading = useCallback(() => {
+    console.log(`🔄 Restarting story loading: ${storyId}`);
     stopLoading();
     setTimeout(() => {
       startLoading();
@@ -152,6 +164,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   // Auto-start loading if enabled
   useEffect(() => {
     if (autoStart && storyId && manifest && !isLoading && !content) {
+      console.log(`⚡ Auto-starting story load for: ${storyId}`);
       startLoading(manifest);
     }
   }, [autoStart, storyId, manifest, isLoading, content, startLoading]);
@@ -160,6 +173,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   useEffect(() => {
     return () => {
       if (storyIdRef.current && isLoadingRef.current) {
+        console.log(`🧹 Cleaning up story loading: ${storyIdRef.current}`);
         storyViewerService.cancelStoryLoading(storyIdRef.current);
       }
     };
@@ -168,6 +182,7 @@ export function useProgressiveStoryLoad(storyId, manifest = null, autoStart = fa
   // Cancel loading when storyId changes
   useEffect(() => {
     if (isLoading) {
+      console.log(`📝 Story ID changed, stopping previous load`);
       stopLoading();
     }
   }, [storyId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -279,4 +294,4 @@ export function useMultipleStoryLoad(storyIds = []) {
   };
 }
 
-// 2,436 characters
+// Character count: 8,158

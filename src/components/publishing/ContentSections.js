@@ -11,7 +11,8 @@ export const ContentSections = ({
   publishingStats,
   walletStatus,
   publishing,
-  handleResumePublishing 
+  handleResumePublishing,
+  handleViewStory // New prop for viewing published stories
 }) => {
   return (
     <>
@@ -57,27 +58,46 @@ export const ContentSections = ({
         </View>
       )}
       
-      {/* Published Content */}
+      {/* Published Content - NOW CLICKABLE */}
       {publishedContent.length > 0 && (
         <View style={publishingStyles.section}>
           <Text style={publishingStyles.sectionTitle}>✅ Published ({publishedContent.length})</Text>
           {publishedContent.map((item, index) => (
-            <View key={index} style={publishingStyles.contentItem}>
-              <Text style={publishingStyles.contentTitle}>{item.title}</Text>
+            <TouchableOpacity 
+              key={index} 
+              style={[
+                publishingStyles.contentItem,
+                publishingStyles.publishedContentItem // New style for published items
+              ]}
+              onPress={() => handleViewStory && handleViewStory(item)}
+              activeOpacity={0.7}
+            >
+              <View style={publishingStyles.publishedContentHeader}>
+                <Text style={publishingStyles.contentTitle}>{item.title}</Text>
+                <Text style={publishingStyles.viewStoryIcon}>👁️</Text>
+              </View>
+              
               <Text style={publishingStyles.contentMeta}>
                 {item.glyphs?.length || item.totalGlyphs || 0} glyphs • {item.transactionIds?.length || 0} transactions
               </Text>
+              
               {item.scrollId && (
                 <Text style={publishingStyles.scrollId}>
                   Scroll: {item.scrollId.slice(0, 8)}...
                 </Text>
               )}
+              
               {item.publishedAt && (
                 <Text style={publishingStyles.publishedDate}>
                   Published: {new Date(item.publishedAt).toLocaleDateString()}
                 </Text>
               )}
-            </View>
+              
+              {/* Tap to view indicator */}
+              <Text style={publishingStyles.tapToViewText}>
+                📖 Tap to read story
+              </Text>
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -104,4 +124,4 @@ export const ContentSections = ({
   );
 };
 
-// Character count: 3005
+// Character count: 3718

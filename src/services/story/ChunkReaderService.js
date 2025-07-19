@@ -58,15 +58,15 @@ export class ChunkReaderService {
         attempts: 0,
         timestamp: Date.now()
       });
-      
-      this.processRequestQueue();
+
+      this.processQueue();
     });
   }
 
   /**
-   * Process the request queue with rate limiting
+   * Process the rate-limited request queue
    */
-  async processRequestQueue() {
+  async processQueue() {
     if (this.rateLimitConfig.isProcessingQueue || this.rateLimitConfig.requestQueue.length === 0) {
       return;
     }
@@ -76,50 +76,39 @@ export class ChunkReaderService {
     while (this.rateLimitConfig.requestQueue.length > 0) {
       const request = this.rateLimitConfig.requestQueue.shift();
       
-      try {
-        // Ensure minimum time between requests
-        const timeSinceLastRequest = Date.now() - this.rateLimitConfig.lastRequestTime;
-        const remainingDelay = this.rateLimitConfig.minRequestInterval - timeSinceLastRequest;
-        
-        if (remainingDelay > 0) {
-          console.log(`Rate limiting: waiting ${remainingDelay}ms before next request`);
-          await this.sleep(remainingDelay);
-        }
+      // Ensure minimum interval between requests
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.rateLimitConfig.lastRequestTime;
+      
+      if (timeSinceLastRequest < this.rateLimitConfig.minRequestInterval) {
+        await this.sleep(this.rateLimitConfig.minRequestInterval - timeSinceLastRequest);
+      }
 
-        // Attempt to fetch the transaction
-        const result = await this.fetchTransactionWithRetry(request);
-        
-        // Cache the result
+      try {
+        const result = await this.fetchSingleChunk(request.transactionId);
         this.cacheTransaction(request.transactionId, result);
-        
-        // Update last request time
-        this.rateLimitConfig.lastRequestTime = Date.now();
-        
-        // Resolve the promise
         request.resolve(result);
-        
       } catch (error) {
-        console.error(`Failed to fetch transaction ${request.transactionId}:`, error);
         request.reject(error);
       }
+
+      this.rateLimitConfig.lastRequestTime = Date.now();
     }
 
     this.rateLimitConfig.isProcessingQueue = false;
   }
 
   /**
-   * Fetch transaction with retry logic
-   * @param {Object} request - Request object with transactionId and attempt count
-   * @returns {Promise<string>} Transaction data
+   * Fetch a single chunk with retry logic
+   * @param {string} transactionId - Transaction ID
+   * @returns {Promise<string>} Chunk data
    */
-  async fetchTransactionWithRetry(request) {
-    const { transactionId } = request;
-    
+  async fetchSingleChunk(transactionId) {
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
         console.log(`Fetching transaction ${transactionId} (attempt ${attempt + 1})`);
         
-        // Fetch the transaction from Solana
+        // Fetch the transaction from Solana with the correct parameters
         const transaction = await this.connection.getTransaction(transactionId, {
           encoding: 'base64',
           commitment: 'confirmed',
@@ -166,34 +155,65 @@ export class ChunkReaderService {
    */
   extractChunkDataFromTransaction(transaction) {
     try {
-      // Look for memo instructions in the transaction
-      const instructions = transaction.transaction.message.instructions;
+      console.log('Extracting chunk data from transaction:', {
+        version: transaction.version,
+        hasMeta: !!transaction.meta,
+        hasTransaction: !!transaction.transaction
+      });
+
+      // Handle both legacy and versioned transactions
+      const message = transaction.transaction.message;
+      const instructions = message.instructions || [];
       
-      for (const instruction of instructions) {
-        // Check if this is a memo instruction
-        // Memo program ID: MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr
-        const memoProgramId = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
-        const programId = transaction.transaction.message.accountKeys[instruction.programIdIndex];
+      console.log(`Found ${instructions.length} instructions`);
+
+      // Find memo instruction
+      for (let i = 0; i < instructions.length; i++) {
+        const instruction = instructions[i];
         
+        // Get the program ID from the account keys
+        let programId;
+        if (message.accountKeys) {
+          // Legacy transaction format
+          programId = message.accountKeys[instruction.programIdIndex];
+        } else if (message.staticAccountKeys) {
+          // Versioned transaction format
+          programId = message.staticAccountKeys[instruction.programIdIndex];
+        }
+        
+        console.log(`Instruction ${i}: programId=${programId}`);
+        
+        // Check if this is a memo instruction
+        const memoProgramId = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
         if (programId === memoProgramId && instruction.data) {
-          // The data should be base64 encoded
-          const chunkData = Buffer.from(instruction.data, 'base64').toString('utf8');
-          return chunkData;
+          console.log('Found memo instruction with data');
+          
+          // The data is base64 encoded, decode it to get the chunk content
+          try {
+            const chunkData = Buffer.from(instruction.data, 'base64').toString('utf8');
+            console.log(`Extracted chunk data (${chunkData.length} chars):`, chunkData.substring(0, 100) + '...');
+            return chunkData;
+          } catch (decodeError) {
+            console.error('Error decoding instruction data:', decodeError);
+          }
         }
       }
       
-      // Also check meta.logMessages for memo data (alternative approach)
+      // Alternative: Check meta.logMessages for memo data
       if (transaction.meta && transaction.meta.logMessages) {
+        console.log('Checking log messages for memo data');
         for (const log of transaction.meta.logMessages) {
           if (log.startsWith('Program log: ')) {
             const memoData = log.substring('Program log: '.length);
             if (memoData && memoData.length > 0) {
+              console.log('Found memo data in logs:', memoData.substring(0, 100) + '...');
               return memoData;
             }
           }
         }
       }
       
+      console.warn('No memo data found in transaction');
       return null;
       
     } catch (error) {
@@ -232,7 +252,7 @@ export class ChunkReaderService {
       return null;
     }
 
-    // Check if cache entry is expired
+    // Check if cache entry has expired
     if (Date.now() - cached.timestamp > this.cacheMaxAge) {
       this.transactionCache.delete(transactionId);
       return null;
@@ -242,20 +262,15 @@ export class ChunkReaderService {
   }
 
   /**
-   * Clear expired cache entries
+   * Clear all cached transactions
    */
-  cleanExpiredCache() {
-    const now = Date.now();
-    for (const [transactionId, cached] of this.transactionCache.entries()) {
-      if (now - cached.timestamp > this.cacheMaxAge) {
-        this.transactionCache.delete(transactionId);
-      }
-    }
+  clearCache() {
+    this.transactionCache.clear();
   }
 
   /**
    * Get cache statistics
-   * @returns {Object} Cache stats
+   * @returns {Object} Cache statistics
    */
   getCacheStats() {
     return {
@@ -266,44 +281,29 @@ export class ChunkReaderService {
   }
 
   /**
-   * Get current rate limiting status
-   * @returns {Object} Rate limiting status
-   */
-  getRateLimitStatus() {
-    return {
-      queueLength: this.rateLimitConfig.requestQueue.length,
-      isProcessing: this.rateLimitConfig.isProcessingQueue,
-      timeSinceLastRequest: Date.now() - this.rateLimitConfig.lastRequestTime,
-      minInterval: this.rateLimitConfig.minRequestInterval
-    };
-  }
-
-  /**
-   * Utility sleep function
+   * Sleep utility function
    * @param {number} ms - Milliseconds to sleep
-   * @returns {Promise<void>}
+   * @returns {Promise} Promise that resolves after the specified time
    */
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * Clear all caches and reset state
+   * Test connection to Solana network
+   * @returns {Promise<boolean>} True if connection is working
    */
-  reset() {
-    this.transactionCache.clear();
-    this.rateLimitConfig.requestQueue = [];
-    this.rateLimitConfig.isProcessingQueue = false;
-    this.rateLimitConfig.lastRequestTime = 0;
+  async testConnection() {
+    try {
+      const version = await this.connection.getVersion();
+      console.log('Solana connection test successful:', version);
+      return true;
+    } catch (error) {
+      console.error('Solana connection test failed:', error);
+      return false;
+    }
   }
 }
 
-// Export singleton instance
-export const chunkReaderService = new ChunkReaderService();
 
-// Clean expired cache entries every 5 minutes
-setInterval(() => {
-  chunkReaderService.cleanExpiredCache();
-}, 5 * 60 * 1000);
-
-// 2,634 characters
+// Character count: 8789

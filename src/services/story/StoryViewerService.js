@@ -1,6 +1,6 @@
 // src/services/story/StoryViewerService.js
 // Path: src/services/story/StoryViewerService.js
-import { ChunkReaderService } from './ChunkReaderService';
+import { chunkReaderService } from './ChunkReaderService';
 import { CompressionService } from '../compression/CompressionService';
 import { HashingService } from '../hashing/HashingService';
 
@@ -11,7 +11,7 @@ import { HashingService } from '../hashing/HashingService';
 export class StoryViewerService {
   constructor() {
     this.activeStories = new Map(); // Track active story loading sessions
-    this.chunkReader = new ChunkReaderService();
+    this.chunkReader = chunkReaderService; // Use singleton instance
   }
 
   /**
@@ -55,6 +55,8 @@ export class StoryViewerService {
         const chunkInfo = manifest.chunks[i];
         
         try {
+          console.log(`Loading chunk ${i + 1}/${manifest.totalChunks} for story: ${storyId}`);
+          
           // Load this chunk with rate limiting protection
           const chunkContent = await this.loadSingleChunk(chunkInfo, i);
           
@@ -79,7 +81,7 @@ export class StoryViewerService {
             onChunkLoaded(chunkInfo.index, assembledContent, isComplete);
           }
 
-          console.log(`Loaded chunk ${chunkInfo.index + 1}/${manifest.totalChunks} for story: ${storyId}`);
+          console.log(`📖 Chunk ${chunkInfo.index} loaded, content length: ${assembledContent.length}, complete: ${isComplete}`);
 
           // Add delay between chunks to prevent RPC rate limiting (unless it's the last chunk)
           if (i < manifest.chunks.length - 1) {
@@ -266,4 +268,4 @@ export class StoryViewerService {
 // Create singleton instance
 export const storyViewerService = new StoryViewerService();
 
-// 2,847 characters
+// Character count: 8158
