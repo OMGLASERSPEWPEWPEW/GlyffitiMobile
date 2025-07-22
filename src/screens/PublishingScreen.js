@@ -367,14 +367,19 @@ export const PublishingScreen = ({ navigation }) => {
       // Publish to blockchain
       const result = await publishingService.blockchainPublisher.publishContent(
         preparedContent,
-        walletService.getKeypair(),
+        walletService.getWalletKeypair(),
         (progressData) => {
           console.log(`📊 Progress: ${progressData.progress}%`);
-          setProgress(progressData.progress);
+          setProgress({
+            progress: progressData.progress || 0,  // ✅ Correct property name
+            currentGlyph: progressData.currentGlyph || 0,
+            totalGlyphs: progressData.totalGlyphs || 0,
+            message: `Publishing glyph ${progressData.currentGlyph || 0}/${progressData.totalGlyphs || 0}`
+            });
         }
       );
 
-      if (result.success) {
+        if (result.status === 'completed') {
         console.log('✅ Publishing successful!');
         
         // Create published content record - SINGLE ENTRY
