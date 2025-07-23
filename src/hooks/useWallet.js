@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { MobileWalletService } from '../services/wallet/MobileWalletService';
+import { SolanaAirdropService } from '../services/wallet/SolanaAirdropService';
 
 /**
  * Custom hook for wallet management
@@ -20,6 +21,9 @@ export const useWallet = () => {
 
   // Refs to prevent duplicate operations
   const initRef = useRef(false);
+  
+  // Create airdrop service instance
+  const airdropService = useRef(new SolanaAirdropService()).current;
 
   // Initialize wallet status on mount
   useEffect(() => {
@@ -164,20 +168,32 @@ export const useWallet = () => {
         'Request Devnet SOL',
         'Request 1 SOL from the Solana devnet faucet?',
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: () => setIsRequestingAirdrop(false) },
           { 
             text: 'Request', 
             onPress: async () => {
               try {
-                // Note: Actual airdrop implementation would go here
-                Alert.alert('Success', 'Airdrop requested! Balance should update shortly.');
+                const keypair = walletService.getWalletKeypair();
                 
-                // Refresh balance after a delay
-                setTimeout(() => {
-                  loadWalletBalance(walletService, 'post-airdrop');
-                }, 3000);
+                console.log('🎁 Requesting airdrop...');
+                await airdropService.requestAirdrop(keypair.publicKey, 1);
+                
+                Alert.alert('⏳ Processing', 'Waiting for airdrop confirmation...');
+                
+                // Refresh balance after delays
+                setTimeout(async () => {
+                  console.log('💰 Refreshing balance (first check)...');
+                  await loadWalletBalance(walletService, 'post-airdrop');
+                }, 2000);
+                
+                setTimeout(async () => {
+                  console.log('💰 Refreshing balance (final check)...');
+                  await loadWalletBalance(walletService, 'post-airdrop-final');
+                  Alert.alert('✅ Success!', 'Airdrop completed! Your new balance should be displayed.');
+                }, 5000);
                 
               } catch (error) {
+                console.error('❌ Airdrop failed:', error);
                 Alert.alert('Error', 'Airdrop failed: ' + error.message);
               } finally {
                 setIsRequestingAirdrop(false);
