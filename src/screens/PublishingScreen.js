@@ -13,13 +13,13 @@ import {
 import { ArrowLeft } from 'lucide-react-native';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
-import { MobilePublishingService } from '../services/publishing/MobilePublishingService';
 import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
 import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
-import { useWallet } from '../hooks/useWallet'; // NEW: Import our hook
+import { useWallet } from '../hooks/useWallet';
+import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 
 export const PublishingScreen = ({ navigation }) => {
-  // NEW: Use the wallet hook instead of managing wallet state directly
+  // Use the wallet hook (keeping this as-is)
   const {
     walletService,
     walletStatus,
@@ -36,19 +36,21 @@ export const PublishingScreen = ({ navigation }) => {
     handleMigration
   } = useWallet();
 
-  // Core state management (keeping non-wallet state as-is)
-  const [publishingService] = useState(() => new MobilePublishingService());
-  const [publishing, setPublishing] = useState(false);
-  const [progress, setProgress] = useState({
-    progress: 0,
-    currentGlyph: 0,
-    totalGlyphs: 0,
-    message: ''
-  });
-  const [inProgressContent, setInProgressContent] = useState([]);
-  const [drafts, setDrafts] = useState([]);
-  const [publishedContent, setPublishedContent] = useState([]);
-  const [publishingStats, setPublishingStats] = useState(null);
+  // NEW: Use the publishing hook instead of local state
+  const {
+    publishingService,
+    isPublishing: publishing,
+    progress,
+    drafts,
+    inProgressContent,
+    publishedContent,
+    publishingStats,
+    isLoadingContent,
+    loadExistingContent,
+    publishToBlockchain
+  } = usePublishing(walletService);
+
+  // Keep only the essential local state
   const [isLoading, setIsLoading] = useState(true);
 
   // Initialize data on component mount
@@ -56,26 +58,14 @@ export const PublishingScreen = ({ navigation }) => {
     initializeData();
   }, []);
 
-  // Link wallet to publishing service when wallet becomes available
-  useEffect(() => {
-    if (walletService && walletStatus === 'unlocked' && publishingService) {
-      console.log('🔗 Linking wallet to publishing service...');
-      publishingService.setWallet(walletService);
-    }
-  }, [walletService, walletStatus, publishingService]);
-
   // Initialize all data including published content
   const initializeData = async () => {
     try {
       console.log('🔄 Initializing PublishingScreen data...');
       setIsLoading(true);
       
-      // Load all content types concurrently
-      await Promise.all([
-        loadInProgressContent(),
-        loadPublishedContent(),
-        loadPublishingStats()
-      ]);
+      // Use the hook's loadExistingContent method
+      await loadExistingContent();
       
       console.log('✅ PublishingScreen initialization complete');
     } catch (error) {
@@ -85,184 +75,110 @@ export const PublishingScreen = ({ navigation }) => {
     }
   };
 
-  // Load in-progress content
-  const loadInProgressContent = async () => {
-    try {
-      const inProgress = await MobileStorageManager.getInProgressContentArray();
-      console.log(`📥 Loaded ${inProgress.length} in-progress items`);
-      setInProgressContent(inProgress);
-    } catch (error) {
-      console.error('Error loading in-progress content:', error);
-      setInProgressContent([]);
-    }
-  };
-
-  // Load published content
-  const loadPublishedContent = async () => {
-    try {
-      const published = await MobileStorageManager.getPublishedContentArray();
-      console.log(`📚 Loaded ${published.length} published items`);
-      setPublishedContent(published);
-    } catch (error) {
-      console.error('Error loading published content:', error);
-      setPublishedContent([]);
-    }
-  };
-
-  // Load publishing stats
-  const loadPublishingStats = async () => {
-    try {
-      if (publishingService && typeof publishingService.getPublishingStats === 'function') {
-        const stats = await publishingService.getPublishingStats();
-        setPublishingStats(stats);
-      }
-    } catch (error) {
-      console.log('Publishing stats not available:', error.message);
-    }
-  };
-
-  // Handle file selection and publishing
+  // Publishing logic - using the original simple one-tap flow
   const handlePublishFile = async () => {
-    if (!walletService || walletStatus !== 'unlocked') {
-      Alert.alert('Wallet Required', 'Please unlock your wallet first');
+    if (!walletService || !publishingService || publishing) {
+      console.log('🚫 Cannot publish:', { 
+        walletService: !!walletService, 
+        publishingService: !!publishingService, 
+        publishing 
+      });
       return;
     }
-
-    if (publishing) return;
-
+    
     try {
-      setPublishing(true);
-      setProgress({ 
-        message: 'Selecting file...', 
-        progress: 0,
-        currentGlyph: 0,
-        totalGlyphs: 0 
-      });
-      
       // Pick and load file
-      const fileContent = await publishingService.pickAndLoadFile();
-      if (!fileContent) {
-        setPublishing(false);
-        setProgress({
-          progress: 0,
-          currentGlyph: 0,
-          totalGlyphs: 0,
-          message: ''
-        });
+      const content = await publishingService.pickAndLoadFile();
+      if (!content) {
+        console.log('📄 No file selected');
         return;
       }
-
-      setProgress({ 
-        message: 'Preparing content...', 
-        progress: 10,
-        currentGlyph: 0,
-        totalGlyphs: 0 
-      });
       
-      // Prepare content for publishing
+      // Prepare content
       const preparedContent = await publishingService.prepareContent(
-        fileContent,
-        fileContent.title || 'Untitled Story'
+        content,
+        content.title || 'Untitled Story'
       );
-
-      // Save as in-progress (like original code)
-      await MobileStorageManager.saveInProgressContent(preparedContent);
-      await loadInProgressContent();
-
-      setProgress({ 
-        message: 'Publishing to blockchain...', 
-        progress: 20,
-        currentGlyph: 0,
-        totalGlyphs: preparedContent.glyphs ? preparedContent.glyphs.length : 0 
-      });
       
-      // Publish content - use blockchainPublisher directly like original code
-      const result = await publishingService.blockchainPublisher.publishContent(
-        preparedContent,
-        walletService.getWalletKeypair(),
-        (status) => {
-          console.log(`📊 Progress: ${status.progress}%`);
-          setProgress({
-            progress: status.progress || 0,              // ← NOT 'percentage'
-            currentGlyph: status.currentGlyph || 0,      // ← Include this
-            totalGlyphs: status.totalGlyphs || 0,        // ← Include this
-            stage: status.stage || 'publishing',         // ← Include stage
-            message: `Publishing glyph ${status.currentGlyph || 0}/${status.totalGlyphs || 0}...`
-          });
-        }
-      );
-
-      // Handle result
-      if (result.status === 'completed') {
-        Alert.alert('✅ Success!', `Successfully published "${preparedContent.title}"!`);
-        
-        // Refresh content lists
-        await Promise.all([
-          loadInProgressContent(),
-          loadPublishedContent(),
-          loadPublishingStats()
-        ]);
-      } else if (result.status === 'partial') {
-        Alert.alert('⚠️ Partial Success', `Published ${result.successfulGlyphs}/${result.totalGlyphs} glyphs.`);
-        
-        // Still refresh to show partial progress
-        await Promise.all([
-          loadInProgressContent(),
-          loadPublishedContent(),
-          loadPublishingStats()
-        ]);
-      } else {
-        Alert.alert('❌ Publishing Failed', result.error || 'Publishing failed. Please try again.');
+      if (!preparedContent) {
+        Alert.alert('Error', 'Failed to prepare content');
+        return;
       }
-
+      
+      // Get wallet keypair
+      const keypair = walletService.getWalletKeypair();
+      if (!keypair) {
+        Alert.alert('Error', 'Failed to access wallet');
+        return;
+      }
+      
+      // Progress callback - matches original format
+      const onProgress = (status) => {
+        console.log('📊 Publishing progress:', status);
+        // The hook handles progress state internally
+      };
+      
+      // Use the hook's publishToBlockchain method
+      const result = await publishToBlockchain(preparedContent, keypair, onProgress);
+      
+      if (result && result.status === 'completed') {
+        Alert.alert(
+          '✅ Success!', 
+          `Successfully published "${preparedContent.title}"!`
+        );
+      } else if (result && result.status === 'partial') {
+        Alert.alert(
+          '⚠️ Partial Success', 
+          `Published ${result.successfulGlyphs}/${result.totalGlyphs} glyphs.`
+        );
+      } else {
+        Alert.alert('❌ Publishing Failed', 'Publishing failed. Please try again.');
+      }
+      
     } catch (error) {
-      console.error('❌ Publishing process failed:', error);
-      Alert.alert('Publishing Failed', error.message);
-    } finally {
-      setPublishing(false);
-      setProgress({
-        progress: 0,
-        currentGlyph: 0,
-        totalGlyphs: 0,
-        message: ''
-      });
+      console.error('❌ Publishing error:', error);
+      Alert.alert('Error', error.message || 'An error occurred during publishing');
     }
   };
 
   // Resume publishing for in-progress content
   const handleResumePublishing = async (contentId) => {
-    try {
-      console.log(`🔄 Resuming publishing for: ${contentId}`);
-      Alert.alert('Resume Publishing', 'Resume publishing feature coming soon!');
-    } catch (error) {
-      console.error('Error resuming publishing:', error);
-      Alert.alert('Error', 'Failed to resume publishing: ' + error.message);
-    }
+    Alert.alert(
+      'Resume Publishing',
+      'This will restart publishing from the beginning. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Resume', 
+          onPress: async () => {
+            try {
+              // For now, just show a message since full resume isn't implemented
+              Alert.alert('Info', 'Resume publishing not yet implemented');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to resume publishing');
+            }
+          }
+        }
+      ]
+    );
   };
 
-  // Handle viewing published stories
-  const handleViewStory = async (publishedItem) => {
+  // Handle viewing a published story
+  const handleViewStory = async (item) => {
     try {
-      console.log('📖 Opening story:', publishedItem.title);
+      console.log('📖 Opening story viewer for:', item.title);
       
-      let manifest = publishedItem.manifest;
+      // Get manifest from the item or try to load it
+      let manifest = item.manifest;
       
-      if (!manifest && publishedItem.scrollId) {
-        console.log('🔍 Fetching manifest for scrollId:', publishedItem.scrollId);
-        manifest = await MobileScrollManager.getScrollById(publishedItem.scrollId);
-      }
-      
-      if (!manifest) {
-        console.log('🔧 Creating manifest from published content...');
+      if (!manifest && item.scrollId) {
         try {
-          manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedItem);
-          await MobileScrollManager.saveScrollLocally(manifest);
-          console.log('✅ Created and saved manifest:', manifest.storyId);
-        } catch (manifestError) {
-          console.error('❌ Error creating manifest:', manifestError);
+          manifest = await MobileScrollManager.loadScroll(item.scrollId);
+        } catch (error) {
+          console.warn('⚠️ Could not load manifest from ScrollManager:', error);
           Alert.alert(
-            'Error',
-            'Could not prepare story for viewing. The story data may be incomplete.',
+            'Story Loading Issue',
+            'The story data may be incomplete.',
             [{ text: 'OK' }]
           );
           return;
@@ -314,11 +230,7 @@ export const PublishingScreen = ({ navigation }) => {
             try {
               const { ClearPublishedScript } = await import('../utils/ClearPublishedScript');
               await ClearPublishedScript.clearAll();
-              await Promise.all([
-                loadInProgressContent(),
-                loadPublishedContent(),
-                loadPublishingStats()
-              ]);
+              await loadExistingContent(); // Use hook's method
               Alert.alert('Success', 'All test data cleared!');
             } catch (error) {
               Alert.alert('Error', 'Failed to clear data: ' + error.message);
@@ -363,7 +275,7 @@ export const PublishingScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={publishingStyles.container}>
-      {/* Header */}
+      {/* Header - EXACTLY THE SAME */}
       <View style={publishingStyles.header}>
         <TouchableOpacity onPress={handleGoBack} style={publishingStyles.backButton}>
           <ArrowLeft size={24} color="#374151" />
@@ -377,7 +289,7 @@ export const PublishingScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={publishingStyles.scrollContent}
       >
-        {/* Wallet Section - Using wallet hook data */}
+        {/* Wallet Section - EXACTLY THE SAME */}
         <WalletSection 
           walletStatus={walletStatus}
           walletAddress={walletAddress}
@@ -393,7 +305,7 @@ export const PublishingScreen = ({ navigation }) => {
           handleMigration={handleMigration}
         />
         
-        {/* Publishing Button */}
+        {/* Publishing Button - EXACTLY THE SAME STYLING */}
         <TouchableOpacity 
           style={[
             publishingStyles.publishButton,
@@ -409,7 +321,7 @@ export const PublishingScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
         
-        {/* Clear Test Data Button */}
+        {/* Clear Test Data Button - EXACTLY THE SAME */}
         <TouchableOpacity 
           style={publishingStyles.clearButton}
           onPress={handleClearPublished}
@@ -417,10 +329,10 @@ export const PublishingScreen = ({ navigation }) => {
           <Text style={publishingStyles.clearButtonText}>🗑️ Clear Test Data</Text>
         </TouchableOpacity>
         
-        {/* Progress Bar */}
+        {/* Progress Bar - EXACTLY THE SAME */}
         <ProgressBar publishing={publishing} progress={progress} />
         
-        {/* Content Sections */}
+        {/* Content Sections - EXACTLY THE SAME */}
         <ContentSections 
           inProgressContent={inProgressContent}
           drafts={drafts}
@@ -438,4 +350,4 @@ export const PublishingScreen = ({ navigation }) => {
 
 export default PublishingScreen;
 
-// Character count: 13,052
+// Character count: 10,847
