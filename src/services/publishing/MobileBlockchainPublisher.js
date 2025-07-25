@@ -3,8 +3,8 @@
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import { CompressionService } from '../compression/CompressionService';
 import { StorageService } from '../storage/StorageService';
-import { MobileScrollManager } from './MobileScrollManager';
-import { MobileStorageManager } from './MobileStorageManager';
+// import { MobileScrollManager } from './MobileScrollManager';
+// import { MobileStorageManager } from './MobileStorageManager';
 
 /**
  * Mobile Blockchain Publisher - Handles blockchain publishing operations

@@ -1,7 +1,8 @@
 // src/services/publishing/MobilePublishingService.js
 // Path: src/services/publishing/MobilePublishingService.js
 import { MobileWalletService } from '../wallet/MobileWalletService';
-import { MobileContentManager } from './MobileContentManager';
+import { ContentService } from './ContentService';
+// import { MobileContentManager } from './MobileContentManager';
 // import { MobileStorageManager } from './MobileStorageManager';
 import { MobileBlockchainPublisher } from './MobileBlockchainPublisher';
 import { StorageService } from '../storage/StorageService';
@@ -39,7 +40,7 @@ export class MobilePublishingService {
    * @returns {Promise<Object|null>} Content object or null
    */
   async pickAndLoadFile() {
-    const fileContent = await MobileContentManager.pickAndLoadFile();
+    const fileContent = await ContentService.pickAndLoadFile();
     if (!fileContent) {
       return null;
     }
@@ -64,7 +65,7 @@ export class MobilePublishingService {
    * @returns {Object} Content object
    */
   createTextContent(text, title = 'Manual Entry') {
-    return MobileContentManager.createTextContent(text, title);
+    return ContentService.createTextContent(text, title);
   }
 
   /**
@@ -85,7 +86,7 @@ export class MobilePublishingService {
         throw new Error('Unable to access wallet keypair');
       }
 
-      return await MobileContentManager.prepareContent(
+      return await ContentService.prepareContent(
         contentData,
         title,
         keypair.publicKey.toString(),
@@ -131,7 +132,7 @@ export class MobilePublishingService {
         };
       }
       
-      return MobileContentManager.estimatePublishing(contentText);
+      return ContentService.estimatePublishing(contentText);
     } catch (error) {
       console.error('Error in publishing estimation:', error);
       return {
@@ -152,7 +153,7 @@ export class MobilePublishingService {
    * @returns {boolean} True if valid
    */
   validateContent(content) {
-    return MobileContentManager.validateContent(content);
+    return ContentService.validateContent(content);
   }
 
   /**
@@ -161,7 +162,7 @@ export class MobilePublishingService {
    * @returns {Object} Content statistics
    */
   getContentStats(content) {
-    return MobileContentManager.getContentStats(content);
+    return ContentService.getContentStats(content);
   }
 
   // ==================== PUBLISHING OPERATIONS ====================
@@ -484,7 +485,7 @@ export class MobilePublishingService {
 
       // Test ContentManager
       try {
-        results.contentManager = await MobileContentManager.runSelfTest();
+        results.contentManager = await ContentService.runSelfTest();
       } catch (error) {
         results.errors.push(`ContentManager test failed: ${error.message}`);
       }
@@ -534,7 +535,7 @@ export class MobilePublishingService {
       name: 'MobilePublishingService',
       version: '2.0.0',
       components: [
-        'MobileContentManager',
+        'ContentService',
         'StorageService', 
         'MobileBlockchainPublisher'
       ],
