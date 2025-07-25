@@ -2,8 +2,9 @@
 // Path: src/services/publishing/MobilePublishingService.js
 import { MobileWalletService } from '../wallet/MobileWalletService';
 import { MobileContentManager } from './MobileContentManager';
-import { MobileStorageManager } from './MobileStorageManager';
+// import { MobileStorageManager } from './MobileStorageManager';
 import { MobileBlockchainPublisher } from './MobileBlockchainPublisher';
+import { StorageService } from '../storage/StorageService';
 
 /**
  * Mobile Publishing Service - Main orchestrator for publishing content
@@ -275,7 +276,7 @@ export class MobilePublishingService {
    * @returns {Promise<Array>} Array of in-progress content
    */
   async getInProgressContent() {
-    return await MobileStorageManager.getInProgressContentArray();
+    return await StorageService.getInProgressContentArray();
   }
 
   /**
@@ -283,7 +284,7 @@ export class MobilePublishingService {
    * @returns {Promise<Array>} Array of in-progress content
    */
   async getInProgressContentArray() {
-    return await MobileStorageManager.getInProgressContentArray();
+    return await StorageService.getInProgressContentArray();
   }
 
   /**
@@ -291,7 +292,7 @@ export class MobilePublishingService {
    * @returns {Promise<Array>} Array of published content (fixed to use new storage manager)
    */
   async getPublishedContent() {
-    return await MobileStorageManager.getPublishedContentArray();
+    return await StorageService.getPublishedContentArray();
   }
 
   /**
@@ -299,7 +300,7 @@ export class MobilePublishingService {
    * @returns {Promise<Array>} Array of published content
    */
   async getPublishedContentArray() {
-    return await MobileStorageManager.getPublishedContentArray();
+    return await StorageService.getPublishedContentArray();
   }
 
   /**
@@ -308,7 +309,7 @@ export class MobilePublishingService {
    * @returns {Promise<Object|null>} Published content or null
    */
   async getPublishedContentById(contentId) {
-    return await MobileStorageManager.getPublishedContentById(contentId);
+    return await StorageService.getPublishedContentById(contentId);
   }
 
   /**
@@ -317,7 +318,7 @@ export class MobilePublishingService {
    * @returns {Promise<boolean>} Success status
    */
   async deletePublishedContent(contentId) {
-    return await MobileStorageManager.deletePublishedContent(contentId);
+    return await StorageService.deletePublishedContent(contentId);
   }
 
   /**
@@ -327,7 +328,7 @@ export class MobilePublishingService {
    * @returns {Promise<Object>} Search results
    */
   async searchContent(searchTerm, options = {}) {
-    return await MobileStorageManager.searchContent(searchTerm, options);
+    return await StorageService.searchContent(searchTerm, options);
   }
 
   /**
@@ -335,7 +336,7 @@ export class MobilePublishingService {
    * @returns {Promise<Object>} Storage statistics
    */
   async getStorageStats() {
-    return await MobileStorageManager.getStorageStats();
+    return await StorageService.getStorageStats();
   }
 
   /**
@@ -343,7 +344,7 @@ export class MobilePublishingService {
    * @returns {Promise<boolean>} Success status
    */
   async clearAllStorage() {
-    return await MobileStorageManager.clearAllStorage();
+    return await StorageService.clearAllStorage();
   }
 
   /**
@@ -351,7 +352,7 @@ export class MobilePublishingService {
    * @returns {Promise<string>} JSON string of all data
    */
   async exportAllData() {
-    return await MobileStorageManager.exportAllData();
+    return await StorageService.exportAllData();
   }
 
   /**
@@ -361,7 +362,7 @@ export class MobilePublishingService {
    * @returns {Promise<Object>} Import results
    */
   async importData(jsonData, merge = true) {
-    return await MobileStorageManager.importData(jsonData, merge);
+    return await StorageService.importData(jsonData, merge);
   }
 
   // ==================== LEGACY COMPATIBILITY METHODS ====================
@@ -400,7 +401,7 @@ export class MobilePublishingService {
         status: 'draft'
       };
       
-      return await MobileStorageManager.saveInProgressContent(inProgressContent);
+      return await StorageService.saveInProgressContent(inProgressContent);
     } catch (error) {
       console.error('Error saving draft:', error);
       return false;
@@ -490,7 +491,7 @@ export class MobilePublishingService {
 
       // Test StorageManager
       try {
-        results.storageManager = await MobileStorageManager.runSelfTest();
+        results.storageManager = await StorageService.runSelfTest();
       } catch (error) {
         results.errors.push(`StorageManager test failed: ${error.message}`);
       }
@@ -534,9 +535,8 @@ export class MobilePublishingService {
       version: '2.0.0',
       components: [
         'MobileContentManager',
-        'MobileStorageManager', 
-        'MobileBlockchainPublisher',
-        'MobileScrollManager'
+        'StorageService', 
+        'MobileBlockchainPublisher'
       ],
       capabilities: [
         'File loading and text entry',
@@ -547,7 +547,7 @@ export class MobilePublishingService {
         'Data backup and import',
         'Content search and statistics'
       ],
-      storageKeys: MobileStorageManager.STORAGE_KEYS
+      storageKeys: StorageService.STORAGE_KEYS
     };
   }
 }

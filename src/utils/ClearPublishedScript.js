@@ -3,6 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
 import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
+import { StorageService } from '../services/storage/StorageService';
 
 export class ClearPublishedScript {
   
@@ -14,11 +15,11 @@ export class ClearPublishedScript {
     try {
       console.log('🧹 Starting comprehensive data clear...');
       
-      // Use the new MobileStorageManager to clear all publishing data
-      const storageResult = await MobileStorageManager.clearAllStorage();
+      // Use the new StorageService to clear all publishing data
+      const storageResult = await StorageService.clearAllStorage();
       
       if (!storageResult) {
-        throw new Error('Failed to clear storage via MobileStorageManager');
+        throw new Error('Failed to clear storage via StorageService');
       }
       
       // Also clear any legacy storage keys
@@ -64,11 +65,11 @@ export class ClearPublishedScript {
   static async clearAllPublished() {
     try {
       // Use new storage manager
-      const published = await MobileStorageManager.getPublishedContent();
+      const published = await StorageService.getPublishedContent();
       const publishedIds = Object.keys(published);
       
       for (const contentId of publishedIds) {
-        await MobileStorageManager.deletePublishedContent(contentId);
+        await StorageService.deletePublishedContent(contentId);
       }
       
       console.log('✅ All published content cleared');
@@ -97,11 +98,11 @@ export class ClearPublishedScript {
   static async clearInProgress() {
     try {
       // Use new storage manager
-      const inProgress = await MobileStorageManager.getInProgressContent();
+      const inProgress = await StorageService.getInProgressContent();
       const inProgressIds = Object.keys(inProgress);
       
       for (const contentId of inProgressIds) {
-        await MobileStorageManager.removeInProgressContent(contentId);
+        await StorageService.removeInProgressContent(contentId);
       }
       
       console.log('✅ In-progress content cleared');
@@ -117,11 +118,11 @@ export class ClearPublishedScript {
    */
   static async clearScrolls() {
     try {
-      const scrolls = await MobileScrollManager.getAllScrolls();
+      const scrolls = await StorageService.getAllScrolls();
       const scrollIds = Object.keys(scrolls);
       
       for (const scrollId of scrollIds) {
-        await MobileScrollManager.deleteScroll(scrollId);
+        await StorageService.deleteScroll(scrollId);
       }
       
       console.log('✅ All scroll manifests cleared');
@@ -138,10 +139,10 @@ export class ClearPublishedScript {
   static async getStorageStats() {
     try {
       // Use new storage manager for comprehensive stats
-      const stats = await MobileStorageManager.getStorageStats();
+      const stats = await StorageService.getStorageStats();
       
       // Also get scroll stats
-      const scrolls = await MobileScrollManager.getAllScrolls();
+      const scrolls = await StorageService.getAllScrolls();
       const scrollCount = Object.keys(scrolls).length;
       
       const comprehensiveStats = {
@@ -209,7 +210,7 @@ export class ClearPublishedScript {
       console.log('🧹 Clearing content data only (preserving wallet)...');
       
       // Clear content using storage managers
-      await MobileStorageManager.clearAllStorage();
+      await StorageService.clearAllStorage();
       
       // Clear legacy content keys but preserve wallet
       const contentKeys = [

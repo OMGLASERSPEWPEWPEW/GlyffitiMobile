@@ -2,6 +2,7 @@
 // Path: src/services/publishing/MobileBlockchainPublisher.js
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import { CompressionService } from '../compression/CompressionService';
+import { StorageService } from '../storage/StorageService';
 import { MobileScrollManager } from './MobileScrollManager';
 import { MobileStorageManager } from './MobileStorageManager';
 
@@ -53,7 +54,7 @@ export class MobileBlockchainPublisher {
       this.activePublishing.set(contentId, status);
 
       // Save as in-progress
-      await MobileStorageManager.saveInProgressContent(content);
+      await StorageService.saveInProgressContent(content);
 
       console.log(`📤 Starting publication of ${content.glyphs.length} glyphs...`);
       onProgress && onProgress(status);
@@ -148,7 +149,7 @@ export class MobileBlockchainPublisher {
               onProgress && onProgress(status);
               
               // Save partial progress
-              await MobileStorageManager.updateInProgressContent(
+              await StorageService.updateInProgressContent(
                 contentId, 
                 content.glyphs, 
                 status.successfulGlyphs, 
@@ -172,7 +173,7 @@ export class MobileBlockchainPublisher {
         }
         
         // Update in-progress content after each successful glyph
-        await MobileStorageManager.updateInProgressContent(
+        await StorageService.updateInProgressContent(
           contentId, 
           content.glyphs, 
           status.successfulGlyphs, 
@@ -207,7 +208,7 @@ export class MobileBlockchainPublisher {
           };
           
           // Create scroll manifest
-          const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
+          const manifest = await StorageService.createScrollFromPublishedContent(publishedContent);
           
           // CRITICAL FIX: Use correct property name (storyId, not id)
           status.scrollId = manifest.storyId;
@@ -216,7 +217,7 @@ export class MobileBlockchainPublisher {
           
           // CRITICAL FIX: Save manifest to glyffiti_scrolls storage
           console.log('💾 Saving scroll manifest to local storage...');
-          const saveResult = await MobileScrollManager.saveScrollLocally(manifest);
+          const saveResult = await StorageService.saveScrollLocally(manifest);
           
           if (!saveResult) {
             console.warn('⚠️ Warning: Failed to save scroll manifest locally');
@@ -225,8 +226,8 @@ export class MobileBlockchainPublisher {
           }
           
           // Save as published content
-          await MobileStorageManager.savePublishedContent(publishedContent);
-          await MobileStorageManager.removeInProgressContent(contentId);
+          await StorageService.savePublishedContent(publishedContent);
+          await StorageService.removeInProgressContent(contentId);
           
           status.stage = 'completed';
           status.progress = 100;
@@ -317,7 +318,7 @@ export class MobileBlockchainPublisher {
       console.log(`🔄 Resuming publication of content: ${contentId}`);
       
       // Get in-progress content
-      const inProgressContent = await MobileStorageManager.getInProgressContent();
+      const inProgressContent = await StorageService.getInProgressContent();
       const content = inProgressContent[contentId];
       
       if (!content) {
@@ -364,13 +365,13 @@ export class MobileBlockchainPublisher {
           publishedAt: Date.now()
         };
         
-        const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
+        const manifest = await StorageService.createScrollFromPublishedContent(publishedContent);
         publishedContent.scrollId = manifest.storyId;
         publishedContent.manifest = manifest;
         
-        await MobileScrollManager.saveScrollLocally(manifest);
-        await MobileStorageManager.savePublishedContent(publishedContent);
-        await MobileStorageManager.removeInProgressContent(contentId);
+        await StorageService.saveScrollLocally(manifest);
+        await StorageService.savePublishedContent(publishedContent);
+        await StorageService.removeInProgressContent(contentId);
         
         status.stage = 'completed';
         status.progress = 100;
@@ -482,7 +483,7 @@ export class MobileBlockchainPublisher {
               onProgress && onProgress(status);
               
               // Save partial progress
-              await MobileStorageManager.updateInProgressContent(
+              await StorageService.updateInProgressContent(
                 contentId, 
                 content.glyphs, 
                 status.successfulGlyphs, 
@@ -506,7 +507,7 @@ export class MobileBlockchainPublisher {
         }
         
         // Update in-progress content after each successful glyph
-        await MobileStorageManager.updateInProgressContent(
+        await StorageService.updateInProgressContent(
           contentId, 
           content.glyphs, 
           status.successfulGlyphs, 
@@ -539,15 +540,15 @@ export class MobileBlockchainPublisher {
             glyphs: content.glyphs.filter(g => g.status === 'published')
           };
           
-          const manifest = await MobileScrollManager.createScrollFromPublishedContent(publishedContent);
+          const manifest = await StorageService.createScrollFromPublishedContent(publishedContent);
           
           status.scrollId = manifest.storyId;
           publishedContent.scrollId = manifest.storyId;
           publishedContent.manifest = manifest;
           
-          await MobileScrollManager.saveScrollLocally(manifest);
-          await MobileStorageManager.savePublishedContent(publishedContent);
-          await MobileStorageManager.removeInProgressContent(contentId);
+          await StorageService.saveScrollLocally(manifest);
+          await StorageService.savePublishedContent(publishedContent);
+          await StorageService.removeInProgressContent(contentId);
           
           status.stage = 'completed';
           status.progress = 100;
@@ -635,7 +636,7 @@ export class MobileBlockchainPublisher {
         this.activePublishing.delete(contentId);
         
         // Remove from in-progress storage
-        await MobileStorageManager.removeInProgressContent(contentId);
+        await StorageService.removeInProgressContent(contentId);
         
         return true;
       }

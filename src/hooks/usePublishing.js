@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import { MobilePublishingService } from '../services/publishing/MobilePublishingService';
 import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
 import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
+import { StorageService } from '../services/storage/StorageService';
 
 /**
  * Custom hook for publishing management
@@ -156,7 +157,7 @@ export const usePublishing = (walletService = null) => {
         savedAt: Date.now()
       };
       
-      await MobileStorageManager.saveDraft(draftContent);
+      await StorageService.saveDraft(draftContent);
       setDrafts(prev => [...prev, draftContent]);
       console.log('💾 Draft saved');
       

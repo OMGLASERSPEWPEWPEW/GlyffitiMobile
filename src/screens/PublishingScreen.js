@@ -15,6 +15,7 @@ import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
 import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
 import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
+import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 
@@ -173,7 +174,7 @@ export const PublishingScreen = ({ navigation }) => {
       
       if (!manifest && item.scrollId) {
         try {
-          manifest = await MobileScrollManager.loadScroll(item.scrollId);
+          manifest = await StorageService.loadScroll(item.scrollId);
         } catch (error) {
           console.warn('⚠️ Could not load manifest from ScrollManager:', error);
           Alert.alert(
