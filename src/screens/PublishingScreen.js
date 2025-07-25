@@ -13,8 +13,6 @@ import {
 import { ArrowLeft } from 'lucide-react-native';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
-import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
-import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
 import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook

@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { MobilePublishingService } from '../services/publishing/MobilePublishingService';
-import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
-import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
 import { StorageService } from '../services/storage/StorageService';
 
 /**

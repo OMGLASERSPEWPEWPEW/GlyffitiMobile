@@ -1,8 +1,6 @@
 // src/utils/ClearPublishedScript.js
 // Path: src/utils/ClearPublishedScript.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MobileStorageManager } from '../services/publishing/MobileStorageManager';
-import { MobileScrollManager } from '../services/publishing/MobileScrollManager';
 import { StorageService } from '../services/storage/StorageService';
 
 export class ClearPublishedScript {
