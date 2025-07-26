@@ -7,9 +7,9 @@ import {
   StyleSheet, 
   FlatList, 
   TouchableOpacity, 
-  RefreshControl,
-  ActivityIndicator 
+  RefreshControl
 } from 'react-native';
+import { LoadingSpinner } from '../shared';
 import { Book, Clock, User, Download, Eye, Star } from 'lucide-react-native';
 import { colors, spacing, typography } from '../../styles';
 import { storyCache } from '../../services/story/StoryCache';
@@ -395,19 +395,13 @@ const StoryDiscoveryList = ({
       />
       
       {loading && stories.length === 0 && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator 
-            size="large" 
-            color={isDarkMode ? colors.accentDark : colors.accent} 
-          />
-          <Text style={[
-            styles.loadingText,
-            { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-          ]}>
-            Loading stories...
-          </Text>
-        </View>
-      )}
+        <LoadingSpinner
+            message="Loading stories..."
+            isDarkMode={isDarkMode}
+            inline={false}
+            animated={true}
+        />
+        )}
     </View>
   );
 };
@@ -568,21 +562,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 250,
   },
-  loadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background + '90',
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    marginTop: spacing.medium,
-  },
+
 });
 
 export default StoryDiscoveryList;

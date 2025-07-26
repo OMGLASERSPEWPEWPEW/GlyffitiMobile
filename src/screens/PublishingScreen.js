@@ -7,9 +7,9 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator
+  Alert
 } from 'react-native';
+import { LoadingOverlay } from '../components/shared';
 import { ArrowLeft } from 'lucide-react-native';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
@@ -51,6 +51,9 @@ export const PublishingScreen = ({ navigation }) => {
 
   // Keep only the essential local state
   const [isLoading, setIsLoading] = useState(true);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletLoadingMessage, setWalletLoadingMessage] = useState('');
+  const [airdropLoading, setAirdropLoading] = useState(false);
 
   // Initialize data on component mount
   useEffect(() => {
@@ -72,6 +75,74 @@ export const PublishingScreen = ({ navigation }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Enhanced wallet action handler with loading overlay
+  const handleWalletActionWithLoading = async () => {
+    try {
+      setWalletLoading(true);
+      
+      if (walletStatus === 'none') {
+        setWalletLoadingMessage('Creating secure wallet...');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setWalletLoadingMessage('Encrypting with password...');
+        
+        const result = await handleWalletAction();
+        
+        if (result !== false) {
+          setWalletLoadingMessage('Wallet created successfully!');
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } else {
+        setWalletLoadingMessage('Unlocking wallet...');
+        
+        const result = await handleWalletAction();
+        
+        if (result !== false) {
+          setWalletLoadingMessage('Wallet unlocked successfully!');
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+    } catch (error) {
+      console.error('Wallet action error:', error);
+      Alert.alert('Error', 'Failed to complete wallet action: ' + error.message);
+    } finally {
+      setWalletLoading(false);
+      setWalletLoadingMessage('');
+    }
+  };
+
+    // Enhanced airdrop handler with loading overlay
+  const handleRequestAirdropWithLoading = async () => {
+    try {
+      setAirdropLoading(true);
+      await handleRequestAirdrop();
+    } catch (error) {
+      console.error('Airdrop error:', error);
+      Alert.alert('Error', 'Failed to request airdrop: ' + error.message);
+    } finally {
+      setAirdropLoading(false);
+    }
+  };
+
+  // Cancel wallet loading
+  const handleCancelWalletLoading = () => {
+    Alert.alert(
+      'Cancel Operation',
+      'Are you sure you want to cancel the wallet operation?',
+      [
+        { text: 'Continue', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'destructive',
+          onPress: () => {
+            setWalletLoading(false);
+            setWalletLoadingMessage('');
+          }
+        }
+      ]
+    );
   };
 
   // Publishing logic - using the original simple one-tap flow
@@ -142,24 +213,26 @@ export const PublishingScreen = ({ navigation }) => {
 
   // Resume publishing for in-progress content
   const handleResumePublishing = async (contentId) => {
-    Alert.alert(
-      'Resume Publishing',
-      'This will restart publishing from the beginning. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Resume', 
-          onPress: async () => {
-            try {
-              // For now, just show a message since full resume isn't implemented
-              Alert.alert('Info', 'Resume publishing not yet implemented');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to resume publishing');
-            }
-          }
-        }
-      ]
-    );
+    if (!walletService || !publishingService || publishing) {
+      console.log('🚫 Cannot resume publishing');
+      return;
+    }
+
+    try {
+      console.log(`🔄 Resuming publishing for content: ${contentId}`);
+      
+      const content = inProgressContent.find(c => c.id === contentId);
+      if (!content) {
+        throw new Error('Content not found');
+      }
+
+      await publishingService.resumePublishing(contentId);
+      await loadExistingContent();
+      
+    } catch (error) {
+      console.error('❌ Resume publishing failed:', error);
+      Alert.alert('Resume Failed', error.message);
+    }
   };
 
   // Handle viewing a published story
@@ -261,14 +334,15 @@ export const PublishingScreen = ({ navigation }) => {
   };
 
   // Show loading screen during initialization
-  if (isLoading && walletStatus === 'checking') {
+    if (isLoading && walletStatus === 'checking') {
     return (
-      <SafeAreaView style={publishingStyles.container}>
-        <View style={publishingStyles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={publishingStyles.loadingText}>Loading publishing data...</Text>
-        </View>
-      </SafeAreaView>
+      <LoadingOverlay
+        visible={true}
+        message="Initializing Publishing..."
+        subMessage="Loading wallet and content data"
+        modal={false}
+        isDarkMode={false}
+      />
     );
   }
 
@@ -293,14 +367,14 @@ export const PublishingScreen = ({ navigation }) => {
           walletStatus={walletStatus}
           walletAddress={walletAddress}
           walletBalance={walletBalance}
-          isRequestingAirdrop={isRequestingAirdrop}
+          isRequestingAirdrop={isRequestingAirdrop || airdropLoading}
           showWalletUnlock={showWalletUnlock}
           password={password}
-          isLoading={isLoadingWallet}
+          isLoading={isLoadingWallet || walletLoading}
           setPassword={setPassword}
           setShowWalletUnlock={setShowWalletUnlock}
-          handleRequestAirdrop={handleRequestAirdrop}
-          handleWalletAction={handleWalletAction}
+          handleRequestAirdrop={handleRequestAirdropWithLoading}
+          handleWalletAction={handleWalletActionWithLoading}
           handleMigration={handleMigration}
         />
         
@@ -343,6 +417,31 @@ export const PublishingScreen = ({ navigation }) => {
           handleViewStory={handleViewStory}
         />
       </ScrollView>
+
+
+          {/* Wallet Loading Overlay */}
+      <LoadingOverlay
+        visible={walletLoading}
+        message={walletLoadingMessage}
+        subMessage="This may take a few moments..."
+        showCancel={true}
+        onCancel={handleCancelWalletLoading}
+        isDarkMode={false}
+        modal={true}
+      />
+
+      {/* Airdrop Loading Overlay */}
+      <LoadingOverlay
+        visible={airdropLoading}
+        message="Requesting Airdrop..."
+        subMessage="Connecting to Solana testnet"
+        showCancel={false}
+        isDarkMode={false}
+        modal={true}
+      />           
+
+
+
     </SafeAreaView>
   );
 };

@@ -5,7 +5,8 @@ import { View, ScrollView, StyleSheet, SafeAreaView } from 'react-native';
 import { useStoryViewer } from '../../hooks/useStoryViewer';
 import StoryContent from './StoryContent';
 import StoryHeader from './StoryHeader';
-import StoryLoadingIndicator from './StoryLoadingIndicator';
+// import StoryLoadingIndicator from './StoryLoadingIndicator';
+import { LoadingProgress } from '../shared';
 import StoryErrorDisplay from './StoryErrorDisplay';
 import { colors, spacing } from '../../styles';
 
@@ -98,19 +99,22 @@ const StoryViewer = ({
   }
 
   // Show loading state (when no content yet)
-  if (isLoading && !hasContent) {
-    return (
-      <StoryLoadingIndicator
-        storyTitle={storyManifest?.title}
+  {isLoading && !hasContent && (
+    <LoadingProgress
+        title="Loading Story"
+        subtitle={storyManifest?.title}
         progress={progress}
         estimatedTimeRemaining={estimatedTimeRemaining}
         loadingStats={loadingStats}
         onCancel={stopLoading}
         onBack={handleBack}
         isDarkMode={isDarkMode}
-      />
-    );
-  }
+        tips={[
+        '💡 Stories load chunk by chunk to prevent network blocking',
+        '📚 Completed stories are cached for instant future access'
+        ]}
+    />
+    );}
 
   return (
     <SafeAreaView style={[
@@ -152,14 +156,14 @@ const StoryViewer = ({
         
         {/* Loading indicator at bottom if still loading */}
         {isLoading && hasContent && (
-          <View style={styles.bottomLoadingContainer}>
-            <StoryLoadingIndicator
-              compact={true}
-              progress={progress}
-              estimatedTimeRemaining={estimatedTimeRemaining}
-              isDarkMode={isDarkMode}
-            />
-          </View>
+            <View style={styles.bottomLoadingContainer}>
+                <LoadingProgress
+                compact={true}
+                progress={progress}
+                estimatedTimeRemaining={estimatedTimeRemaining}
+                isDarkMode={isDarkMode}
+                />
+            </View>
         )}
         
         {/* Error indicator at bottom if error occurred during loading */}
