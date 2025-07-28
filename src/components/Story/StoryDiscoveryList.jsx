@@ -6,11 +6,10 @@ import {
   Text, 
   StyleSheet, 
   FlatList, 
-  TouchableOpacity, 
   RefreshControl
 } from 'react-native';
-import { LoadingSpinner } from '../shared';
-import { Book, Clock, User, Download, Eye, Star } from 'lucide-react-native';
+import { LoadingSpinner, ContentCard } from '../shared';
+import { Book } from 'lucide-react-native';
 import { colors, spacing, typography } from '../../styles';
 import { storyCache } from '../../services/story/StoryCache';
 
@@ -50,57 +49,59 @@ const StoryDiscoveryList = ({
         // Load discovery feed (this would normally come from your story discovery service)
         // For now, we'll combine cached stories with mock discovery data
         const cached = await storyCache.getAllCachedManifests();
-        const mockDiscovery = generateMockDiscoveryData();
-        const combined = [...cached, ...mockDiscovery];
+        const mockData = generateMockDiscoveryData();
+        const combined = [...cached, ...mockData];
         setStories(processFeedData(combined));
       }
     } catch (error) {
       console.error('Error loading stories:', error);
+      setStories([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Load cache statistics
+  // Load cache data for statistics
   const loadCacheData = async () => {
     try {
       const cached = await storyCache.getAllCachedManifests();
-      const stats = await storyCache.getCacheStats();
       setCachedStories(cached);
+      
+      const stats = await storyCache.getCacheStats();
       setCacheStats(stats);
     } catch (error) {
       console.error('Error loading cache data:', error);
+      setCachedStories([]);
+      setCacheStats({ totalStories: 0, totalSizeMB: 0 });
     }
   };
 
-  // Process and sort feed data
-  const processFeedData = (rawData) => {
-    let processed = rawData.filter(story => {
-      // Apply search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return (
-          story.title?.toLowerCase().includes(query) ||
-          story.author?.toLowerCase().includes(query)
-        );
-      }
-      return true;
-    });
+  // Process and filter story data
+  const processFeedData = (data) => {
+    let processed = [...data];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      processed = processed.filter(story => 
+        story.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        story.author?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        story.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
 
     // Apply sorting
     switch (sortBy) {
       case 'recent':
         processed.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         break;
+      case 'popular':
+        processed.sort((a, b) => (b.views || 0) - (a.views || 0));
+        break;
       case 'title':
         processed.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         break;
       case 'author':
         processed.sort((a, b) => (a.author || '').localeCompare(b.author || ''));
-        break;
-      case 'popular':
-        // Sort by a popularity metric (mock for now)
-        processed.sort((a, b) => (b.views || 0) - (a.views || 0));
         break;
     }
 
@@ -157,16 +158,6 @@ const StoryDiscoveryList = ({
     setRefreshing(false);
   };
 
-  // Format author display
-  const formatAuthor = (author, publicKey) => {
-    if (!author || author === publicKey) {
-      return publicKey ? 
-        `${publicKey.substring(0, 6)}...${publicKey.substring(-4)}` : 
-        'Unknown Author';
-    }
-    return author;
-  };
-
   // Format time ago
   const formatTimeAgo = (timestamp) => {
     if (!timestamp) return '';
@@ -183,173 +174,65 @@ const StoryDiscoveryList = ({
     return 'Just now';
   };
 
-  // Render individual story item
+  // Render individual story item using ContentCard
   const renderStoryItem = ({ item: story }) => {
     const isCached = cachedStories.some(cached => cached.storyId === story.storyId);
     
     return (
-      <TouchableOpacity 
-        style={[
-          styles.storyCard,
-          isDarkMode && styles.storyCardDark
-        ]}
+      <ContentCard
+        title={story.title}
+        author={story.author}
+        authorPublicKey={story.authorPublicKey}
+        previewText={story.previewText}
+        timeAgo={formatTimeAgo(story.timestamp)}
+        estimatedReadTime={story.estimatedReadTime}
+        views={story.views}
+        likes={story.likes}
+        tags={story.tags || []}
+        isCached={isCached}
         onPress={() => handleStorySelect(story)}
-        activeOpacity={0.7}
-      >
-        {/* Story header */}
-        <View style={styles.storyHeader}>
-          <View style={styles.storyTitleSection}>
-            <Text 
-              style={[
-                styles.storyTitle,
-                { color: isDarkMode ? colors.textDark : colors.text }
-              ]}
-              numberOfLines={2}
-            >
-              {story.title}
-            </Text>
-            <View style={styles.authorRow}>
-              <User 
-                size={12} 
-                color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} 
-              />
-              <Text style={[
-                styles.authorText,
-                { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-              ]}>
-                {formatAuthor(story.author, story.authorPublicKey)}
-              </Text>
-            </View>
-          </View>
-          
-          {/* Cache indicator */}
-          {isCached && (
-            <View style={styles.cacheIndicator}>
-              <Download 
-                size={16} 
-                color={isDarkMode ? colors.successDark : colors.success} 
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Story preview */}
-        {story.previewText && (
-          <Text 
-            style={[
-              styles.previewText,
-              { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-            ]}
-            numberOfLines={2}
-          >
-            {story.previewText}
-          </Text>
-        )}
-
-        {/* Story metadata */}
-        <View style={styles.metadataRow}>
-          <View style={styles.metadataLeft}>
-            <View style={styles.metadataItem}>
-              <Book size={12} color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} />
-              <Text style={[
-                styles.metadataText,
-                { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-              ]}>
-                {story.totalChunks} chunks
-              </Text>
-            </View>
-            
-            {story.estimatedReadTime && (
-              <View style={styles.metadataItem}>
-                <Clock size={12} color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} />
-                <Text style={[
-                  styles.metadataText,
-                  { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-                ]}>
-                  {story.estimatedReadTime} min
-                </Text>
-              </View>
-            )}
-          </View>
-          
-          <View style={styles.metadataRight}>
-            {story.views && (
-              <View style={styles.metadataItem}>
-                <Eye size={12} color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} />
-                <Text style={[
-                  styles.metadataText,
-                  { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-                ]}>
-                  {story.views}
-                </Text>
-              </View>
-            )}
-            
-            <Text style={[
-              styles.timeAgo,
-              { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-            ]}>
-              {formatTimeAgo(story.timestamp)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Tags */}
-        {story.tags && story.tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            {story.tags.slice(0, 3).map((tag, index) => (
-              <View 
-                key={index}
-                style={[
-                  styles.tag,
-                  isDarkMode && styles.tagDark
-                ]}
-              >
-                <Text style={[
-                  styles.tagText,
-                  { color: isDarkMode ? colors.accentDark : colors.accent }
-                ]}>
-                  #{tag}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
+        isDarkMode={isDarkMode}
+        marginHorizontal={0} // Remove horizontal margin since parent has padding
+        marginBottom={spacing.medium}
+      />
     );
   };
 
   // Render empty state
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Book 
-        size={48} 
-        color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} 
-      />
-      <Text style={[
-        styles.emptyTitle,
-        { color: isDarkMode ? colors.textDark : colors.text }
-      ]}>
-        {showCachedOnly ? 'No Cached Stories' : 'No Stories Found'}
-      </Text>
-      <Text style={[
-        styles.emptyText,
-        { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
-      ]}>
-        {showCachedOnly 
-          ? 'Stories you read will be cached here for offline access'
-          : searchQuery 
-            ? 'Try a different search term'
-            : 'Check back later for new stories'
-        }
-      </Text>
-    </View>
-  );
+  const renderEmptyState = () => {
+    const emptyTitle = showCachedOnly ? 'No Cached Stories' : 'No Stories Found';
+    const emptyMessage = showCachedOnly 
+      ? 'You haven\'t cached any stories yet. Browse the discovery feed to find stories to download.'
+      : searchQuery 
+        ? 'Try adjusting your search terms or browse all stories.'
+        : 'Check your connection and try refreshing.';
 
-  // Render cache stats header
+    return (
+      <View style={styles.emptyContainer}>
+        <Book 
+          size={48} 
+          color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} 
+        />
+        <Text style={[
+          styles.emptyTitle,
+          { color: isDarkMode ? colors.textDark : colors.text }
+        ]}>
+          {emptyTitle}
+        </Text>
+        <Text style={[
+          styles.emptyText,
+          { color: isDarkMode ? colors.textSecondaryDark : colors.textSecondary }
+        ]}>
+          {emptyMessage}
+        </Text>
+      </View>
+    );
+  };
+
+  // Render header with cache statistics
   const renderHeader = () => {
     if (!showCachedOnly || !cacheStats) return null;
-    
+
     return (
       <View style={[
         styles.headerContainer,
@@ -437,111 +320,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: typography.fontFamily,
   },
-  storyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.medium,
-    marginBottom: spacing.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  storyCardDark: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: colors.borderDark,
-    shadowColor: colors.shadowDark,
-  },
-  storyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.small,
-  },
-  storyTitleSection: {
-    flex: 1,
-    marginRight: spacing.small,
-  },
-  storyTitle: {
-    fontSize: 18,
-    fontFamily: typography.fontFamilyBold,
-    lineHeight: 24,
-    marginBottom: spacing.extraSmall,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  authorText: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    marginLeft: spacing.extraSmall,
-  },
-  cacheIndicator: {
-    padding: spacing.small,
-    borderRadius: 20,
-    backgroundColor: colors.success + '20',
-  },
-  previewText: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    lineHeight: 20,
-    marginBottom: spacing.medium,
-  },
-  metadataRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.small,
-  },
-  metadataLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metadataRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.medium,
-  },
-  metadataText: {
-    fontSize: 12,
-    fontFamily: typography.fontFamily,
-    marginLeft: spacing.extraSmall,
-  },
-  timeAgo: {
-    fontSize: 12,
-    fontFamily: typography.fontFamily,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: spacing.small,
-  },
-  tag: {
-    backgroundColor: colors.accent + '15',
-    paddingHorizontal: spacing.small,
-    paddingVertical: spacing.extraSmall,
-    borderRadius: 12,
-    marginRight: spacing.small,
-    marginBottom: spacing.extraSmall,
-  },
-  tagDark: {
-    backgroundColor: colors.accentDark + '15',
-  },
-  tagText: {
-    fontSize: 11,
-    fontFamily: typography.fontFamily,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -562,9 +340,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 250,
   },
-
 });
 
 export default StoryDiscoveryList;
 
-// 3,647 characters
+// Character count: 8127

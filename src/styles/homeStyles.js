@@ -58,27 +58,16 @@ export const homeStyles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Primary button (Publishing)
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: spacing.large,
+  // Primary button content (for Card component usage)
+  primaryButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   primaryButtonIcon: {
     fontSize: 32,
     marginRight: spacing.medium,
   },
-  primaryButtonContent: {
+  primaryButtonTextContainer: {
     flex: 1,
   },
   primaryButtonTitle: {
@@ -100,16 +89,13 @@ export const homeStyles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.medium,
   },
-  secondaryButton: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: spacing.medium,
+  secondaryButtonContainer: {
     width: (width - 52) / 2, // Account for padding and gap
+  },
+  secondaryButtonContent: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 100,
     justifyContent: 'center',
+    minHeight: 100,
   },
   secondaryButtonIcon: {
     fontSize: 24,
@@ -129,13 +115,8 @@ export const homeStyles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Info card
-  infoCard: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: spacing.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
+  // Info card content (for Card component usage)
+  infoCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -164,4 +145,4 @@ export const homeStyles = StyleSheet.create({
   },
 });
 
-// 1,292 characters
+// Character count: 2896

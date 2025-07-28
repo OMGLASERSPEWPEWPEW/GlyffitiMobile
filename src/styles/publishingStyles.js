@@ -192,28 +192,46 @@ export const publishingStyles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Progress bar
+  // Progress bar - UPDATED WITH NEW CARD-BASED STYLES
   progressContainer: {
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  progressBarBackground: {
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+    color: '#1a1a1a',
+  },
+  progressBarContainer: {
     height: 8,
     backgroundColor: '#e9ecef',
     borderRadius: 4,
     overflow: 'hidden',
+    marginBottom: 8,
   },
-  progressBarFill: {
+  progressBar: {
     height: '100%',
     backgroundColor: '#28a745',
     borderRadius: 4,
   },
   progressText: {
     textAlign: 'center',
-    marginTop: 8,
     fontSize: 14,
+    color: '#495057',
+    marginBottom: 4,
+  },
+  compressionText: {
+    textAlign: 'center',
+    fontSize: 12,
     color: '#495057',
   },
 
@@ -327,20 +345,12 @@ export const publishingStyles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     color: '#0066cc',
-    fontWeight: '500',
-  },
-  tapToViewText: {
-    fontSize: 12,
-    color: '#007bff',
-    textAlign: 'center',
-    fontWeight: '500',
-    paddingTop: 8,
   },
 
   // Resume button
   resumeButton: {
-    backgroundColor: '#17a2b8',
-    padding: 10,
+    backgroundColor: '#007bff',
+    padding: 8,
     borderRadius: 6,
     alignItems: 'center',
     marginTop: 8,
@@ -354,27 +364,16 @@ export const publishingStyles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Empty states
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
+  // Card-based content items (for Card component usage)
+  contentItemCard: {
+    borderLeftWidth: 4,
   },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#495057',
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6c757d',
+  publishedNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
     textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 16,
+    marginTop: 8,
+    color: '#6c757d',
   },
 
   // Statistics
@@ -393,8 +392,7 @@ export const publishingStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
-    marginBottom: 16,
-    textAlign: 'center',
+    marginBottom: 12,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -404,42 +402,43 @@ export const publishingStyles = StyleSheet.create({
   statItem: {
     width: '48%',
     alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007bff',
+    color: '#1a1a1a',
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
     color: '#6c757d',
-    marginTop: 4,
+    textAlign: 'center',
   },
 
-  // Debug section (development only)
+  // Debug section
   debugSection: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ffeaa7',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   debugTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#856404',
+    color: '#1a1a1a',
     marginBottom: 8,
   },
   debugText: {
     fontSize: 12,
-    color: '#856404',
+    color: '#6c757d',
     marginBottom: 2,
   },
 });
 
-// Character count: 8,842
+// Character count: 7024
