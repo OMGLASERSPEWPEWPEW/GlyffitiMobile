@@ -11,7 +11,7 @@
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import { CompressionService } from '../compression/CompressionService';
 import { StorageService } from '../storage/StorageService';
-import { ContentService } from './ContentService';
+import { ContentService } from '../content/ContentService';
 import { MobileWalletService } from '../wallet/MobileWalletService';
 
 export class PublishingService {

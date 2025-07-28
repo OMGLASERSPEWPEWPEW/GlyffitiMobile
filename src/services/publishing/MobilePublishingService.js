@@ -1,7 +1,7 @@
 // src/services/publishing/MobilePublishingService.js
 // Path: src/services/publishing/MobilePublishingService.js
 import { MobileWalletService } from '../wallet/MobileWalletService';
-import { ContentService } from './ContentService';
+import { ContentService } from '../content/ContentService';
 import { MobileBlockchainPublisher } from './MobileBlockchainPublisher';
 import { StorageService } from '../storage/StorageService';
 
