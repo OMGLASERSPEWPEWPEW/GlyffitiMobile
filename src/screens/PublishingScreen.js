@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { LoadingOverlay } from '../components/shared';
+import { LoadingOverlay, Button } from '../components/shared';
 import { ArrowLeft } from 'lucide-react-native';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
@@ -379,28 +379,26 @@ export const PublishingScreen = ({ navigation }) => {
         />
         
         {/* Publishing Button - EXACTLY THE SAME STYLING */}
-        <TouchableOpacity 
-          style={[
-            publishingStyles.publishButton,
-            (publishing || walletStatus !== 'unlocked') && publishingStyles.publishButtonDisabled
-          ]}
+        <Button
+          title={publishing ? '📤 Publishing...' : 
+                walletStatus !== 'unlocked' ? '🔒 Unlock Wallet to Publish' :
+                '📁 Pick File & Publish'}
           onPress={handlePublishFile}
           disabled={publishing || walletStatus !== 'unlocked' || isLoading}
-        >
-          <Text style={publishingStyles.publishButtonText}>
-            {publishing ? '📤 Publishing...' : 
-             walletStatus !== 'unlocked' ? '🔒 Unlock Wallet to Publish' :
-             '📁 Pick File & Publish'}
-          </Text>
-        </TouchableOpacity>
+          loading={publishing}
+          variant="primary"
+          size="large"
+          style={publishingStyles.publishButton}
+        />
         
         {/* Clear Test Data Button - EXACTLY THE SAME */}
-        <TouchableOpacity 
-          style={publishingStyles.clearButton}
+        <Button
+          title="🗑️ Clear Test Data"
           onPress={handleClearPublished}
-        >
-          <Text style={publishingStyles.clearButtonText}>🗑️ Clear Test Data</Text>
-        </TouchableOpacity>
+          variant="danger"
+          size="medium"
+          style={publishingStyles.clearButton}
+        />
         
         {/* Progress Bar - EXACTLY THE SAME */}
         <ProgressBar publishing={publishing} progress={progress} />

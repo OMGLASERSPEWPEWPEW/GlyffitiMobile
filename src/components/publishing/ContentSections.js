@@ -2,7 +2,7 @@
 // Path: src/components/publishing/ContentSections.js
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { Card } from '../shared';
+import { Card, Button } from '../shared';
 import { publishingStyles } from '../../styles/publishingStyles';
 import { spacing } from '../../styles';
 
@@ -68,19 +68,15 @@ export const ContentSections = ({
                   Last updated: {new Date(item.lastUpdated).toLocaleDateString()}
                 </Text>
               )}
-              <TouchableOpacity 
-                style={[
-                  publishingStyles.resumeButton,
-                  walletStatus !== 'unlocked' && publishingStyles.resumeButtonDisabled,
-                  { backgroundColor: walletStatus !== 'unlocked' ? '#6c757d' : (isDarkMode ? '#3b82f6' : '#007bff') }
-                ]}
+              <Button
+                title={walletStatus !== 'unlocked' ? '🔒 Unlock to Resume' : '▶️ Resume Publishing'}
                 onPress={() => handleResumePublishing(item.contentId || item.id)}
                 disabled={publishing || walletStatus !== 'unlocked'}
-              >
-                <Text style={publishingStyles.resumeButtonText}>
-                  {walletStatus !== 'unlocked' ? '🔒 Unlock to Resume' : '▶️ Resume Publishing'}
-                </Text>
-              </TouchableOpacity>
+                variant={walletStatus !== 'unlocked' ? 'secondary' : 'primary'}
+                size="medium"
+                isDarkMode={isDarkMode}
+                style={publishingStyles.resumeButton}
+              />
             </Card>
           ))}
         </Card>

@@ -2,7 +2,7 @@
 // Path: src/components/publishing/WalletSection.js
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { StatusCard } from '../shared';
+import { StatusCard, FormField, PasswordInput } from '../shared';
 import { colors, spacing, typography } from '../../styles';
 
 export const WalletSection = ({ 
@@ -92,25 +92,18 @@ export const WalletSection = ({
     >
       {/* Password input when unlocking */}
       {showWalletUnlock && (
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={[
-              styles.passwordInput,
-              {
-                backgroundColor: isDarkMode ? '#374151' : colors.backgroundSecondary,
-                borderColor: isDarkMode ? '#6b7280' : colors.border,
-                color: isDarkMode ? '#e5e7eb' : colors.text,
-              }
-            ]}
-            placeholder="Enter password..."
-            placeholderTextColor={isDarkMode ? '#9ca3af' : colors.textSecondary}
-            secureTextEntry
+        <FormField
+          label="Password"
+          isDarkMode={isDarkMode}
+          style={styles.passwordContainer}
+        >
+          <PasswordInput
             value={password}
             onChangeText={setPassword}
-            autoCapitalize="none"
-            editable={!isLoading}
+            isDarkMode={isDarkMode}
+            disabled={isLoading}
           />
-        </View>
+        </FormField>
       )}
     </StatusCard>
   );
@@ -131,18 +124,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: spacing.small,
     textAlign: 'center',
-  },
-  passwordContainer: {
-    marginTop: spacing.medium,
-  },
-  passwordInput: {
-    fontSize: 16,
-    fontFamily: typography.fontFamily,
-    padding: spacing.medium,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: spacing.small,
-  },
+  }
 });
 
 // Character count: 3416

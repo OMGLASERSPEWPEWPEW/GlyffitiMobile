@@ -1,9 +1,10 @@
-// src/components/shared/ContentCard.js
-// Path: src/components/shared/ContentCard.js
+// src/components/shared/layout/ContentCard.js
+// Path: src/components/shared/layout/ContentCard.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { User, Clock, Eye, Star, Download, Book } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../../styles';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { User, Clock, Eye, Star, Download } from 'lucide-react-native';
+import { colors, spacing } from '../../../styles';
+import { cardStyles } from '../../../styles/cardStyles';
 import Card from './Card';
 
 /**
@@ -70,14 +71,14 @@ const ContentCard = ({
     <Card
       isDarkMode={isDarkMode}
       onPress={onPress}
-      style={[styles.contentCard, style]}
+      style={[cardStyles.contentCard, style]}
       {...cardProps}
     >
       {/* Header: Title and Cache Indicator */}
-      <View style={styles.header}>
-        <View style={styles.titleSection}>
+      <View style={cardStyles.contentHeader}>
+        <View style={cardStyles.contentTitleSection}>
           <Text style={[
-            styles.title,
+            cardStyles.contentTitle,
             { color: textColor }
           ]} numberOfLines={2}>
             {title}
@@ -85,13 +86,13 @@ const ContentCard = ({
           
           {/* Author row */}
           <TouchableOpacity 
-            style={styles.authorRow}
+            style={cardStyles.contentAuthorRow}
             onPress={onAuthorPress}
             disabled={!onAuthorPress}
           >
             <User size={14} color={subtitleColor} />
             <Text style={[
-              styles.authorText,
+              cardStyles.contentAuthorText,
               { color: subtitleColor }
             ]}>
               {formatAuthor()}
@@ -102,7 +103,7 @@ const ContentCard = ({
         {/* Cache indicator */}
         {showCacheIndicator && isCached && (
           <View style={[
-            styles.cacheIndicator,
+            cardStyles.contentCacheIndicator,
             { backgroundColor: colors.success + '20' }
           ]}>
             <Download size={16} color={colors.success} />
@@ -112,7 +113,7 @@ const ContentCard = ({
         {/* Bookmark indicator */}
         {isBookmarked && (
           <TouchableOpacity 
-            style={styles.bookmarkButton}
+            style={cardStyles.contentBookmarkButton}
             onPress={onBookmarkPress}
           >
             <Star size={16} color={colors.warning} />
@@ -123,7 +124,7 @@ const ContentCard = ({
       {/* Preview text */}
       {previewText && (
         <Text style={[
-          styles.previewText,
+          cardStyles.contentPreviewText,
           { color: textColor }
         ]}>
           {formatPreviewText()}
@@ -132,14 +133,14 @@ const ContentCard = ({
 
       {/* Metadata row */}
       {showMetadata && (
-        <View style={styles.metadataRow}>
-          <View style={styles.metadataLeft}>
+        <View style={cardStyles.contentMetadataRow}>
+          <View style={cardStyles.contentMetadataLeft}>
             {/* Read time */}
             {estimatedReadTime && (
-              <View style={styles.metadataItem}>
+              <View style={cardStyles.contentMetadataItem}>
                 <Clock size={12} color={metadataColor} />
                 <Text style={[
-                  styles.metadataText,
+                  cardStyles.contentMetadataText,
                   { color: metadataColor }
                 ]}>
                   {estimatedReadTime}m read
@@ -149,10 +150,10 @@ const ContentCard = ({
 
             {/* Views */}
             {views !== undefined && (
-              <View style={styles.metadataItem}>
+              <View style={cardStyles.contentMetadataItem}>
                 <Eye size={12} color={metadataColor} />
                 <Text style={[
-                  styles.metadataText,
+                  cardStyles.contentMetadataText,
                   { color: metadataColor }
                 ]}>
                   {formatNumber(views)}
@@ -162,10 +163,10 @@ const ContentCard = ({
 
             {/* Likes */}
             {likes !== undefined && (
-              <View style={styles.metadataItem}>
+              <View style={cardStyles.contentMetadataItem}>
                 <Star size={12} color={metadataColor} />
                 <Text style={[
-                  styles.metadataText,
+                  cardStyles.contentMetadataText,
                   { color: metadataColor }
                 ]}>
                   {formatNumber(likes)}
@@ -177,7 +178,7 @@ const ContentCard = ({
           {/* Time ago */}
           {timeAgo && (
             <Text style={[
-              styles.timeAgo,
+              cardStyles.contentTimeAgo,
               { color: metadataColor }
             ]}>
               {timeAgo}
@@ -188,19 +189,19 @@ const ContentCard = ({
 
       {/* Tags */}
       {showTags && tags.length > 0 && (
-        <View style={styles.tagsContainer}>
+        <View style={cardStyles.contentTagsContainer}>
           {tags.slice(0, 5).map((tag, index) => (
             <TouchableOpacity
               key={index}
               style={[
-                styles.tag,
+                cardStyles.contentTag,
                 { backgroundColor: accentColor + '15' }
               ]}
               onPress={() => onTagPress && onTagPress(tag)}
               disabled={!onTagPress}
             >
               <Text style={[
-                styles.tagText,
+                cardStyles.contentTagText,
                 { color: accentColor }
               ]}>
                 {tag}
@@ -209,11 +210,11 @@ const ContentCard = ({
           ))}
           {tags.length > 5 && (
             <View style={[
-              styles.tag,
+              cardStyles.contentTag,
               { backgroundColor: metadataColor + '15' }
             ]}>
               <Text style={[
-                styles.tagText,
+                cardStyles.contentTagText,
                 { color: metadataColor }
               ]}>
                 +{tags.length - 5}
@@ -226,92 +227,6 @@ const ContentCard = ({
   );
 };
 
-const styles = StyleSheet.create({
-  contentCard: {
-    // Additional card-specific styling handled by Card component
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.small,
-  },
-  titleSection: {
-    flex: 1,
-    marginRight: spacing.small,
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: typography.fontFamilyBold,
-    lineHeight: 24,
-    marginBottom: spacing.extraSmall,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  authorText: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    marginLeft: spacing.extraSmall,
-  },
-  cacheIndicator: {
-    padding: spacing.small,
-    borderRadius: 20,
-    marginLeft: spacing.small,
-  },
-  bookmarkButton: {
-    padding: spacing.small,
-    marginLeft: spacing.small,
-  },
-  previewText: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    lineHeight: 20,
-    marginBottom: spacing.medium,
-  },
-  metadataRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.small,
-  },
-  metadataLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.medium,
-  },
-  metadataText: {
-    fontSize: 12,
-    fontFamily: typography.fontFamily,
-    marginLeft: spacing.extraSmall,
-  },
-  timeAgo: {
-    fontSize: 12,
-    fontFamily: typography.fontFamily,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: spacing.small,
-  },
-  tag: {
-    paddingHorizontal: spacing.small,
-    paddingVertical: spacing.extraSmall,
-    borderRadius: 12,
-    marginRight: spacing.small,
-    marginBottom: spacing.extraSmall,
-  },
-  tagText: {
-    fontSize: 11,
-    fontFamily: typography.fontFamily,
-  },
-});
-
 export default ContentCard;
 
-// Character count: 6951
+// Character count: 5479

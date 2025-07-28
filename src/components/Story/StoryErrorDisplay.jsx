@@ -1,9 +1,11 @@
 // src/components/Story/StoryErrorDisplay.jsx
 // Path: src/components/Story/StoryErrorDisplay.jsx
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { AlertTriangle, RefreshCw, ArrowLeft, Wifi, Clock } from 'lucide-react-native';
 import { colors, spacing, typography } from '../../styles';
+import { storyStyles } from '../../styles/storyStyles';
+import { Button } from '../shared';
 
 /**
  * Error display component for story loading failures
@@ -233,42 +235,25 @@ const StoryErrorDisplay = ({
         {/* Action buttons */}
         <View style={styles.actionContainer}>
           {onRetry && errorInfo.canRetry && (
-            <TouchableOpacity 
-              style={[
-                styles.retryButton,
-                isDarkMode && styles.retryButtonDark
-              ]} 
+            <Button
+              title="Try Again"
               onPress={onRetry}
-            >
-              <RefreshCw 
-                size={20} 
-                color={isDarkMode ? colors.accentDark : colors.accent} 
-                style={styles.buttonIcon}
-              />
-              <Text style={[
-                styles.retryButtonText,
-                { color: isDarkMode ? colors.accentDark : colors.accent }
-              ]}>
-                Try Again
-              </Text>
-            </TouchableOpacity>
+              variant="primary"
+              size="medium"
+              isDarkMode={isDarkMode}
+              icon={<RefreshCw size={20} color="#ffffff" />}
+              style={{ marginRight: spacing.medium }}
+            />
           )}
 
           {onBack && (
-            <TouchableOpacity 
-              style={[
-                styles.backButtonFull,
-                isDarkMode && styles.backButtonFullDark
-              ]} 
+            <Button
+              title="Go Back"
               onPress={onBack}
-            >
-              <Text style={[
-                styles.backButtonText,
-                { color: isDarkMode ? colors.textDark : colors.text }
-              ]}>
-                Go Back
-              </Text>
-            </TouchableOpacity>
+              variant="secondary"
+              size="medium"
+              isDarkMode={isDarkMode}
+            />
           )}
         </View>
 

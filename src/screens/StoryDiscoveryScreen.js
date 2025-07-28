@@ -7,12 +7,12 @@ import {
   StyleSheet, 
   SafeAreaView, 
   TouchableOpacity,
-  TextInput,
   StatusBar
 } from 'react-native';
 import { ArrowLeft, Search, Filter } from 'lucide-react-native';
 import StoryDiscoveryList from '../components/Story/StoryDiscoveryList';
 import { colors, spacing, typography } from '../styles';
+import { FormField, TextInput } from '../components/shared';
 
 /**
  * Screen for discovering and browsing stories
@@ -91,27 +91,15 @@ export const StoryDiscoveryScreen = ({ navigation, route }) => {
       </View>
 
       {/* Search Bar */}
-      <View style={[
-        styles.searchContainer,
-        isDarkMode && styles.searchContainerDark
-      ]}>
-        <Search 
-          size={20} 
-          color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary}
-          style={styles.searchIcon} 
-        />
+      <FormField isDarkMode={isDarkMode} style={{ marginHorizontal: spacing.medium, marginVertical: spacing.small }}>
         <TextInput
-          style={[
-            styles.searchInput,
-            { color: isDarkMode ? colors.textDark : colors.text }
-          ]}
+          variant="search"
           placeholder="Search stories..."
-          placeholderTextColor={isDarkMode ? colors.textSecondaryDark : colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          clearButtonMode="while-editing"
+          isDarkMode={isDarkMode}
         />
-      </View>
+      </FormField>
 
       {/* Filter Menu */}
       {showFilterMenu && (
@@ -194,30 +182,6 @@ const styles = StyleSheet.create({
   filterButton: {
     padding: spacing.small,
     marginLeft: spacing.small,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.medium,
-    marginVertical: spacing.small,
-    paddingHorizontal: spacing.medium,
-    paddingVertical: spacing.small,
-    backgroundColor: colors.surface,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchContainerDark: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: colors.borderDark,
-  },
-  searchIcon: {
-    marginRight: spacing.small,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: typography.fontFamily,
   },
   filterMenu: {
     backgroundColor: colors.surface,
