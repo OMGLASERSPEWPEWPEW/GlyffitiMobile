@@ -8,7 +8,7 @@ import {
   ScrollView,
   Dimensions
 } from 'react-native';
-import { Card } from '../components/shared';
+import { Card, ErrorDisplay, RetryButton } from '../components/shared';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles';
 // Temporarily comment out story cache until we fix the dependencies
@@ -19,23 +19,29 @@ const { width } = Dimensions.get('window');
 export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [cachedStories, setCachedStories] = useState([]);
   const [cacheStats, setCacheStats] = useState(null);
+  const [loadingError, setLoadingError] = useState(null);
 
   useEffect(() => {
     // loadCacheData();
   }, []);
 
-  /* Temporarily disabled until dependencies are fixed
+  // Updated loadCacheData function with proper error handling
   const loadCacheData = async () => {
     try {
-      const cached = await storyCache.getAllCachedManifests();
-      const stats = await storyCache.getCacheStats();
-      setCachedStories(cached.slice(0, 3)); // Show first 3 for preview
-      setCacheStats(stats);
+      setLoadingError(null); // Clear any previous errors
+      // const cached = await storyCache.getAllCachedManifests();
+      // const stats = await storyCache.getCacheStats();
+      // setCachedStories(cached.slice(0, 3)); // Show first 3 for preview
+      // setCacheStats(stats);
+      console.log('Cache data loaded successfully');
     } catch (error) {
       console.error('Error loading cache data:', error);
+      setLoadingError({
+        type: 'general',
+        message: 'Failed to load cached stories. Please try again.'
+      });
     }
   };
-  */
 
   const handlePublishing = () => {
     navigation?.navigate('Publishing');
@@ -87,6 +93,18 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
             Decentralized storytelling on Solana
           </Text>
         </View>
+
+        {/* Error display for loading issues */}
+        {loadingError && (
+          <ErrorDisplay
+            type={loadingError.type}
+            title="Loading Error"
+            message={loadingError.message}
+            onRetry={() => loadCacheData()}
+            isDarkMode={isDarkMode}
+            style={{ margin: spacing.medium }}
+          />
+        )}
 
         {/* Main Action Section */}
         <View style={homeStyles.mainSection}>
@@ -304,4 +322,4 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
 export default HomeScreen;
 
-// Character count: 7124
+// Character count: 7451

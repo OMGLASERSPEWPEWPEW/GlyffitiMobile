@@ -13,11 +13,17 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { PublishingScreen } from './src/screens/PublishingScreen';
 import { StoryViewScreen } from './src/screens/StoryViewScreen';
 import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
+import { ErrorBoundary } from './src/components/shared';
 
 const Stack = createStackNavigator();
 
 export default function App() {
   return (
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+      console.error('App-level error:', error);
+      }}
+      >
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator 
@@ -74,6 +80,7 @@ export default function App() {
       </NavigationContainer>
       <StatusBar style="auto" />
     </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

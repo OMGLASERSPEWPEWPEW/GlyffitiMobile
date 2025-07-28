@@ -3,6 +3,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import StoryViewer from '../components/Story/StoryViewer';
+import { ErrorBoundary, ErrorDisplay } from '../components/shared';
 
 /**
  * Screen wrapper for the StoryViewer component
@@ -14,23 +15,36 @@ export const StoryViewScreen = ({ route, navigation }) => {
 
   // Validate required parameters
   if (!storyId || !manifest) {
-    Alert.alert(
-      'Error',
-      'Story information is missing. Please try again.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
+    return (
+      <ErrorDisplay
+        type="validation"
+        title="Story Not Found"
+        message="Story information is missing. Please try again."
+        showGoBack={true}
+        onGoBack={() => navigation.goBack()}
+        style={{ flex: 1, justifyContent: 'center' }}
+      />
     );
-    return null;
   }
+
 
   // The StoryViewer component now handles everything internally
   // We just pass the props and let the hook manage all the logic
   return (
-    <StoryViewer
-      storyId={storyId}
-      manifest={manifest}
-      autoStart={autoStart}
-      navigation={navigation}
-    />
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('StoryViewer error:', error);
+        // Could log to analytics here
+      }}
+      onFallbackPress={() => navigation.goBack()}
+    >
+      <StoryViewer
+        storyId={storyId}
+        manifest={manifest}
+        autoStart={autoStart}
+        navigation={navigation}
+      />
+    </ErrorBoundary>
   );
 };
 

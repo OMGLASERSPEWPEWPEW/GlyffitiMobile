@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { LoadingOverlay, Button } from '../components/shared';
+import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton } from '../components/shared';
 import { ArrowLeft } from 'lucide-react-native';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
@@ -54,6 +54,8 @@ export const PublishingScreen = ({ navigation }) => {
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletLoadingMessage, setWalletLoadingMessage] = useState('');
   const [airdropLoading, setAirdropLoading] = useState(false);
+  const [initError, setInitError] = useState(null);
+  const [publishError, setPublishError] = useState(null);
 
   // Initialize data on component mount
   useEffect(() => {
@@ -65,13 +67,15 @@ export const PublishingScreen = ({ navigation }) => {
     try {
       console.log('🔄 Initializing PublishingScreen data...');
       setIsLoading(true);
-      
-      // Use the hook's loadExistingContent method
+      setInitError(null);
       await loadExistingContent();
-      
       console.log('✅ PublishingScreen initialization complete');
     } catch (error) {
       console.error('❌ Error initializing PublishingScreen:', error);
+      setInitError({
+        type: 'general',
+        message: 'Failed to load publishing data. Please try again.'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -347,100 +351,134 @@ export const PublishingScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={publishingStyles.container}>
-      {/* Header - EXACTLY THE SAME */}
-      <View style={publishingStyles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={publishingStyles.backButton}>
-          <ArrowLeft size={24} color="#374151" />
-        </TouchableOpacity>
-        <Text style={publishingStyles.headerTitle}>Publishing</Text>
-        <View style={publishingStyles.headerSpacer} />
-      </View>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('PublishingScreen error:', error);
+        setPublishError({
+          type: 'general',
+          message: 'An unexpected error occurred in the publishing screen.'
+        });
+      }}
+      onRetry={() => {
+        setPublishError(null);
+        initializeData();
+      }}
+    >
+      <SafeAreaView style={publishingStyles.container}>
+        {/* Header - EXACTLY THE SAME */}
+        <View style={publishingStyles.header}>
+          <TouchableOpacity onPress={handleGoBack} style={publishingStyles.backButton}>
+            <ArrowLeft size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text style={publishingStyles.headerTitle}>Publishing</Text>
+          <View style={publishingStyles.headerSpacer} />
+        </View>
 
-      <ScrollView 
-        style={publishingStyles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={publishingStyles.scrollContent}
-      >
-        {/* Wallet Section - EXACTLY THE SAME */}
-        <WalletSection 
-          walletStatus={walletStatus}
-          walletAddress={walletAddress}
-          walletBalance={walletBalance}
-          isRequestingAirdrop={isRequestingAirdrop || airdropLoading}
-          showWalletUnlock={showWalletUnlock}
-          password={password}
-          isLoading={isLoadingWallet || walletLoading}
-          setPassword={setPassword}
-          setShowWalletUnlock={setShowWalletUnlock}
-          handleRequestAirdrop={handleRequestAirdropWithLoading}
-          handleWalletAction={handleWalletActionWithLoading}
-          handleMigration={handleMigration}
+        <ScrollView 
+          style={publishingStyles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={publishingStyles.scrollContent}
+        >
+          {/* Error display for initialization errors */}
+          {initError && (
+            <ErrorDisplay
+              type={initError.type}
+              title="Initialization Error"
+              message={initError.message}
+              onRetry={initializeData}
+              showGoBack={true}
+              onGoBack={() => navigation.goBack()}
+              style={{ margin: spacing.medium }}
+            />
+          )}
+          
+          {/* Error display for publishing errors */}
+          {publishError && (
+            <ErrorDisplay
+              type={publishError.type}
+              title="Publishing Error"
+              message={publishError.message}
+              onRetry={() => setPublishError(null)}
+              style={{ margin: spacing.medium }}
+            />
+          )}
+
+          {/* Wallet Section - EXACTLY THE SAME */}
+          <WalletSection 
+            walletStatus={walletStatus}
+            walletAddress={walletAddress}
+            walletBalance={walletBalance}
+            isRequestingAirdrop={isRequestingAirdrop || airdropLoading}
+            showWalletUnlock={showWalletUnlock}
+            password={password}
+            isLoading={isLoadingWallet || walletLoading}
+            setPassword={setPassword}
+            setShowWalletUnlock={setShowWalletUnlock}
+            handleRequestAirdrop={handleRequestAirdropWithLoading}
+            handleWalletAction={handleWalletActionWithLoading}
+            handleMigration={handleMigration}
+          />
+          
+          {/* Publishing Button - EXACTLY THE SAME STYLING */}
+          <Button
+            title={publishing ? '📤 Publishing...' : 
+                  walletStatus !== 'unlocked' ? '🔒 Unlock Wallet to Publish' :
+                  '📁 Pick File & Publish'}
+            onPress={handlePublishFile}
+            disabled={publishing || walletStatus !== 'unlocked' || isLoading}
+            loading={publishing}
+            variant="primary"
+            size="large"
+            style={publishingStyles.publishButton}
+          />
+          
+          {/* Clear Test Data Button - EXACTLY THE SAME */}
+          <Button
+            title="🗑️ Clear Test Data"
+            onPress={handleClearPublished}
+            variant="danger"
+            size="medium"
+            style={publishingStyles.clearButton}
+          />
+          
+          {/* Progress Bar - EXACTLY THE SAME */}
+          <ProgressBar publishing={publishing} progress={progress} />
+          
+          {/* Content Sections - EXACTLY THE SAME */}
+          <ContentSections 
+            inProgressContent={inProgressContent}
+            drafts={drafts}
+            publishedContent={publishedContent}
+            publishingStats={publishingStats}
+            walletStatus={walletStatus}
+            publishing={publishing}
+            handleResumePublishing={handleResumePublishing}
+            handleViewStory={handleViewStory}
+          />
+        </ScrollView>
+
+        {/* Wallet Loading Overlay */}
+        <LoadingOverlay
+          visible={walletLoading}
+          message={walletLoadingMessage}
+          subMessage="This may take a few moments..."
+          showCancel={true}
+          onCancel={handleCancelWalletLoading}
+          isDarkMode={false}
+          modal={true}
         />
-        
-        {/* Publishing Button - EXACTLY THE SAME STYLING */}
-        <Button
-          title={publishing ? '📤 Publishing...' : 
-                walletStatus !== 'unlocked' ? '🔒 Unlock Wallet to Publish' :
-                '📁 Pick File & Publish'}
-          onPress={handlePublishFile}
-          disabled={publishing || walletStatus !== 'unlocked' || isLoading}
-          loading={publishing}
-          variant="primary"
-          size="large"
-          style={publishingStyles.publishButton}
-        />
-        
-        {/* Clear Test Data Button - EXACTLY THE SAME */}
-        <Button
-          title="🗑️ Clear Test Data"
-          onPress={handleClearPublished}
-          variant="danger"
-          size="medium"
-          style={publishingStyles.clearButton}
-        />
-        
-        {/* Progress Bar - EXACTLY THE SAME */}
-        <ProgressBar publishing={publishing} progress={progress} />
-        
-        {/* Content Sections - EXACTLY THE SAME */}
-        <ContentSections 
-          inProgressContent={inProgressContent}
-          drafts={drafts}
-          publishedContent={publishedContent}
-          publishingStats={publishingStats}
-          walletStatus={walletStatus}
-          publishing={publishing}
-          handleResumePublishing={handleResumePublishing}
-          handleViewStory={handleViewStory}
-        />
-      </ScrollView>
 
-
-          {/* Wallet Loading Overlay */}
-      <LoadingOverlay
-        visible={walletLoading}
-        message={walletLoadingMessage}
-        subMessage="This may take a few moments..."
-        showCancel={true}
-        onCancel={handleCancelWalletLoading}
-        isDarkMode={false}
-        modal={true}
-      />
-
-      {/* Airdrop Loading Overlay */}
-      <LoadingOverlay
-        visible={airdropLoading}
-        message="Requesting Airdrop..."
-        subMessage="Connecting to Solana testnet"
-        showCancel={false}
-        isDarkMode={false}
-        modal={true}
-      />           
-
-
-
-    </SafeAreaView>
+        {/* Airdrop Loading Overlay */}
+        <LoadingOverlay
+          visible={airdropLoading}
+          message="Requesting Airdrop..."
+          subMessage="Connecting to Solana testnet"
+          showCancel={false}
+          isDarkMode={false}
+          modal={true}
+        />           
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
