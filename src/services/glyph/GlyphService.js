@@ -1,6 +1,11 @@
-// src/services/publishing/GlyphService.js
+// src/services/glyph/GlyphService.js
+// Path: src/services/glyph/GlyphService.js
 import { CompressionService } from '../compression/CompressionService';
 import { HashingService } from '../hashing/HashingService';
+import { TextProcessor } from './processing/TextProcessor';
+import { ChunkManager } from './processing/ChunkManager';
+import { ContentAssembler } from './assembly/ContentAssembler';
+import { GlyphValidator } from './validation/GlyphValidator';
 
 /**
  * @typedef {Object} GlyphChunk
@@ -80,87 +85,7 @@ export class GlyphService {
    * @returns {Promise<GlyphChunk[]>} Array of glyph chunks
    */
   static async createGlyphs(content) {
-    try {
-      const chunks = [];
-      let originalText = content.content;
-      
-      // Pre-process text to ensure optimal chunking
-      originalText = this.preprocessText(originalText);
-      
-      // Calculate how many chunks we'll need
-      const totalChunks = Math.ceil(originalText.length / this.config.targetChunkSize);
-      
-      console.log(`Creating ${totalChunks} glyphs from ${originalText.length} characters`);
-      
-      // Split content into chunks and compress each chunk individually
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * this.config.targetChunkSize;
-        const end = Math.min(start + this.config.targetChunkSize, originalText.length);
-        
-        // Extract chunk text content, finding natural breaking points
-        let chunkText = originalText.slice(start, end);
-        
-        // If not the last chunk, try to break at natural points
-        if (i < totalChunks - 1) {
-          chunkText = this.findNaturalBreakPoint(originalText, start, end);
-        }
-        
-        // Compress this individual chunk
-        const compressedChunk = CompressionService.compress(chunkText);
-        
-        // Get estimated size after base64 encoding
-        const base64Size = Math.ceil(compressedChunk.length * 4 / 3);
-        
-        // Verify the chunk isn't too large after base64 encoding
-        if (base64Size > this.config.maxMemoSize) {
-          console.warn(`Chunk ${i} exceeds maximum size after base64 encoding: ${base64Size} bytes. Max: ${this.config.maxMemoSize}`);
-          
-          // Recursively split this chunk if too large
-          const smallerChunks = await this.splitOversizedChunk(chunkText, i, totalChunks);
-          chunks.push(...smallerChunks);
-          
-          // Adjust total chunks count and update remaining indices
-          const additionalChunks = smallerChunks.length - 1;
-          for (let j = i + 1; j < totalChunks; j++) {
-            // Will need to update subsequent chunk indices
-          }
-          
-          continue;
-        }
-        
-        // Create hash for the chunk
-        const hash = await HashingService.hashContent(compressedChunk);
-        
-        // Create chunk with hash
-        chunks.push({
-          index: i,
-          totalChunks,
-          content: compressedChunk,
-          hash: hash,
-          originalText: chunkText
-        });
-        
-        // Log progress for large content
-        if (totalChunks > 10 && (i + 1) % 5 === 0) {
-          console.log(`Created ${i + 1}/${totalChunks} glyphs...`);
-        }
-      }
-      
-      // Update total chunks count in all chunks if we had splits
-      const finalTotalChunks = chunks.length;
-      if (finalTotalChunks !== totalChunks) {
-        chunks.forEach((chunk, index) => {
-          chunk.index = index;
-          chunk.totalChunks = finalTotalChunks;
-        });
-      }
-      
-      console.log(`Successfully created ${chunks.length} glyphs`);
-      return chunks;
-    } catch (error) {
-      console.error('Error creating glyphs:', error);
-      throw new Error('Failed to create glyphs: ' + error.message);
-    }
+    return await ChunkManager.createGlyphs(content, this.config);
   }
   
   /**
@@ -171,38 +96,7 @@ export class GlyphService {
    * @returns {string} Text chunk with natural break
    */
   static findNaturalBreakPoint(text, start, end) {
-    const originalChunk = text.slice(start, end);
-    
-    // If we're at the end of text, return as-is
-    if (end >= text.length) {
-      return originalChunk;
-    }
-    
-    // Look for natural breaking points within the last 100 characters
-    const searchStart = Math.max(start, end - 100);
-    const searchText = text.slice(searchStart, end);
-    
-    // Priority order: paragraph break, sentence break, word break
-    const paragraphBreak = searchText.lastIndexOf('\n\n');
-    if (paragraphBreak !== -1) {
-      const breakPoint = searchStart + paragraphBreak + 2;
-      return text.slice(start, breakPoint);
-    }
-    
-    const sentenceBreak = searchText.lastIndexOf('. ');
-    if (sentenceBreak !== -1) {
-      const breakPoint = searchStart + sentenceBreak + 2;
-      return text.slice(start, breakPoint);
-    }
-    
-    const wordBreak = searchText.lastIndexOf(' ');
-    if (wordBreak !== -1) {
-      const breakPoint = searchStart + wordBreak + 1;
-      return text.slice(start, breakPoint);
-    }
-    
-    // No natural break found, return original chunk
-    return originalChunk;
+    return TextProcessor.findNaturalBreakPoint(text, start, end);
   }
   
   /**
@@ -213,30 +107,7 @@ export class GlyphService {
    * @returns {Promise<GlyphChunk[]>} Array of smaller chunks
    */
   static async splitOversizedChunk(chunkText, originalIndex, totalChunks) {
-    const smallerChunks = [];
-    const smallerSize = Math.floor(this.config.targetChunkSize / 2);
-    const subChunkCount = Math.ceil(chunkText.length / smallerSize);
-    
-    console.log(`Splitting oversized chunk into ${subChunkCount} smaller pieces`);
-    
-    for (let i = 0; i < subChunkCount; i++) {
-      const start = i * smallerSize;
-      const end = Math.min(start + smallerSize, chunkText.length);
-      const subChunkText = chunkText.slice(start, end);
-      
-      const compressedSubChunk = CompressionService.compress(subChunkText);
-      const hash = await HashingService.hashContent(compressedSubChunk);
-      
-      smallerChunks.push({
-        index: originalIndex + i, // Will be updated later
-        totalChunks: totalChunks, // Will be updated later
-        content: compressedSubChunk,
-        hash: hash,
-        originalText: subChunkText
-      });
-    }
-    
-    return smallerChunks;
+    return await ChunkManager.splitOversizedChunk(chunkText, originalIndex, totalChunks, this.config);
   }
   
   /**
@@ -245,38 +116,7 @@ export class GlyphService {
    * @returns {Promise<string>} Reassembled text content
    */
   static async reassembleContent(chunks) {
-    try {
-      // Verify we have all chunks and they're valid
-      chunks.sort((a, b) => a.index - b.index);
-      
-      // Check for missing chunks
-      for (let i = 0; i < chunks.length; i++) {
-        if (chunks[i].index !== i) {
-          throw new Error(`Missing chunk at index ${i}`);
-        }
-      }
-      
-      const decompressedChunks = [];
-      
-      for (const chunk of chunks) {
-        // Verify hash integrity
-        const actualHash = await HashingService.hashContent(chunk.content);
-        if (actualHash !== chunk.hash) {
-          throw new Error(`Invalid hash for chunk ${chunk.index}. This may indicate tampered content.`);
-        }
-        
-        // Decompress chunk
-        const decompressedChunk = CompressionService.decompress(chunk.content);
-        decompressedChunks.push(decompressedChunk);
-      }
-      
-      // Combine and clean up the reassembled text
-      const combinedText = decompressedChunks.join('');
-      return this.cleanupReassembledText(combinedText);
-    } catch (error) {
-      console.error('Error reassembling content:', error);
-      throw new Error('Failed to reassemble content: ' + error.message);
-    }
+    return await ContentAssembler.reassembleContent(chunks);
   }
   
   /**
@@ -285,16 +125,7 @@ export class GlyphService {
    * @returns {string} Decompressed text content
    */
   static decodeGlyphFromBlockchain(base64Data) {
-    try {
-      // Convert base64 string back to binary
-      const binaryData = CompressionService.base64ToUint8Array(base64Data);
-      
-      // Decompress the binary data
-      return CompressionService.decompress(binaryData);
-    } catch (error) {
-      console.error('Error decoding glyph from blockchain:', error);
-      throw new Error('Failed to decode glyph data. The data may be corrupted or in an incorrect format.');
-    }
+    return ContentAssembler.decodeGlyphFromBlockchain(base64Data);
   }
   
   /**
@@ -303,28 +134,7 @@ export class GlyphService {
    * @returns {string} Processed text
    */
   static preprocessText(text) {
-    if (typeof text !== 'string') {
-      throw new Error('Text must be a string');
-    }
-    
-    // Apply dialog formatting cleanup
-    text = this.cleanDialogBreaks(text);
-    
-    // Normalize line endings
-    text = text.replace(/\r\n/g, '\n');
-    
-    // Remove excessive whitespace but preserve intentional formatting
-    text = text.replace(/[ \t]+/g, ' '); // Multiple spaces/tabs to single space
-    text = text.replace(/\n[ \t]+/g, '\n'); // Remove leading whitespace on lines
-    text = text.replace(/[ \t]+\n/g, '\n'); // Remove trailing whitespace on lines
-    
-    // Normalize paragraph breaks (max 2 consecutive newlines)
-    text = text.replace(/\n{3,}/g, '\n\n');
-    
-    // Trim overall
-    text = text.trim();
-    
-    return text;
+    return TextProcessor.preprocessText(text);
   }
   
   /**
@@ -333,16 +143,7 @@ export class GlyphService {
    * @returns {string} Cleaned text
    */
   static cleanDialogBreaks(text) {
-    // Remove awkward breaks in dialog
-    text = text.replace(/"\s*\n\s*([a-z])/g, ' $1');
-    
-    // Fix broken quotes
-    text = text.replace(/"\s+"/g, '" "');
-    
-    // Ensure proper spacing around dialog
-    text = text.replace(/([.!?])\s*"\s*([A-Z])/g, '$1" $2');
-    
-    return text;
+    return TextProcessor.cleanDialogBreaks(text);
   }
   
   /**
@@ -351,16 +152,7 @@ export class GlyphService {
    * @returns {string} Cleaned text
    */
   static cleanupReassembledText(text) {
-    // Remove any duplicate spaces that might have been introduced
-    text = text.replace(/\s+/g, ' ');
-    
-    // Fix any broken paragraph formatting
-    text = text.replace(/\n{3,}/g, '\n\n');
-    
-    // Trim
-    text = text.trim();
-    
-    return text;
+    return TextProcessor.cleanupReassembledText(text);
   }
   
   /**
@@ -369,8 +161,7 @@ export class GlyphService {
    * @returns {number} Estimated chunk count
    */
   static estimateChunkCount(content) {
-    const processedContent = this.preprocessText(content);
-    return Math.ceil(processedContent.length / this.config.targetChunkSize);
+    return TextProcessor.estimateChunkCount(content, this.config.targetChunkSize);
   }
   
   /**
@@ -425,80 +216,35 @@ export class GlyphService {
         originalSize: 0,
         estimatedCompressedSize: 0,
         estimatedBytes: 0,
-        compressionRatio: 1,
+        compressionRatio: 0,
         spaceSaved: 0,
         costs: {
           storage: 0,
           transactions: 0,
           total: 0,
           currency: 'SOL'
-        }
+        },
+        error: error.message
       };
     }
   }
   
   /**
-   * Verify if a glyph's hash is valid (anti-spoofing protection)
-   * @param {GlyphChunk} chunk - Chunk to verify
-   * @returns {Promise<boolean>} True if hash is valid
+   * Verify integrity of a glyph chunk
+   * @param {GlyphChunk} glyph - Glyph to verify
+   * @returns {Promise<boolean>} True if valid
    */
-  static async verifyGlyphIntegrity(chunk) {
-    try {
-      const actualHash = await HashingService.hashContent(chunk.content);
-      return actualHash === chunk.hash;
-    } catch (error) {
-      console.error('Error verifying glyph integrity:', error);
-      return false;
-    }
+  static async verifyGlyphIntegrity(glyph) {
+    return await GlyphValidator.verifyGlyphIntegrity(glyph);
   }
   
   /**
-   * Verify the entire scroll integrity - ensures all glyphs are original
-   * @param {Object} manifest - Scroll manifest with chunk info
-   * @param {GlyphChunk[]} chunks - Array of actual chunks
-   * @returns {Promise<boolean>} True if all chunks are valid
+   * Verify integrity of an entire scroll (all glyphs)
+   * @param {GlyphChunk[]} glyphs - Array of glyphs to verify
+   * @returns {Promise<boolean>} True if all glyphs are valid
    */
-  static async verifyScrollIntegrity(manifest, chunks) {
-    try {
-      // First check if we have all the chunks
-      if (chunks.length !== manifest.totalChunks) {
-        console.error('Scroll integrity check failed: Missing chunks');
-        return false;
-      }
-      
-      // Create a map of chunks by index
-      const chunksMap = new Map();
-      chunks.forEach(chunk => chunksMap.set(chunk.index, chunk));
-      
-      // Verify each chunk in the manifest
-      for (const manifestChunk of manifest.chunks) {
-        const chunk = chunksMap.get(manifestChunk.index);
-        
-        if (!chunk) {
-          console.error(`Scroll integrity check failed: Missing chunk at index ${manifestChunk.index}`);
-          return false;
-        }
-        
-        // Verify the hash matches
-        if (chunk.hash !== manifestChunk.hash) {
-          console.error(`Scroll integrity check failed: Hash mismatch at index ${manifestChunk.index}`);
-          return false;
-        }
-        
-        // Verify the content hash is valid
-        const isValid = await this.verifyGlyphIntegrity(chunk);
-        if (!isValid) {
-          console.error(`Scroll integrity check failed: Content integrity issue at index ${manifestChunk.index}`);
-          return false;
-        }
-      }
-      
-      console.log('Scroll integrity verification passed');
-      return true;
-    } catch (error) {
-      console.error('Error verifying scroll integrity:', error);
-      return false;
-    }
+  static async verifyScrollIntegrity(glyphs) {
+    return await GlyphValidator.verifyScrollIntegrity(glyphs);
   }
   
   /**
@@ -507,53 +253,7 @@ export class GlyphService {
    * @returns {Object} Preview information
    */
   static createChunkingPreview(content) {
-    try {
-      const processedContent = this.preprocessText(content);
-      const chunkSize = this.config.targetChunkSize;
-      const totalChunks = Math.ceil(processedContent.length / chunkSize);
-      
-      const preview = {
-        originalLength: content.length,
-        processedLength: processedContent.length,
-        chunkSize: chunkSize,
-        totalChunks: totalChunks,
-        chunks: []
-      };
-      
-      // Create preview of first few chunks
-      const previewCount = Math.min(5, totalChunks);
-      for (let i = 0; i < previewCount; i++) {
-        const start = i * chunkSize;
-        const end = Math.min(start + chunkSize, processedContent.length);
-        const chunkText = processedContent.slice(start, end);
-        
-        preview.chunks.push({
-          index: i,
-          length: chunkText.length,
-          preview: chunkText.substring(0, 100) + (chunkText.length > 100 ? '...' : ''),
-          estimatedCompressedSize: CompressionService.estimateCompressedSize(chunkText)
-        });
-      }
-      
-      if (totalChunks > previewCount) {
-        preview.chunks.push({
-          index: '...',
-          note: `And ${totalChunks - previewCount} more chunks`
-        });
-      }
-      
-      return preview;
-    } catch (error) {
-      console.error('Error creating chunking preview:', error);
-      return {
-        originalLength: 0,
-        processedLength: 0,
-        chunkSize: 0,
-        totalChunks: 0,
-        chunks: [],
-        error: error.message
-      };
-    }
+    return GlyphValidator.createChunkingPreview(content, this.config);
   }
   
   /**
@@ -561,66 +261,8 @@ export class GlyphService {
    * @returns {Promise<boolean>} True if all tests pass
    */
   static async runSelfTest() {
-    try {
-      console.log('Running GlyphService self-test...');
-      
-      const testContent = {
-        id: 'test_content',
-        title: 'Test Content',
-        content: 'This is a test string for the glyph manager. '.repeat(50) + 
-                 'It should split into multiple chunks, compress them, and reassemble correctly. ' +
-                 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(20),
-        authorPublicKey: 'test_author_key',
-        timestamp: Date.now()
-      };
-      
-      // Test chunking
-      const chunks = await this.createGlyphs(testContent);
-      console.log(`Created ${chunks.length} chunks`);
-      
-      if (chunks.length === 0) {
-        console.error('Self-test failed: No chunks created');
-        return false;
-      }
-      
-      // Test integrity verification
-      for (const chunk of chunks) {
-        const isValid = await this.verifyGlyphIntegrity(chunk);
-        if (!isValid) {
-          console.error(`Self-test failed: Chunk ${chunk.index} failed integrity check`);
-          return false;
-        }
-      }
-      
-      // Test reassembly
-      const reassembled = await this.reassembleContent(chunks);
-      const originalProcessed = this.preprocessText(testContent.content);
-      
-      if (reassembled !== originalProcessed) {
-        console.error('Self-test failed: Reassembled content does not match original');
-        console.log('Expected length:', originalProcessed.length);
-        console.log('Actual length:', reassembled.length);
-        return false;
-      }
-      
-      // Test cost estimation
-      const costEstimate = this.estimateStorageCost(testContent.content);
-      if (costEstimate.chunkCount !== chunks.length) {
-        console.error('Self-test failed: Cost estimation chunk count mismatch');
-        return false;
-      }
-      
-      console.log('GlyphService self-test passed!');
-      console.log(`Processed ${testContent.content.length} chars into ${chunks.length} chunks`);
-      console.log(`Compression ratio: ${costEstimate.compressionRatio}`);
-      console.log(`Estimated cost: ${costEstimate.costs.total} ${costEstimate.costs.currency}`);
-      
-      return true;
-    } catch (error) {
-      console.error('Self-test failed with error:', error);
-      return false;
-    }
+    return await GlyphValidator.runSelfTest(this.config);
   }
 }
 
-// Character count: 15847
+// Character count: 7806
