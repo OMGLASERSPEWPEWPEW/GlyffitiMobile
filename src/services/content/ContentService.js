@@ -2,7 +2,7 @@
 // Path: src/services/publishing/ContentService.js
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { MobileGlyphManager } from './MobileGlyphManager';
+import { MobileGlyphManager } from '../publishing/MobileGlyphManager';
 
 /**
  * Content Service - Handles content loading, validation, and preparation
