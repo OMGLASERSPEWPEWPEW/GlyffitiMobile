@@ -1,16 +1,15 @@
-// src/services/publishing/MobileBlockchainPublisher.js
-// Path: src/services/publishing/MobileBlockchainPublisher.js
+// src/services/publishing/BlockChainPublisher.js
+// Path: src/services/publishing/BlockChainPublisher.js
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import { CompressionService } from '../compression/CompressionService';
 import { StorageService } from '../storage/StorageService';
-// import { MobileScrollManager } from './MobileScrollManager';
-// import { MobileStorageManager } from './MobileStorageManager';
+
 
 /**
- * Mobile Blockchain Publisher - Handles blockchain publishing operations
- * Separated from MobilePublishingService for better organization
+ * Blockchain Publisher - Handles blockchain publishing operations
+ * Separated from PublishingService for better organization
  */
-export class MobileBlockchainPublisher {
+export class BlockChainPublisher {
   constructor() {
     this.connection = new Connection('https://api.devnet.solana.com', 'confirmed');
     this.MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
@@ -725,7 +724,7 @@ export class MobileBlockchainPublisher {
    */
   async runSelfTest() {
     try {
-      console.log('Running MobileBlockchainPublisher self-test...');
+      console.log('Running BlockChainPublisher self-test...');
       
       // Test connection
       const connectionStatus = await this.checkConnection();
@@ -759,7 +758,7 @@ export class MobileBlockchainPublisher {
       // Clean up
       this.activePublishing.delete('test_blockchain');
 
-      console.log('✅ MobileBlockchainPublisher self-test passed!');
+      console.log('✅ BlockChainPublisher self-test passed!');
       return true;
     } catch (error) {
       console.error('Self-test failed with error:', error);

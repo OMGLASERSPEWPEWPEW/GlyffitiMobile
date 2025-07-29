@@ -1,529 +1,554 @@
 // src/services/publishing/PublishingService.js
 // Path: src/services/publishing/PublishingService.js
-
-/* 
-  NOTE TO FUTURE US / LLMS:
-  - This file replaces MobilePublishingService, MobileGlyphManager, and MobileBlockchainPublisher.
-  - It deliberately exposes a few backwards-compat methods (e.g., getDrafts) because the UI still calls them.
-  - If you remove a compat method, search the codebase for its callers first.
-*/
-
-import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
-import { CompressionService } from '../compression/CompressionService';
-import { StorageService } from '../storage/StorageService';
-import { ContentService } from '../content/ContentService';
 import { MobileWalletService } from '../wallet/MobileWalletService';
+import { ContentService } from '../content/ContentService';
+import { BlockChainPublisher } from './BlockChainPublisher';
+import { StorageService } from '../storage/StorageService';
 
+/**
+ * Mobile Publishing Service - Main orchestrator for publishing content
+ * Refactored to use separate managers for better organization and maintainability
+ */
 export class PublishingService {
   constructor() {
-    // Wallet
     this.currentWallet = null;
-
-    // Operation state
-    this.currentOperation = null; // 'preparing' | 'publishing' | null
-    this.progress = {
-      step: null,
-      progress: 0,     // 0–100
-      percentage: 0,   // mirror for old code
-      glyphsDone: 0,
-      glyphsTotal: 0
-    };
-
-    // Solana
-    this.connection = null;
-    this.clusterUrl = null;
+    this.blockchainPublisher = new BlockChainPublisher();
   }
 
-  // ---------------------------------------------------------------------------
-  // Wallet
-  // ---------------------------------------------------------------------------
-  setWallet(walletInstance) {
-    this.currentWallet = walletInstance;
+  /**
+   * Initialize the service with a wallet
+   * @param {MobileWalletService} walletService - Initialized wallet service
+   */
+  setWallet(walletService) {
+    this.currentWallet = walletService;
   }
 
+  /**
+   * Get current wallet if available
+   * @returns {MobileWalletService|null} Current wallet or null
+   */
   getCurrentWallet() {
     return this.currentWallet;
   }
 
-  // ---------------------------------------------------------------------------
-  // Content Input
-  // ---------------------------------------------------------------------------
-  async pickAndLoadFile(onProgress) {
-    try {
-      this._setProgress('Loading file', 5, onProgress);
+  // ==================== CONTENT MANAGEMENT ====================
 
-      const fileContent = await ContentService.pickFileAndReadText();
-      if (!fileContent) throw new Error('No file selected or failed to read.');
-
-      const content = ContentService.createContentFromText(fileContent, {
-        source: 'file',
-        filename: ContentService.getLastPickedFilename?.() || undefined
-      });
-
-      await StorageService.saveInProgressContent(content);
-      this._setProgress('File loaded', 100, onProgress);
-
-      return content;
-    } catch (err) {
-      console.error('pickAndLoadFile error:', err);
-      throw err;
+  /**
+   * File picker with expanded format support
+   * @returns {Promise<Object|null>} Content object or null
+   */
+  async pickAndLoadFile() {
+    const fileContent = await ContentService.pickAndLoadFile();
+    if (!fileContent) {
+      return null;
     }
+
+    // Return in the format expected by existing code
+    return {
+      id: `content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      title: fileContent.filename ? fileContent.filename.replace(/\.[^/.]+$/, '') : 'Untitled',
+      content: fileContent.content,
+      filename: fileContent.filename,
+      size: fileContent.size,
+      type: fileContent.type,
+      authorPublicKey: this.currentWallet ? this.currentWallet.getWalletPublicKey() : 'unknown',
+      createdAt: Date.now()
+    };
   }
 
-  createTextContent(text, metadata = {}) {
-    const content = ContentService.createContentFromText(text, {
-      source: 'manual',
-      ...metadata
-    });
-    StorageService.saveInProgressContent(content);
-    return content;
+  /**
+   * Manual text entry
+   * @param {string} text - Text content
+   * @param {string} title - Content title
+   * @returns {Object} Content object
+   */
+  createTextContent(text, title = 'Manual Entry') {
+    return ContentService.createTextContent(text, title);
   }
 
-  // ---------------------------------------------------------------------------
-  // Preparation
-  // ---------------------------------------------------------------------------
-  async prepareContent(content, onProgress) {
+  /**
+   * Prepare content for publishing with enhanced validation
+   * @param {Object} contentData - Content from file or manual entry
+   * @param {string} title - Publishing title
+   * @param {Object} options - Publishing options
+   * @returns {Promise<Object>} Prepared content ready for publishing
+   */
+  async prepareContent(contentData, title, options = {}) {
     try {
-      this.currentOperation = 'preparing';
-      this._setProgress('Validating content', 0, onProgress);
-
-      if (!this.validateContent(content)) {
-        throw new Error('Invalid content structure');
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected. Please connect a wallet first.');
       }
 
-      if (content.glyphs && content.glyphs.length) {
-        this._setProgress('Already prepared', 100, onProgress);
-        this.currentOperation = null;
-        return content;
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
       }
 
-      this._setProgress('Creating glyphs', 10, onProgress);
-      const glyphs = ContentService.createGlyphs(content.originalContent);
-
-      this._setProgress('Compressing glyphs', 40, onProgress);
-      const { compressedGlyphs, compressionStats } =
-        CompressionService.compressGlyphs(glyphs);
-
-      content.glyphs = compressedGlyphs;
-      content.compressionStats = compressionStats;
-      content.preparedAt = new Date().toISOString();
-
-      await StorageService.saveInProgressContent(content);
-
-      this._setProgress('Preparation complete', 100, onProgress);
-      this.currentOperation = null;
-      return content;
+      return await ContentService.prepareContent(
+        contentData,
+        title,
+        keypair.publicKey.toString(),
+        {
+          ...options,
+          authorName: options.authorName || `User_${keypair.publicKey.toString().substring(0, 8)}`
+        }
+      );
     } catch (error) {
-      console.error('prepareContent error:', error);
-      this._setProgress('Preparation failed', 0, onProgress);
-      this.currentOperation = null;
+      console.error('Error preparing content:', error);
       throw error;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Estimation
-  // ---------------------------------------------------------------------------
-  estimatePublishing(contentOrGlyphCount) {
-    let glyphCount = 0;
-    if (typeof contentOrGlyphCount === 'number') {
-      glyphCount = contentOrGlyphCount;
-    } else if (contentOrGlyphCount?.glyphs) {
-      glyphCount = contentOrGlyphCount.glyphs.length;
-    }
-
-    // Replace with your real fee math
-    const baseLamportsPerGlyph = 5000;
-    const estimatedLamports = baseLamportsPerGlyph * glyphCount;
-    const estimatedTxnCount = Math.ceil(glyphCount / 2);
-
-    return {
-      glyphCount,
-      estimatedLamports,
-      estimatedTxnCount
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Validation / Stats
-  // ---------------------------------------------------------------------------
-  validateContent(content) {
-    return (
-      content &&
-      typeof content.originalContent === 'string' &&
-      content.originalContent.length > 0
-    );
-  }
-
-  getContentStats(content) {
-    if (!this.validateContent(content)) return null;
-
-    const wordCount = content.originalContent.split(/\s+/).length;
-    const characterCount = content.originalContent.length;
-    const paragraphCount = content.originalContent.split(/\n\s*\n/).length;
-
-    return {
-      wordCount,
-      characterCount,
-      paragraphCount,
-      glyphCount: content.glyphs?.length || 0,
-      compressionStats: content.compressionStats,
-      estimatedReadingTime: Math.ceil(wordCount / 200),
-      createdAt: content.createdAt,
-      title: content.title,
-      filename: content.metadata?.filename || null
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Publishing
-  // ---------------------------------------------------------------------------
-  async publishContent(content, onProgress) {
+  /**
+   * Estimate publishing cost and time for content
+   * @param {string|Object} content - Content text or content object
+   * @returns {Object} Publishing estimate
+   */
+  estimatePublishing(content) {
     try {
-      this.currentOperation = 'publishing';
+      // Handle both string content and content objects
+      let contentText = '';
+      
+      if (typeof content === 'string') {
+        contentText = content;
+      } else if (content && content.content) {
+        contentText = content.content;
+      } else {
+        console.warn('Invalid content type for estimation, using empty string');
+        contentText = '';
+      }
+      
+      if (!contentText || contentText.trim().length === 0) {
+        return {
+          glyphCount: 0,
+          estimatedCost: 0,
+          currency: 'SOL',
+          estimatedTimeMinutes: 0,
+          compressionRatio: 1,
+          spaceSaved: 0,
+          error: 'Content is empty'
+        };
+      }
+      
+      return ContentService.estimatePublishing(contentText);
+    } catch (error) {
+      console.error('Error in publishing estimation:', error);
+      return {
+        glyphCount: 0,
+        estimatedCost: 0,
+        currency: 'SOL',
+        estimatedTimeMinutes: 0,
+        compressionRatio: 1,
+        spaceSaved: 0,
+        error: error.message
+      };
+    }
+  }
 
-      this._setProgress('Checking wallet', 0, onProgress);
-      if (!this.currentWallet) throw new Error('No wallet connected');
+  /**
+   * Validate content structure
+   * @param {Object} content - Content to validate
+   * @returns {boolean} True if valid
+   */
+  validateContent(content) {
+    return ContentService.validateContent(content);
+  }
 
-      if (!content || !content.content) throw new Error('No valid content to publish');
+  /**
+   * Get content statistics
+   * @param {Object} content - Content to analyze
+   * @returns {Object} Content statistics
+   */
+  getContentStats(content) {
+    return ContentService.getContentStats(content);
+  }
 
-      const keypair = this.currentWallet.getWalletKeypair?.();
-      if (!keypair) throw new Error('Unable to access wallet keypair');
+  // ==================== PUBLISHING OPERATIONS ====================
 
-      let preparedContent = content;
-      if (!content.glyphs || !content.glyphs.length) {
-        preparedContent = await this.prepareContent(content, onProgress);
+  /**
+   * Publish prepared content to blockchain with enhanced error handling and scroll creation
+   * @param {Object} content - Content object (raw or prepared)
+   * @param {Function} onProgress - Progress callback
+   * @returns {Promise<Object>} Publishing result with scroll information
+   */
+  async publishContent(content, onProgress = null) {
+    try {
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected');
       }
 
-      const result = await this._publishToBlockchain(preparedContent, keypair, onProgress);
+      if (!content || !content.content) {
+        throw new Error('No valid content to publish');
+      }
 
-      if (result?.status === 'completed') {
-        await StorageService.markContentAsPublished(
-          preparedContent.contentId,
-          result
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
+      }
+
+      // Check if content is already prepared (has glyphs) or needs preparation
+      let preparedContent;
+      if (content.glyphs && content.glyphs.length > 0) {
+        // Content is already prepared
+        preparedContent = content;
+      } else {
+        // Content needs to be prepared first
+        console.log('📝 Preparing content for publishing...');
+        
+        const contentData = {
+          content: content.content,
+          filename: content.filename || `${content.title}.txt`,
+          size: content.content.length,
+          type: content.type || 'text/plain'
+        };
+
+        preparedContent = await this.prepareContent(
+          contentData,
+          content.title || 'Untitled',
+          {
+            authorName: content.authorName
+          }
         );
       }
 
-      this._setProgress('Publishing complete', 100, onProgress);
-      this.currentOperation = null;
-      return result;
+      return await this.blockchainPublisher.publishContent(preparedContent, keypair, onProgress);
     } catch (error) {
       console.error('❌ Publishing error:', error);
-      this._setProgress('Publishing failed', 0, onProgress);
-      this.currentOperation = null;
       throw error;
     }
   }
 
-  async _publishToBlockchain(content, keypair, onProgress) {
-    this._setProgress('Connecting to Solana', 10, onProgress);
-
-    const connection = await this._getConnection();
-
-    const glyphs = content.glyphs;
-    const total = glyphs.length;
-    let sent = 0;
-
-    for (let i = 0; i < glyphs.length; i++) {
-      const tx = new Transaction();
-      const ix = new TransactionInstruction({
-        keys: [],
-        programId: new PublicKey('11111111111111111111111111111111'), // dummy
-        data: Buffer.from(glyphs[i].data)
-      });
-      tx.add(ix);
-
-      await connection.sendTransaction(tx, [keypair]);
-
-      sent++;
-      const pct = Math.round((sent / total) * 100);
-      this._setProgress(`Publishing glyph ${sent}/${total}`, pct, onProgress, {
-        glyphsDone: sent,
-        glyphsTotal: total
-      });
-    }
-
-    await StorageService.saveScrollManifest(content.contentId, {
-      publishedAt: new Date().toISOString(),
-      totalGlyphs: total
-    });
-
-    return {
-      status: 'completed',
-      glyphsPublished: total,
-      contentId: content.contentId,
-      txCount: total
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Resume / Cancel
-  // ---------------------------------------------------------------------------
-  async resumePublishing(contentId, onProgress) {
-    const content = await StorageService.getInProgressContent(contentId);
-    if (!content) throw new Error('No in-progress content found');
-
-    // Real resume logic would skip already published glyphs
-    return this.publishContent(content, onProgress);
-  }
-
-  async cancelPublishing(contentId) {
-    await StorageService.markPublishingCanceled?.(contentId);
-    return true;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Backwards-compat helpers (shim old MobilePublishingService methods)
-  // ---------------------------------------------------------------------------
   /**
-   * Old code expects: publishingService.getDrafts()
-   * We try a few likely StorageService methods. If none exist, we return [].
+   * Resume publishing from a failed or partial state
+   * @param {string} contentId - Content ID to resume
+   * @param {Function} onProgress - Progress callback
+   * @returns {Promise<Object>} Publishing result
+   */
+  async resumePublishing(contentId, onProgress = null) {
+    try {
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected');
+      }
+
+      const keypair = this.currentWallet.getWalletKeypair();
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
+      }
+
+      return await this.blockchainPublisher.resumePublishing(contentId, keypair, onProgress);
+    } catch (error) {
+      console.error('❌ Error resuming publishing:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get publishing status for active publishing operations
+   * @param {string} contentId - Content ID to check
+   * @returns {Object|null} Current status or null
+   */
+  getPublishingStatus(contentId) {
+    return this.blockchainPublisher.getPublishingStatus(contentId);
+  }
+
+  /**
+   * Cancel an active publishing operation
+   * @param {string} contentId - Content ID to cancel
+   * @returns {Promise<boolean>} Success status
+   */
+  async cancelPublishing(contentId) {
+    return await this.blockchainPublisher.cancelPublishing(contentId);
+  }
+
+  /**
+   * Get all active publishing operations
+   * @returns {Array} Array of active publishing statuses
+   */
+  getActivePublishing() {
+    return this.blockchainPublisher.getActivePublishing();
+  }
+
+  // ==================== STORAGE OPERATIONS ====================
+
+  /**
+   * Get in-progress content as array (fixed to use new storage manager)
+   * @returns {Promise<Array>} Array of in-progress content
+   */
+  async getInProgressContent() {
+    return await StorageService.getInProgressContentArray();
+  }
+
+  /**
+   * Get in-progress content as array
+   * @returns {Promise<Array>} Array of in-progress content
+   */
+  async getInProgressContentArray() {
+    return await StorageService.getInProgressContentArray();
+  }
+
+  /**
+   * Get all published content
+   * @returns {Promise<Array>} Array of published content (fixed to use new storage manager)
+   */
+  async getPublishedContent() {
+    return await StorageService.getPublishedContentArray();
+  }
+
+  /**
+   * Get published content as array sorted by date
+   * @returns {Promise<Array>} Array of published content
+   */
+  async getPublishedContentArray() {
+    return await StorageService.getPublishedContentArray();
+  }
+
+  /**
+   * Get published content by ID
+   * @param {string} contentId - Content ID to retrieve
+   * @returns {Promise<Object|null>} Published content or null
+   */
+  async getPublishedContentById(contentId) {
+    return await StorageService.getPublishedContentById(contentId);
+  }
+
+  /**
+   * Delete published content
+   * @param {string} contentId - Content ID to delete
+   * @returns {Promise<boolean>} Success status
+   */
+  async deletePublishedContent(contentId) {
+    return await StorageService.deletePublishedContent(contentId);
+  }
+
+  /**
+   * Find content by search criteria
+   * @param {string} searchTerm - Search term
+   * @param {Object} options - Search options
+   * @returns {Promise<Object>} Search results
+   */
+  async searchContent(searchTerm, options = {}) {
+    return await StorageService.searchContent(searchTerm, options);
+  }
+
+  /**
+   * Get storage statistics
+   * @returns {Promise<Object>} Storage statistics
+   */
+  async getStorageStats() {
+    return await StorageService.getStorageStats();
+  }
+
+  /**
+   * Clear all storage (for testing/debugging)
+   * @returns {Promise<boolean>} Success status
+   */
+  async clearAllStorage() {
+    return await StorageService.clearAllStorage();
+  }
+
+  /**
+   * Export all data for backup
+   * @returns {Promise<string>} JSON string of all data
+   */
+  async exportAllData() {
+    return await StorageService.exportAllData();
+  }
+
+  /**
+   * Import data from backup
+   * @param {string} jsonData - JSON string of backup data
+   * @param {boolean} merge - Whether to merge with existing data
+   * @returns {Promise<Object>} Import results
+   */
+  async importData(jsonData, merge = true) {
+    return await StorageService.importData(jsonData, merge);
+  }
+
+  // ==================== LEGACY COMPATIBILITY METHODS ====================
+
+  /**
+   * Get drafts (for compatibility with existing code)
+   * @returns {Promise<Array>} Array of draft content
    */
   async getDrafts() {
-    try {
-      // Try a direct method first
-      const possibleFns = [
-        'getDrafts',
-        'getInProgressDrafts',
-        'getInProgressContents',
-        'getInProgressContentList',
-        'getAllInProgress',
-        'getAllContent'
-      ];
-      const drafts = await this._callFirstAvailable(StorageService, possibleFns);
-      if (Array.isArray(drafts)) {
-        // If we ended up calling getAllContent, filter out published
-        return drafts.filter(d => !d.publishedAt && !d.isPublished);
-      }
-      return drafts || [];
-    } catch (e) {
-      console.error('getDrafts shim error:', e);
-      return [];
-    }
+    // Map in-progress content to draft format for compatibility
+    const inProgress = await this.getInProgressContentArray();
+    return inProgress.map(content => ({
+      id: content.contentId,
+      title: content.title,
+      content: content.originalContent,
+      savedAt: content.lastUpdated || content.createdAt,
+      ...content
+    }));
   }
 
+  /**
+   * Save draft (for compatibility with existing code)
+   * @param {Object} content - Content to save as draft
+   * @returns {Promise<boolean>} Success status
+   */
   async saveDraft(content) {
-    // Some UIs called this old helper directly
     try {
-      if (!content) throw new Error('No content passed to saveDraft');
-      // Prefer explicit "saveDraft" if StorageService has it
-      const saved = await this._callFirstAvailable(
-        StorageService,
-        ['saveDraft', 'saveInProgressContent', 'saveContent'],
-        content
-      );
-      return saved ?? content;
-    } catch (e) {
-      console.error('saveDraft shim error:', e);
-      throw e;
-    }
-  }
-
-  async deleteDraft(contentId) {
-    try {
-      await this._callFirstAvailable(
-        StorageService,
-        ['deleteDraft', 'removeInProgressContent', 'deleteInProgressContent', 'deleteContent'],
-        contentId
-      );
-      return true;
-    } catch (e) {
-      console.error('deleteDraft shim error:', e);
+      // Convert draft format to in-progress format
+      const inProgressContent = {
+        contentId: content.id || `draft_${Date.now()}`,
+        title: content.title,
+        originalContent: content.content,
+        authorPublicKey: content.authorPublicKey || 'unknown',
+        glyphs: content.glyphs || [],
+        createdAt: content.savedAt || Date.now(),
+        status: 'draft'
+      };
+      
+      return await StorageService.saveInProgressContent(inProgressContent);
+    } catch (error) {
+      console.error('Error saving draft:', error);
       return false;
     }
   }
 
-  async getPublished() {
+  // ==================== BLOCKCHAIN OPERATIONS ====================
+
+  /**
+   * Check blockchain connection status
+   * @returns {Promise<Object>} Connection status
+   */
+  async checkConnection() {
+    return await this.blockchainPublisher.checkConnection();
+  }
+
+  /**
+   * Estimate transaction costs
+   * @param {number} glyphCount - Number of glyphs to publish
+   * @returns {Promise<Object>} Cost estimation
+   */
+  async estimateTransactionCosts(glyphCount) {
+    return await this.blockchainPublisher.estimateTransactionCosts(glyphCount);
+  }
+
+  // ==================== UTILITY METHODS ====================
+
+  /**
+   * Get service health status
+   * @returns {Promise<Object>} Health status of all components
+   */
+  async getHealthStatus() {
     try {
-      const published = await this._callFirstAvailable(
-        StorageService,
-        ['getPublishedContents', 'getPublishedContentList', 'getAllPublished', 'getAllContent']
-      );
-      if (Array.isArray(published)) {
-        return published.filter(p => p.publishedAt || p.isPublished);
-      }
-      return published || [];
-    } catch (e) {
-      console.error('getPublished shim error:', e);
-      return [];
+      const [storageStats, connectionStatus] = await Promise.all([
+        this.getStorageStats(),
+        this.checkConnection()
+      ]);
+
+      return {
+        wallet: {
+          connected: !!this.currentWallet,
+          hasKeypair: this.currentWallet ? !!(await this.currentWallet.getKeypair()) : false
+        },
+        storage: {
+          ...storageStats,
+          accessible: true
+        },
+        blockchain: connectionStatus,
+        activePublishing: this.getActivePublishing().length,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error('Error getting health status:', error);
+      return {
+        wallet: { connected: false, hasKeypair: false },
+        storage: { accessible: false, error: error.message },
+        blockchain: { connected: false, error: error.message },
+        activePublishing: 0,
+        timestamp: Date.now(),
+        error: error.message
+      };
     }
   }
 
-  async getContentById(contentId) {
-    return (
-      (await this._callFirstAvailable(
-        StorageService,
-        ['getContentById', 'getInProgressContent', 'getContent'],
-        contentId
-      )) || null
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Misc helpers
-  // ---------------------------------------------------------------------------
-  async _getConnection() {
-    if (this.connection) return this.connection;
-
-    const clusterUrl = MobileWalletService.getClusterUrl?.();
-    this.clusterUrl = clusterUrl;
-    this.connection = new Connection(clusterUrl, 'confirmed');
-    return this.connection;
-  }
-
-  _setProgress(step, pct, onProgress, extra = {}) {
-    this.progress = {
-      ...this.progress,
-      step,
-      progress: pct,
-      percentage: pct, // mirror
-      ...extra
-    };
-    if (typeof onProgress === 'function') {
-      try {
-        onProgress(this.progress);
-      } catch {
-        // ignore progress callback errors
-      }
-    }
-  }
-
-  async _callFirstAvailable(targetObj, methodNames, ...args) {
-    for (const name of methodNames) {
-      if (typeof targetObj?.[name] === 'function') {
-        return await targetObj[name](...args);
-      }
-    }
-    return undefined;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Self-test
-  // ---------------------------------------------------------------------------
+  /**
+   * Run comprehensive self-test of all components
+   * @returns {Promise<Object>} Test results
+   */
   async runSelfTest() {
-    const results = {
-      walletManagement: false,
-      contentOperations: false,
-      storageOperations: false,
-      publishingTracking: false,
-      errors: []
-    };
-
     try {
-      // Wallet
-      if (MobileWalletService && typeof MobileWalletService.getClusterUrl === 'function') {
-        results.walletManagement = true;
-      } else {
-        results.errors.push('Wallet service methods missing.');
-      }
+      console.log('Running PublishingService comprehensive self-test...');
+      
+      const results = {
+        contentManager: false,
+        storageManager: false,
+        blockchainPublisher: false,
+        overallSuccess: false,
+        errors: []
+      };
 
-      // Content ops
-      const testText = 'Hello world. This is a test of glyph creation.';
-      const content = this.createTextContent(testText, { title: 'Self-test' });
-      const prepared = await this.prepareContent(content);
-      if (prepared.glyphs && prepared.glyphs.length) {
-        results.contentOperations = true;
-      } else {
-        results.errors.push('Glyph creation/compression failed.');
-      }
-
-      // Storage ops
-      const fetched = await StorageService.getInProgressContent?.(prepared.contentId);
-      if (fetched) {
-        results.storageOperations = true;
-      } else {
-        results.errors.push('Storage get/save failed.');
-      }
-
-      // Progress tracking
+      // Test ContentManager
       try {
-        this._setProgress('Testing progress', 50, () => {});
-        results.publishingTracking = true;
-      } catch (e) {
-        results.errors.push(`Progress tracking failed: ${e.message}`);
+        results.contentManager = await ContentService.runSelfTest();
+      } catch (error) {
+        results.errors.push(`ContentManager test failed: ${error.message}`);
       }
 
-      results.overallSuccess =
-        results.walletManagement &&
-        results.contentOperations &&
-        results.storageOperations &&
-        results.publishingTracking;
+      // Test StorageManager
+      try {
+        results.storageManager = await StorageService.runSelfTest();
+      } catch (error) {
+        results.errors.push(`StorageManager test failed: ${error.message}`);
+      }
+
+      // Test BlockchainPublisher
+      try {
+        results.blockchainPublisher = await this.blockchainPublisher.runSelfTest();
+      } catch (error) {
+        results.errors.push(`BlockchainPublisher test failed: ${error.message}`);
+      }
+
+      // Overall success
+      results.overallSuccess = results.contentManager && results.storageManager && results.blockchainPublisher;
 
       if (results.overallSuccess) {
-        console.log('✅ PublishingService self-test passed!');
+        console.log('🎉 PublishingService comprehensive self-test passed!');
       } else {
         console.log('❌ PublishingService self-test failed. See errors for details.');
       }
 
       return results;
     } catch (error) {
-      console.error('❌ PublishingService self-test fatal error:', error);
-      results.errors.push(error.message);
-      results.overallSuccess = false;
-      return results;
+      console.error('Self-test failed with error:', error);
+      return {
+        contentManager: false,
+        storageManager: false,
+        blockchainPublisher: false,
+        overallSuccess: false,
+        errors: [`Self-test execution failed: ${error.message}`]
+      };
     }
   }
 
-  getOperationCapabilities() {
+  /**
+   * Get service information
+   * @returns {Object} Service information
+   */
+  getServiceInfo() {
     return {
-      operations: [
+      name: 'PublishingService',
+      version: '2.0.0',
+      components: [
+        'ContentService',
+        'StorageService', 
+        'BlockChainPublisher'
+      ],
+      capabilities: [
         'File loading and text entry',
         'Content preparation and validation',
         'Blockchain publishing with compression',
         'Scroll manifest creation and storage',
         'Progress tracking and error handling',
         'Data backup and import',
-        'Content search and statistics',
-        'Transaction cost estimation',
-        'Connection status monitoring'
+        'Content search and statistics'
       ],
       storageKeys: StorageService.STORAGE_KEYS
     };
   }
 }
 
-// ============================================================================
-// Singleton instance + Backwards-compat Shim + Static facade
-// ============================================================================
-const _publishingServiceInstance = new PublishingService();
-
-// Old MobileBlockchainPublisher API shim
-_publishingServiceInstance.blockchainPublisher = {
-  publishContent: (...args) => _publishingServiceInstance.publishContent(...args),
-  resumePublishing: (...args) => _publishingServiceInstance.resumePublishing(...args),
-  cancelPublishing: (...args) => _publishingServiceInstance.cancelPublishing(...args),
-  estimateTransactionCost: (...args) => _publishingServiceInstance.estimatePublishing(...args),
-  runSelfTest: (...args) => _publishingServiceInstance.runSelfTest(...args)
-};
-
-// Static proxies so you can call PublishingService.publishContent(...) etc.
-PublishingService._instance = _publishingServiceInstance;
-[
-  'setWallet',
-  'getCurrentWallet',
-  'pickAndLoadFile',
-  'createTextContent',
-  'prepareContent',
-  'validateContent',
-  'getContentStats',
-  'estimatePublishing',
-  'publishContent',
-  'resumePublishing',
-  'cancelPublishing',
-  'runSelfTest',
-  'getOperationCapabilities',
-  // Shims
-  'getDrafts',
-  'saveDraft',
-  'deleteDraft',
-  'getPublished',
-  'getContentById'
-].forEach(methodName => {
-  if (typeof _publishingServiceInstance[methodName] === 'function') {
-    PublishingService[methodName] = (...args) =>
-      _publishingServiceInstance[methodName](...args);
-  }
-});
-
-export const publishingService = _publishingServiceInstance;
-export default _publishingServiceInstance;
+// Character count: 9821

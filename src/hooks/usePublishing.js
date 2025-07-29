@@ -2,7 +2,7 @@
 // Path: src/hooks/usePublishing.js
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { MobilePublishingService } from '../services/publishing/MobilePublishingService';
+import { PublishingService } from '../services/publishing/PublishingService';
 import { StorageService } from '../services/storage/StorageService';
 
 /**
@@ -13,7 +13,7 @@ import { StorageService } from '../services/storage/StorageService';
  */
 export const usePublishing = (walletService = null) => {
   // Publishing service instance
-  const [publishingService] = useState(() => new MobilePublishingService());
+  const [publishingService] = useState(() => new PublishingService());
   
   // Core publishing state
   const [isPublishing, setIsPublishing] = useState(false);

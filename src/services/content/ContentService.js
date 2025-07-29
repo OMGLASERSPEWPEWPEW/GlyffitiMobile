@@ -2,7 +2,7 @@
 // Path: src/services/publishing/ContentService.js
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { MobileGlyphManager } from '../publishing/MobileGlyphManager';
+import { GlyphService } from '../glyph/GlyphService';
 
 /**
  * Content Service - Handles content loading, validation, and preparation
@@ -114,7 +114,7 @@ export class ContentService {
       // Generate content ID
       const contentId = `content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Create content object for MobileGlyphManager
+      // Create content object for GlyphService
       const glyphContent = {
         id: contentId,
         title: title.trim(),
@@ -123,8 +123,8 @@ export class ContentService {
         timestamp: Date.now()
       };
       
-      // Generate chunks using MobileGlyphManager.createGlyphs
-      const glyphChunks = await MobileGlyphManager.createGlyphs(glyphContent);
+      // Generate chunks using GlyphService.createGlyphs
+      const glyphChunks = await GlyphService.createGlyphs(glyphContent);
 
       if (!glyphChunks || glyphChunks.length === 0) {
         throw new Error('Failed to process content into glyphs');
@@ -216,7 +216,7 @@ export class ContentService {
         timestamp: Date.now()
       };
 
-      const glyphChunks = await MobileGlyphManager.createGlyphs(tempContent);
+      const glyphChunks = await GlyphService.createGlyphs(tempContent);
       const glyphCount = glyphChunks.length;
 
       // Estimate cost (placeholder - replace with actual fee logic)
