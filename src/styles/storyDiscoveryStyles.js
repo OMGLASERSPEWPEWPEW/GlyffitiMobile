@@ -1,7 +1,7 @@
 // src/styles/storyDiscoveryStyles.js
 // Path: src/styles/storyDiscoveryStyles.js
 import { StyleSheet } from 'react-native';
-import { colors, spacing, typography } from './index';
+import { colors, spacing, typography } from '.';
 
 export const storyDiscoveryStyles = StyleSheet.create({
   // Main container

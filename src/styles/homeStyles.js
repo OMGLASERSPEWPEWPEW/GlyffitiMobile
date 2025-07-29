@@ -2,8 +2,7 @@
 // Path: src/styles/homeStyles.js
 import { StyleSheet, Dimensions } from 'react-native';
 // Import directly to avoid circular reference issues
-import { colors } from './colors';
-import { spacing } from './spacing';
+import { colors, spacing } from '.';
 
 const { width } = Dimensions.get('window');
 

@@ -1,36 +1,47 @@
 // src/styles/index.js
 // Path: src/styles/index.js
 
-// Simple exports without circular references
-export { colors } from './colors';
-export { fonts } from './fonts';
-export { spacing } from './spacing';
+// Central facade for design tokens and style helpers.
+// Keep this file thin to avoid circular imports.
 
-// Typography mapping for story components (define inline to avoid circular refs)
-export const typography = {
-  fontFamily: 'System',
-  fontFamilyBold: 'System-Bold',
-  
-  sizes: {
-    small: 12,
-    medium: 14,
-    large: 18,
-    extraLarge: 20,
-    title: 24,
-    heading: 32,
+// Import the specific modules we use in this file:
+import { typography } from './tokens/typography';
+import { colors } from './tokens/colors';
+import { spacing } from './tokens/spacing';
+import { shadows } from './tokens/shadows';
+import { borderRadius, borderWidth, borderStyle } from './tokens/borders';
+
+// Re-export all tokens so callers can do:
+//   import { colors, spacing, typography } from 'src/styles';
+export * from './tokens';
+
+// ----- Temporary back-compat alias for { fonts } -----
+export const fonts = {
+  family: {
+    regular: typography.fontFamily,
+    bold: typography.fontFamilyBold ?? typography.fontFamily,
   },
-  
-  weights: {
-    normal: '400',
-    medium: '500',
-    bold: '700',
-  },
-  
-  lineHeights: {
-    tight: 1.2,
-    normal: 1.4,
-    relaxed: 1.6,
-  },
+  sizes: typography.fontSize ?? typography.sizes ?? {},
+  weights: typography.fontWeight ?? typography.weights ?? {},
+  lineHeights: typography.lineHeight ?? typography.lineHeights ?? {},
+  textStyles: typography.textStyles ?? {},
 };
+// -----------------------------------------------------
 
-// 238 characters
+// Optional theme helper (light/dark)
+// Only reference token modules directly to avoid cycles.
+export function buildTheme(mode = 'light') {
+  const palette = colors?.[mode] ?? colors;
+
+  return {
+    mode,
+    colors: palette,
+    spacing,
+    shadows,
+    radius: borderRadius,
+    borderWidth,
+    borderStyle,
+    typography, // expose full typography
+    fonts,      // back-compat; remove after migration
+  };
+}

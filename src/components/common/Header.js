@@ -1,7 +1,9 @@
 // src/components/common/Header.js
+// Path: src/components/common/Header.js
+
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, fonts, spacing } from '../../styles';
+import { colors, spacing, typography } from '../../styles';
 
 const Header = ({ title, leftAction, rightAction, leftIcon, rightIcon }) => {
   return (
@@ -13,11 +15,11 @@ const Header = ({ title, leftAction, rightAction, leftIcon, rightIcon }) => {
           </TouchableOpacity>
         )}
       </View>
-      
+
       <View style={styles.centerContainer}>
         <Text style={styles.title}>{title}</Text>
       </View>
-      
+
       <View style={styles.rightContainer}>
         {rightAction && (
           <TouchableOpacity onPress={rightAction} style={styles.iconButton}>
@@ -53,16 +55,21 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   title: {
-    fontSize: fonts.sizes.large,
-    fontWeight: fonts.weights.bold,
+    fontSize: typography.fontSize?.lg ?? 18, // was fonts.sizes.large
     color: colors.text,
+    // Prefer explicit family from tokens over weights when you have dedicated faces:
+    fontFamily: typography.fontFamilyBold ?? typography.fontFamily,
+    // If you rely on weights instead of font families, also set:
+    fontWeight: typography.fontWeight?.bold ?? '700',
   },
   iconButton: {
     padding: spacing.small,
   },
   iconText: {
-    fontSize: fonts.sizes.large,
+    fontSize: typography.fontSize?.lg ?? 18, // was fonts.sizes.large
     color: colors.primary,
+    fontFamily: typography.fontFamily,
+    fontWeight: typography.fontWeight?.medium ?? '600',
   },
 });
 

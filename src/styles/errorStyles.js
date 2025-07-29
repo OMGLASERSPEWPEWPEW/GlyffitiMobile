@@ -1,7 +1,7 @@
 // src/styles/errorStyles.js
 // Path: src/styles/errorStyles.js
 import { StyleSheet } from 'react-native';
-import { colors, spacing, typography } from './index';
+import { colors, spacing, typography } from '.';
 
 export const errorStyles = StyleSheet.create({
   // ErrorBoundary styles

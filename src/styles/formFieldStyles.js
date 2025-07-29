@@ -1,9 +1,7 @@
 // src/styles/formFieldStyles.js
 // Path: src/styles/formFieldStyles.js
 import { StyleSheet } from 'react-native';
-import { colors } from './colors';
-import { spacing } from './spacing';
-import { typography } from '.';
+import { colors, spacing, typography } from '.';
 
 export const formFieldStyles = StyleSheet.create({
   container: {

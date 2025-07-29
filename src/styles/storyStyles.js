@@ -1,7 +1,7 @@
 // src/styles/storyStyles.js
 // Path: src/styles/storyStyles.js
 import { StyleSheet } from 'react-native';
-import { colors, spacing, typography } from './index';
+import { colors, spacing, typography } from '.';
 
 export const storyStyles = StyleSheet.create({
   // StoryErrorDisplay styles
