@@ -11,8 +11,6 @@ import {
 import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles';
-// Temporarily comment out story cache until we fix the dependencies
-// import { storyCache } from '../services/story/StoryCache';
 
 const { width } = Dimensions.get('window');
 
