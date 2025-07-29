@@ -2,7 +2,7 @@
 // Path: src/services/publishing/PublishingService.js
 import { MobileWalletService } from '../wallet/MobileWalletService';
 import { ContentService } from '../content/ContentService';
-import { BlockChainPublisher } from './BlockChainPublisher';
+import { BlockchainService } from '../blockchain/BlockchainService';
 import { StorageService } from '../storage/StorageService';
 
 /**
@@ -12,7 +12,7 @@ import { StorageService } from '../storage/StorageService';
 export class PublishingService {
   constructor() {
     this.currentWallet = null;
-    this.blockchainPublisher = new BlockChainPublisher();
+    this.blockchainPublisher = new BlockchainService();
   }
 
   /**
