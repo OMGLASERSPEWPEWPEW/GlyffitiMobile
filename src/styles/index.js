@@ -15,6 +15,8 @@ import { borderRadius, borderWidth, borderStyle } from './tokens/borders';
 //   import { colors, spacing, typography } from 'src/styles';
 export * from './tokens';
 
+export * from './base';
+
 // ----- Temporary back-compat alias for { fonts } -----
 export const fonts = {
   family: {
