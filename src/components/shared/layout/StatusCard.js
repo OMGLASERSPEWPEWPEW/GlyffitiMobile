@@ -2,7 +2,7 @@
 // Path: src/components/shared/layout/StatusCard.js
 import React from 'react';
 import { View, Text } from 'react-native';
-import { colors, spacing } from '../../../styles';
+import { colors, spacing } from '../../../styles/tokens';
 import { cardStyles } from '../../../styles/cardStyles';
 import Card from './Card';
 import Button from '../ui/Button';

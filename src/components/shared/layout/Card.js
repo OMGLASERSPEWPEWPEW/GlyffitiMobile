@@ -2,7 +2,7 @@
 // Path: src/components/shared/Card.js
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing } from '../../../styles';
+import { colors, spacing } from '../../../styles/tokens';
 
 /**
  * Base card component with consistent styling

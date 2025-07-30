@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { ArrowLeft, Search, Filter } from 'lucide-react-native';
 import StoryDiscoveryList from '../components/Story/StoryDiscoveryList';
-import { colors, spacing, typography } from '../styles';
+import { colors, spacing, typography } from '../styles/tokens';
 import { storyDiscoveryStyles } from '../styles/storyDiscoveryStyles';
 import { FormField, TextInput, ErrorBoundary, ErrorDisplay, RetryButton } from '../components/shared';
 

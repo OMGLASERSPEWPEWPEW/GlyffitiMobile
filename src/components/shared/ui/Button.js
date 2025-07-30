@@ -2,7 +2,7 @@
 // Path: src/components/shared/Button.js
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../../styles';
+import { colors, spacing, typography } from '../../../styles/tokens';
 
 /**
  * Standardized button component with consistent styling

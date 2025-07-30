@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../styles';
+import { colors, spacing, typography } from '../../styles/tokens';
 
 const Header = ({ title, leftAction, rightAction, leftIcon, rightIcon }) => {
   return (

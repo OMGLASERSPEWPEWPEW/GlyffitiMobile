@@ -4,7 +4,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Card, Button } from '../shared';
 import { publishingStyles } from '../../styles/publishingStyles';
-import { spacing } from '../../styles';
+import { spacing } from '../../styles/tokens';
 
 export const ContentSections = ({ 
   inProgressContent = [], 

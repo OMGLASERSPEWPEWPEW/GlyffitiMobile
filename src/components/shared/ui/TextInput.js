@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { View, TextInput as RNTextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { Eye, EyeOff, Search, X } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../../styles';
+import { colors, spacing, typography } from '../../../styles/tokens';
 
 /**
  * Standardized text input component with consistent styling

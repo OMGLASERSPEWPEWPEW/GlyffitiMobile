@@ -4,7 +4,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
-import { colors } from '../../../styles';
+import { colors } from '../../../styles/tokens';
 import { errorStyles } from '../../../styles/errorStyles';
 
 /**

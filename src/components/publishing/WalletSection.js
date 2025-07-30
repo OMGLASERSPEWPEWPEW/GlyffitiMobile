@@ -3,7 +3,7 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { StatusCard, FormField, PasswordInput } from '../shared';
-import { colors, spacing, typography } from '../../styles';
+import { colors, spacing, typography } from '../../styles/tokens';
 
 export const WalletSection = ({ 
   walletStatus, 

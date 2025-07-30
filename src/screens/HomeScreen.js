@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
 import { homeStyles } from '../styles/homeStyles';
-import { colors, spacing } from '../styles';
+import { colors, spacing } from '../styles/tokens';
 
 const { width } = Dimensions.get('window');
 

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { LoadingSpinner, ContentCard } from '../shared';
 import { Book } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../styles';
+import { colors, spacing, typography } from '../../styles/tokens';
 import { storyCache } from '../../services/story/StoryCache';
 
 /**

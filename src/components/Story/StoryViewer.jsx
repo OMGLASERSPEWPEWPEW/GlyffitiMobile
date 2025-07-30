@@ -7,7 +7,7 @@ import { useStoryViewer } from '../../hooks/useStoryViewer';
 import StoryContent from './StoryContent';
 import StoryHeader from './StoryHeader';
 import { LoadingProgress, ErrorDisplay, ErrorBoundary, RetryButton } from '../shared';
-import { colors, spacing } from '../../styles';
+import { colors, spacing } from '../../styles/tokens';
 import { storyViewerStyles } from '../../styles/storyViewerStyles';
 
 /**

@@ -3,7 +3,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { User, Clock, Eye, Star, Download } from 'lucide-react-native';
-import { colors, spacing } from '../../../styles';
+import { colors, spacing } from '../../../styles/tokens';
 import { cardStyles } from '../../../styles/cardStyles';
 import Card from './Card';
 

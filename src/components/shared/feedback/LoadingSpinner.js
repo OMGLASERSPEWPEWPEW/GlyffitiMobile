@@ -2,7 +2,7 @@
 // Path: src/components/shared/LoadingSpinner.js
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Animated } from 'react-native';
-import { colors, spacing, typography } from '../../../styles';
+import { colors, spacing, typography } from '../../../styles/tokens';
 
 /**
  * Standardized loading spinner component

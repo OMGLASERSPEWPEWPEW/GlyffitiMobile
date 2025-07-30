@@ -5,7 +5,7 @@ import HomeScreen from '../screens/HomeScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
 import CreateStoryScreen from '../screens/CreateStoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import { colors } from '../styles';
+import { colors } from '../styles/tokens';
 
 const Tab = createBottomTabNavigator();
 

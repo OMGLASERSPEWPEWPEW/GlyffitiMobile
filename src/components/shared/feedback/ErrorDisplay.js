@@ -13,7 +13,7 @@ import {
   RefreshCw,
   ArrowLeft 
 } from 'lucide-react-native';
-import { colors } from '../../../styles';
+import { colors } from '../../../styles/tokens';
 import { errorStyles } from '../../../styles/errorStyles';
 
 /**

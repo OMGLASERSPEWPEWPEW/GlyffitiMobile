@@ -4,7 +4,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Card } from '../shared';
 import { publishingStyles } from '../../styles/publishingStyles';
-import { spacing } from '../../styles';
+import { spacing } from '../../styles/tokens';
 
 export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   if (!publishing || !progress) {

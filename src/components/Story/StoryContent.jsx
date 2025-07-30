@@ -2,7 +2,7 @@
 // Path: src/components/Story/StoryContent.jsx
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../styles';
+import { colors, spacing, typography } from '../../styles/tokens';
 
 /**
  * Component for rendering story content with proper formatting

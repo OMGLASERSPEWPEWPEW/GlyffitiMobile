@@ -13,7 +13,7 @@ import {
   Clock,
   Download
 } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../styles';
+import { colors, spacing, typography } from '../../styles/tokens';
 
 /**
  * Header component for story viewing with controls and metadata
