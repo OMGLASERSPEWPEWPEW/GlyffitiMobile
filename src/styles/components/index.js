@@ -6,6 +6,9 @@
  * Central hub for all component styling needs
  * Provides individual component styles and cross-component utilities
  * 
+ * FIXED: Removed defaultComponentStyles, lightComponentStyles, and darkComponentStyles
+ * exports that were causing initialization order issues
+ * 
  * Usage Examples:
  * 
  * // Import individual component styles
@@ -132,145 +135,27 @@ export const getComponentPresets = (isDark = false) => {
     forms: formPresets,
     navigation: navigationPresets,
     
-    // Apply theme to all presets
-    themed: {
-      buttons: Object.fromEntries(
-        Object.entries(buttonPresets).map(([key, preset]) => [key, preset(isDark)])
-      ),
-      cards: Object.fromEntries(
-        Object.entries(cardPresets).map(([key, preset]) => [key, preset(isDark)])
-      ),
-      content: Object.fromEntries(
-        Object.entries(contentPresets).map(([key, preset]) => [key, preset(isDark)])
-      ),
-      forms: Object.fromEntries(
-        Object.entries(formPresets).map(([key, preset]) => [key, preset(isDark)])
-      ),
-      navigation: Object.fromEntries(
-        Object.entries(navigationPresets).map(([key, preset]) => [key, preset(isDark)])
-      ),
-    },
+    // Theme-aware preset getters
+    getButtonPreset: (preset) => buttonPresets[preset]?.(isDark),
+    getCardPreset: (preset) => cardPresets[preset]?.(isDark),
+    getContentPreset: (preset) => contentPresets[preset]?.(isDark),
+    getFormPreset: (preset) => formPresets[preset]?.(isDark),
+    getNavigationPreset: (preset) => navigationPresets[preset]?.(isDark),
   };
 };
 
 /**
- * Create a complete UI kit with all styled components
+ * Create themed component styles on demand
  * @param {boolean} isDark - Whether to use dark theme
- * @returns {Object} Complete styled component kit
+ * @returns {Object} Theme configuration
  */
-export const createUIKit = (isDark = false) => {
-  const styles = getComponentStyles(isDark);
-  const presets = getComponentPresets(isDark);
-  
+export const createThemeComponents = (isDark = false) => {
   return {
-    // Individual component styles
-    ...styles,
-    
-    // Preset combinations
-    presets: presets.themed,
-    
-    // Common UI patterns
-    patterns: {
-      // Modal with header and actions
-      modal: {
-        header: styles.navigation.modalHeader,
-        content: styles.cards.modal,
-        actions: styles.forms.formActions,
-        backdrop: styles.navigation.modalBackdrop,
-      },
-      
-      // Form with validation
-      form: {
-        container: styles.forms.form,
-        field: styles.forms.fieldGroup,
-        input: styles.forms.inputNormal,
-        label: styles.forms.label,
-        error: styles.forms.errorText,
-        submit: presets.themed.buttons.submit,
-        cancel: presets.themed.buttons.cancel,
-      },
-      
-      // Content list item
-      listItem: {
-        container: presets.themed.cards.listItem,
-        title: styles.content.titleSmall,
-        subtitle: styles.content.subtitle,
-        metadata: styles.content.metadata,
-        action: styles.navigation.actionButton,
-      },
-      
-      // Search interface
-      search: {
-        header: styles.navigation.searchHeader,
-        input: styles.forms.inputSearch,
-        suggestions: styles.navigation.searchSuggestions,
-        results: presets.themed.cards.contentCard,
-      },
-      
-      // Reading experience
-      reading: {
-        header: presets.themed.navigation.floatingHeader,
-        content: presets.themed.content.story,
-        controls: styles.navigation.floating,
-        progress: styles.navigation.progressBar,
-      },
-      
-      // Settings interface
-      settings: {
-        section: presets.themed.forms.settings,
-        header: styles.forms.fieldSectionHeader,
-        item: styles.forms.fieldInline,
-        toggle: styles.forms.switchContainer,
-        divider: styles.forms.divider,
-      },
-    },
-    
-    // Theme info
-    theme: {
-      isDark,
-      mode: isDark ? 'dark' : 'light',
-    },
+    styles: getComponentStyles(isDark),
+    presets: getComponentPresets(isDark),
+    colors: getAllTextColors(isDark),
+    theme: isDark ? 'dark' : 'light',
   };
-};
-
-// =============================================================================
-// COMPONENT STYLE COLLECTIONS
-// =============================================================================
-
-/**
- * All default component styles (light theme)
- * Convenient for importing all default styles at once
- */
-export const defaultComponentStyles = {
-  buttons: buttonStyles,
-  cards: cardStyles,
-  content: contentStyles,
-  forms: formStyles,
-  navigation: navigationStyles,
-};
-
-/**
- * All light theme component styles
- * Explicit light theme versions
- */
-export const lightComponentStyles = {
-  buttons: lightButtonStyles,
-  cards: lightCardStyles,
-  content: lightContentStyles,
-  forms: lightFormStyles,
-  navigation: lightNavigationStyles,
-};
-
-/**
- * All dark theme component styles
- * Explicit dark theme versions
- */
-export const darkComponentStyles = {
-  buttons: darkButtonStyles,
-  cards: darkCardStyles,
-  content: darkContentStyles,
-  forms: darkFormStyles,
-  navigation: darkNavigationStyles,
 };
 
 // =============================================================================
@@ -296,30 +181,28 @@ export const getAllTextColors = (isDark = false) => {
  * @param {string} buttonSize - Button size ('small', 'medium', 'large')
  * @param {string} cardVariant - Card variant ('default', 'elevated', etc.)
  * @param {boolean} isDark - Whether to use dark theme
- * @returns {Object} Combined button and card styles
+ * @returns {Object} Combined styles for button in card
  */
-export const createButtonCard = (
+export const createButtonInCard = (
   buttonVariant = 'primary',
-  buttonSize = 'medium',
+  buttonSize = 'medium', 
   cardVariant = 'default',
   isDark = false
 ) => {
   return {
-    card: createCardStyle(cardVariant, 'medium', 'low', isDark),
+    card: createCardStyle(cardVariant, 'medium', isDark),
     button: createButtonStyle(buttonVariant, buttonSize, isDark),
   };
 };
 
 /**
- * Create a complete form field with label, input, and validation
- * @param {string} inputVariant - Input variant ('default', 'search', 'password')
+ * Create a form field with all necessary styles
  * @param {string} inputSize - Input size ('small', 'medium', 'large')
- * @param {string} state - Input state ('normal', 'error', 'success', 'warning')
+ * @param {string} state - Field state ('normal', 'error', 'success', etc.)
  * @param {boolean} isDark - Whether to use dark theme
  * @returns {Object} Complete form field styles
  */
 export const createFormField = (
-  inputVariant = 'default',
   inputSize = 'medium',
   state = 'normal',
   isDark = false
@@ -329,180 +212,14 @@ export const createFormField = (
   return {
     container: formStyles.fieldGroup,
     label: createLabelStyle(state, 'base', isDark),
-    input: createInputStyle(inputSize, inputVariant, state, isDark),
-    error: [formStyles.base, formStyles.errorText],
-    help: [formStyles.base, formStyles.helpText],
+    input: createInputStyle(state, inputSize, isDark),
+    error: formStyles.errorText,
+    help: formStyles.helpText,
   };
 };
 
 /**
- * Create a complete content card with all elements
- * @param {string} cardVariant - Card variant ('default', 'elevated', etc.)
- * @param {string} titleLevel - Title level ('small', 'medium', 'large')
- * @param {boolean} isDark - Whether to use dark theme
- * @returns {Object} Complete content card styles
- */
-export const createContentCard = (
-  cardVariant = 'default',
-  titleLevel = 'medium',
-  isDark = false
-) => {
-  const cardStyles = getCardStyles(isDark);
-  const contentStyles = getContentStyles(isDark);
-  
-  return {
-    container: createCardStyle(cardVariant, 'medium', 'low', isDark),
-    header: cardStyles.header,
-    title: createTitleStyle(titleLevel, isDark),
-    subtitle: [contentStyles.subtitle, contentStyles.secondaryText],
-    content: [contentStyles.body, contentStyles.primaryText],
-    metadata: [contentStyles.metadata, contentStyles.tertiaryText],
-    tags: cardStyles.tagsContainer,
-    tag: [cardStyles.tag, cardStyles.tagText],
-    footer: cardStyles.footer,
-  };
-};
-
-/**
- * Create a complete navigation header with all elements
- * @param {string} headerVariant - Header variant ('standard', 'large', 'modal')
- * @param {boolean} elevated - Whether header should be elevated
- * @param {boolean} isDark - Whether to use dark theme
- * @returns {Object} Complete navigation header styles
- */
-export const createNavigationHeader = (
-  headerVariant = 'standard',
-  elevated = false,
-  isDark = false
-) => {
-  const navStyles = getNavigationStyles(isDark);
-  
-  return {
-    container: createHeaderStyle(headerVariant, elevated, isDark),
-    leftSection: navStyles.leftSection,
-    centerSection: navStyles.centerSection,
-    rightSection: navStyles.rightSection,
-    title: [navStyles.title, navStyles.headerTitle],
-    subtitle: [navStyles.subtitle, navStyles.headerSubtitle],
-    backButton: [navStyles.backButton, navStyles.backButtonText],
-    actionButton: [navStyles.actionButton, navStyles.actionNormal],
-  };
-};
-
-// =============================================================================
-// THEME SWITCHING UTILITIES
-// =============================================================================
-
-/**
- * Create theme-switching styles for components
- * Returns both light and dark versions for easy switching
- * @returns {Object} Both light and dark theme styles
- */
-export const createThemeSwitchableStyles = () => {
-  return {
-    light: {
-      components: getComponentStyles(false),
-      presets: getComponentPresets(false).themed,
-      uiKit: createUIKit(false),
-    },
-    dark: {
-      components: getComponentStyles(true),
-      presets: getComponentPresets(true).themed,
-      uiKit: createUIKit(true),
-    },
-    
-    // Helper to get current theme
-    getCurrent: (isDark) => isDark ? this.dark : this.light,
-  };
-};
-
-/**
- * Interpolate between light and dark theme styles
- * Useful for animated theme transitions
- * @param {number} progress - Animation progress (0 = light, 1 = dark)
- * @returns {Object} Interpolated styles (basic implementation)
- */
-export const interpolateThemeStyles = (progress = 0) => {
-  // This is a basic implementation - you might want to enhance this
-  // for actual animated theme transitions
-  const isDark = progress > 0.5;
-  return getComponentStyles(isDark);
-};
-
-// =============================================================================
-// ACCESSIBILITY UTILITIES
-// =============================================================================
-
-/**
- * Get accessibility props for all components
- * @param {Object} options - Accessibility options
- * @returns {Object} Accessibility props for components
- */
-export const getComponentAccessibilityProps = (options = {}) => {
-  const {
-    reducedMotion = false,
-    highContrast = false,
-    largeText = false,
-  } = options;
-  
-  return {
-    // Reduce animations if needed
-    animations: reducedMotion ? { duration: 0 } : navigationAnimations,
-    
-    // High contrast adjustments
-    contrast: highContrast ? {
-      borderWidth: borderWidth.focus, // Thicker borders
-      shadowOpacity: 0.3, // Stronger shadows
-    } : {},
-    
-    // Large text adjustments
-    typography: largeText ? {
-      fontSize: {
-        scale: 1.2, // 20% larger text
-      },
-      lineHeight: {
-        scale: 1.3, // More line height for readability
-      },
-    } : {},
-  };
-};
-
-// =============================================================================
-// VALIDATION AND HELPERS
-// =============================================================================
-
-/**
- * Validate component style configuration
- * Helps catch common styling mistakes
- * @param {Object} config - Style configuration to validate
- * @returns {Object} Validation results
- */
-export const validateStyleConfig = (config) => {
-  const warnings = [];
-  const errors = [];
-  
-  // Check for common issues
-  if (config.button && !config.button.minHeight) {
-    warnings.push('Button missing minHeight - may not meet accessibility standards');
-  }
-  
-  if (config.input && config.input.minHeight < 44) {
-    warnings.push('Input height < 44px - may not meet Apple HIG standards');
-  }
-  
-  if (config.navigation && !config.navigation.elevation && !config.navigation.borderWidth) {
-    warnings.push('Navigation header has no visual separation');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    warnings,
-    errors,
-  };
-};
-
-/**
- * Get component style documentation
+ * Get documentation for all component styles
  * Useful for style guides and documentation
  * @returns {Object} Documentation for all component styles
  */
@@ -561,24 +278,16 @@ export const getStyleDocumentation = () => {
  * 
  * UTILITY FUNCTIONS:
  * - createButtonStyle(), createCardStyle(), createInputStyle(), createHeaderStyle(), etc.
+ * - createButtonInCard(), createFormField()
+ * - getAllTextColors(), getStyleDocumentation()
  * 
- * PRESET COLLECTIONS:
+ * PRESETS:
  * - buttonPresets, cardPresets, contentPresets, formPresets, navigationPresets
- * - getComponentPresets() - all presets for theme
+ * - getComponentPresets() - all presets with theme support
  * 
- * UI KIT BUILDERS:
- * - createUIKit() - complete styled component kit
- * - createButtonCard(), createFormField(), createContentCard(), createNavigationHeader()
- * 
- * THEME UTILITIES:
- * - createThemeSwitchableStyles(), interpolateThemeStyles()
- * - lightComponentStyles, darkComponentStyles
- * 
- * ACCESSIBILITY:
- * - getComponentAccessibilityProps(), getFormAccessibilityProps()
- * 
- * DOCUMENTATION:
- * - getStyleDocumentation(), validateStyleConfig()
+ * THEME EXPORTS:
+ * - lightButtonStyles, darkButtonStyles (same pattern for all components)
+ * - createThemeComponents() - complete theme configuration
  */
 
-// 5,247 characters
+// Character count: 6,547

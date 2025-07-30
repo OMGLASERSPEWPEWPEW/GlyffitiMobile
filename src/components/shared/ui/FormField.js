@@ -2,12 +2,17 @@
 // Path: src/components/shared/ui/FormField.js
 import React from 'react';
 import { View, Text } from 'react-native';
-import { formFieldStyles } from '../../../styles/formFieldStyles';
+import { getFormStyles, createLabelStyle, getFormAccessibilityProps } from '../../../styles/components';
 
 /**
  * Form field wrapper component with label and error message
  * Wraps any input component with consistent label and validation display
  * Keeps forms organized with proper spacing and error states
+ * 
+ * MIGRATED: Now uses the new design system form components
+ * - Replaced formFieldStyles with getFormStyles()
+ * - Added proper theme-aware styling
+ * - Enhanced accessibility support
  */
 const FormField = ({
   label,
@@ -21,21 +26,34 @@ const FormField = ({
   errorStyle,
   helpStyle,
   showRequiredAsterisk = true,
+  size = 'medium', // 'small', 'medium', 'large'
+  state, // Auto-derived from error but can be overridden
 }) => {
+  // Get theme-aware form styles
+  const formStyles = getFormStyles(isDarkMode);
+  
+  // Determine field state (normal, error, success, warning)
+  const fieldState = state || (error ? 'error' : 'normal');
+  
+  // Get label styles with proper state and theme
+  const labelStyles = createLabelStyle(fieldState, 'base', isDarkMode);
+  
+  // Get accessibility props
+  const accessibilityProps = getFormAccessibilityProps(fieldState, label, error, helpText);
+  
   return (
-    <View style={[formFieldStyles.container, style]}>
+    <View style={[formStyles.fieldGroup, style]} {...accessibilityProps}>
       {/* Label */}
       {label && (
         <Text style={[
-          formFieldStyles.label,
-          isDarkMode && formFieldStyles.labelDark,
+          labelStyles,
           labelStyle
         ]}>
           {label}
           {required && showRequiredAsterisk && (
             <Text style={[
-              formFieldStyles.required,
-              isDarkMode && formFieldStyles.requiredDark
+              formStyles.labelRequired,
+              { color: formStyles.requiredColor }
             ]}>
               {' *'}
             </Text>
@@ -44,15 +62,14 @@ const FormField = ({
       )}
 
       {/* Input Field (children) */}
-      <View style={formFieldStyles.inputContainer}>
+      <View style={formStyles.inputContainer}>
         {children}
       </View>
 
       {/* Error Message */}
       {error && (
         <Text style={[
-          formFieldStyles.error,
-          isDarkMode && formFieldStyles.errorDark,
+          formStyles.errorText,
           errorStyle
         ]}>
           {error}
@@ -62,8 +79,7 @@ const FormField = ({
       {/* Help Text */}
       {helpText && !error && (
         <Text style={[
-          formFieldStyles.helpText,
-          isDarkMode && formFieldStyles.helpTextDark,
+          formStyles.helpText,
           helpStyle
         ]}>
           {helpText}
@@ -75,4 +91,4 @@ const FormField = ({
 
 export default FormField;
 
-// Character count: 1242
+// Character count: 1,847

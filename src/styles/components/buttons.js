@@ -73,7 +73,7 @@ const sizes = {
     paddingHorizontal: spacing.medium,       // 16px
     borderRadius: borderRadius.button,       // 8px
     fontSize: typography.fontSize.medium,    // 14px
-    lineHeight: typography.lineHeight.button, // 20px
+    lineHeight: typography.lineHeight.button, // 24px
     minHeight: 44,
   },
   
@@ -81,265 +81,171 @@ const sizes = {
     paddingVertical: spacing.medium,         // 16px
     paddingHorizontal: spacing.large,        // 24px
     borderRadius: borderRadius.buttonLarge,  // 12px
-    fontSize: typography.fontSize.large,     // 18px
-    lineHeight: typography.lineHeight.button, // 20px
-    minHeight: 52,
+    fontSize: typography.fontSize.large,     // 16px
+    lineHeight: typography.lineHeight.button, // 28px
+    minHeight: 56,
   },
   
-  // Icon-only buttons
+  // Icon button sizes
   icon: {
-    paddingVertical: spacing.small,          // 8px
-    paddingHorizontal: spacing.small,        // 8px
-    borderRadius: borderRadius.button,       // 8px
-    minHeight: 44,
-    minWidth: 44,
+    width: 44,
+    height: 44,
+    padding: 0,
+    borderRadius: borderRadius.button,
   },
   
   iconSmall: {
-    paddingVertical: spacing.extraSmall,     // 4px
-    paddingHorizontal: spacing.extraSmall,   // 4px
-    borderRadius: borderRadius.buttonSmall,  // 6px
-    minHeight: 36,
-    minWidth: 36,
+    width: 36,
+    height: 36,
+    padding: 0,
+    borderRadius: borderRadius.buttonSmall,
   },
   
   iconLarge: {
-    paddingVertical: spacing.medium,         // 16px
-    paddingHorizontal: spacing.medium,       // 16px
-    borderRadius: borderRadius.buttonLarge,  // 12px
-    minHeight: 52,
-    minWidth: 52,
+    width: 56,
+    height: 56,
+    padding: 0,
+    borderRadius: borderRadius.buttonLarge,
   },
   
-  // Full width variant
+  // Full width
   fullWidth: {
-    alignSelf: 'stretch',
     width: '100%',
   },
 };
 
 // =============================================================================
-// THEME CREATION FUNCTIONS (DEFINED BEFORE USE)
+// THEME VARIANT FUNCTIONS (DEFINED BEFORE USE)
 // =============================================================================
 
-// Create light theme button styles
+// Light theme button variants
 const createLightButtonStyles = () => {
   const colors = lightColors;
-  
-  return {
-    // Variant: Primary (main call-to-action)
-    primary: {
-      backgroundColor: colors.primary,
-      color: palette.white,
-      ...shadows.sm,
-    },
-    primaryHover: {
-      backgroundColor: colors.primaryHover,
-      ...shadows.md,
-    },
-    primaryActive: {
-      backgroundColor: colors.primaryActive,
-      ...shadows.sm,
-    },
-    primaryDisabled: {
-      backgroundColor: colors.primaryDisabled,
-      color: colors.textTertiary,
-      ...shadows.none,
-    },
-    
-    // Variant: Secondary (secondary actions)
-    secondary: {
-      backgroundColor: colors.secondary,
-      color: palette.white,
-      ...shadows.sm,
-    },
-    secondaryHover: {
-      backgroundColor: colors.secondaryHover,
-      ...shadows.md,
-    },
-    secondaryActive: {
-      backgroundColor: colors.secondaryActive,
-      ...shadows.sm,
-    },
-    secondaryDisabled: {
-      backgroundColor: colors.primaryDisabled,
-      color: colors.textTertiary,
-      ...shadows.none,
-    },
-    
-    // Variant: Success (positive actions)
-    success: {
-      backgroundColor: colors.success,
-      color: palette.white,
-      ...shadows.sm,
-    },
-    successHover: {
-      backgroundColor: palette.green600,
-      ...shadows.md,
-    },
-    
-    // Variant: Error/Destructive (dangerous actions)
-    error: {
-      backgroundColor: colors.error,
-      color: palette.white,
-      ...shadows.sm,
-    },
-    errorHover: {
-      backgroundColor: palette.red600,
-      ...shadows.md,
-    },
-    
-    // Variant: Warning (caution actions)
-    warning: {
-      backgroundColor: colors.warning,
-      color: colors.text,
-      ...shadows.sm,
-    },
-    warningHover: {
-      backgroundColor: palette.yellow600,
-      ...shadows.md,
-    },
-    
-    // Variant: Ghost (minimal styling)
-    ghost: {
-      backgroundColor: 'transparent',
-      color: colors.primary,
-    },
-    ghostHover: {
-      backgroundColor: colors.backgroundSecondary,
-    },
-    ghostActive: {
-      backgroundColor: colors.border,
-    },
-    
-    // Variant: Link (text-like button)
-    link: {
-      backgroundColor: 'transparent',
-      color: colors.link,
-      paddingVertical: spacing.tiny,
-      paddingHorizontal: spacing.tiny,
-      minHeight: 'auto',
-    },
-    linkHover: {
-      color: colors.linkHover,
-      textDecorationLine: 'underline',
-    },
-    
-    // Variant: Outline (border-only)
-    outline: {
-      backgroundColor: 'transparent',
-      borderWidth: borderWidth.thin,
-      borderColor: colors.primary,
-      color: colors.primary,
-    },
-    outlineHover: {
-      backgroundColor: colors.primary,
-      color: palette.white,
-    },
-  };
-};
-
-// Create dark theme button styles
-const createDarkButtonStyles = () => {
-  const colors = darkColors;
   
   return {
     // Variant: Primary
     primary: {
       backgroundColor: colors.primary,
       color: palette.white,
-      ...darkShadows.sm,
+      ...shadows.button,
     },
     primaryHover: {
-      backgroundColor: colors.primaryHover,
-      ...darkShadows.md,
+      backgroundColor: colors.primaryDark,
     },
     primaryActive: {
-      backgroundColor: colors.primaryActive,
-      ...darkShadows.sm,
+      backgroundColor: colors.primaryDark,
+      ...shadows.buttonPressed,
     },
     primaryDisabled: {
-      backgroundColor: colors.primaryDisabled,
-      color: colors.textTertiary,
-      ...darkShadows.none,
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
     },
     
     // Variant: Secondary
     secondary: {
-      backgroundColor: colors.secondary,
-      color: palette.white,
-      ...darkShadows.sm,
+      backgroundColor: colors.surface,
+      color: colors.text,
+      borderWidth: borderWidth.thin,
+      borderColor: colors.border,
     },
     secondaryHover: {
-      backgroundColor: colors.secondaryHover,
-      ...darkShadows.md,
+      backgroundColor: colors.surfaceHover,
+      borderColor: colors.borderDark,
     },
     secondaryActive: {
-      backgroundColor: colors.secondaryActive,
-      ...darkShadows.sm,
+      backgroundColor: colors.surfacePressed,
     },
     secondaryDisabled: {
-      backgroundColor: colors.primaryDisabled,
-      color: colors.textTertiary,
-      ...darkShadows.none,
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+      borderColor: colors.border,
     },
     
     // Variant: Success
     success: {
       backgroundColor: colors.success,
       color: palette.white,
-      ...darkShadows.sm,
     },
     successHover: {
-      backgroundColor: palette.green400,
-      ...darkShadows.md,
+      backgroundColor: colors.successDark,
+    },
+    successDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
     },
     
-    // Variant: Error
+    // Variant: Error/Danger
     error: {
       backgroundColor: colors.error,
       color: palette.white,
-      ...darkShadows.sm,
     },
     errorHover: {
-      backgroundColor: palette.red400,
-      ...darkShadows.md,
+      backgroundColor: colors.errorDark,
+    },
+    errorDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    danger: {
+      backgroundColor: colors.error,
+      color: palette.white,
     },
     
     // Variant: Warning
     warning: {
       backgroundColor: colors.warning,
       color: colors.text,
-      ...darkShadows.sm,
     },
     warningHover: {
-      backgroundColor: palette.yellow400,
-      ...darkShadows.md,
+      backgroundColor: colors.warningDark,
+    },
+    warningDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
     },
     
-    // Variant: Ghost
+    // Variant: Info
+    info: {
+      backgroundColor: colors.info,
+      color: palette.white,
+    },
+    infoHover: {
+      backgroundColor: colors.infoDark,
+    },
+    infoDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Ghost (transparent background)
     ghost: {
       backgroundColor: 'transparent',
-      color: colors.primary,
+      color: colors.text,
     },
     ghostHover: {
-      backgroundColor: colors.backgroundSecondary,
+      backgroundColor: colors.surfaceHover,
     },
     ghostActive: {
-      backgroundColor: colors.border,
+      backgroundColor: colors.surfacePressed,
+    },
+    ghostDisabled: {
+      color: colors.textDisabled,
     },
     
-    // Variant: Link
+    // Variant: Link (text only)
     link: {
       backgroundColor: 'transparent',
       color: colors.link,
-      paddingVertical: spacing.tiny,
-      paddingHorizontal: spacing.tiny,
+      paddingHorizontal: 0,
+      paddingVertical: 0,
       minHeight: 'auto',
     },
     linkHover: {
       color: colors.linkHover,
       textDecorationLine: 'underline',
+    },
+    linkDisabled: {
+      color: colors.textDisabled,
     },
     
     // Variant: Outline
@@ -352,6 +258,158 @@ const createDarkButtonStyles = () => {
     outlineHover: {
       backgroundColor: colors.primary,
       color: palette.white,
+    },
+    outlineDisabled: {
+      borderColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+  };
+};
+
+// Dark theme button variants
+const createDarkButtonStyles = () => {
+  const colors = darkColors;
+  
+  return {
+    // Variant: Primary
+    primary: {
+      backgroundColor: colors.primary,
+      color: palette.white,
+      ...darkShadows.button,
+    },
+    primaryHover: {
+      backgroundColor: colors.primaryLight,
+    },
+    primaryActive: {
+      backgroundColor: colors.primaryLight,
+      ...darkShadows.buttonPressed,
+    },
+    primaryDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Secondary
+    secondary: {
+      backgroundColor: colors.surface,
+      color: colors.text,
+      borderWidth: borderWidth.thin,
+      borderColor: colors.border,
+    },
+    secondaryHover: {
+      backgroundColor: colors.surfaceHover,
+      borderColor: colors.borderLight,
+    },
+    secondaryActive: {
+      backgroundColor: colors.surfacePressed,
+    },
+    secondaryDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+      borderColor: colors.border,
+    },
+    
+    // Variant: Success
+    success: {
+      backgroundColor: colors.success,
+      color: palette.white,
+    },
+    successHover: {
+      backgroundColor: colors.successLight,
+    },
+    successDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Error/Danger
+    error: {
+      backgroundColor: colors.error,
+      color: palette.white,
+    },
+    errorHover: {
+      backgroundColor: colors.errorLight,
+    },
+    errorDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    danger: {
+      backgroundColor: colors.error,
+      color: palette.white,
+    },
+    
+    // Variant: Warning
+    warning: {
+      backgroundColor: colors.warning,
+      color: palette.black,
+    },
+    warningHover: {
+      backgroundColor: colors.warningLight,
+    },
+    warningDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Info
+    info: {
+      backgroundColor: colors.info,
+      color: palette.white,
+    },
+    infoHover: {
+      backgroundColor: colors.infoLight,
+    },
+    infoDisabled: {
+      backgroundColor: colors.disabled,
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Ghost (transparent background)
+    ghost: {
+      backgroundColor: 'transparent',
+      color: colors.text,
+    },
+    ghostHover: {
+      backgroundColor: colors.surfaceHover,
+    },
+    ghostActive: {
+      backgroundColor: colors.surfacePressed,
+    },
+    ghostDisabled: {
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Link (text only)
+    link: {
+      backgroundColor: 'transparent',
+      color: colors.link,
+      paddingHorizontal: 0,
+      paddingVertical: 0,
+      minHeight: 'auto',
+    },
+    linkHover: {
+      color: colors.linkHover,
+      textDecorationLine: 'underline',
+    },
+    linkDisabled: {
+      color: colors.textDisabled,
+    },
+    
+    // Variant: Outline
+    outline: {
+      backgroundColor: 'transparent',
+      borderWidth: borderWidth.thin,
+      borderColor: colors.primary,
+      color: colors.primary,
+    },
+    outlineHover: {
+      backgroundColor: colors.primary,
+      color: palette.white,
+    },
+    outlineDisabled: {
+      borderColor: colors.disabled,
+      color: colors.textDisabled,
     },
   };
 };
@@ -499,4 +557,4 @@ export const buttonPresets = {
 export const lightButtonStyles = createLightButtonStyles();
 export const darkButtonStyles = createDarkButtonStyles();
 
-// 9,547 characters
+// Character count: 9,889
