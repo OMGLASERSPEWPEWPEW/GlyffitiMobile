@@ -1,29 +1,93 @@
 // src/components/common/Header.js
 // Path: src/components/common/Header.js
-
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../styles/tokens';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
-const Header = ({ title, leftAction, rightAction, leftIcon, rightIcon }) => {
+const Header = ({ 
+  title, 
+  leftAction, 
+  rightAction, 
+  leftIcon, 
+  rightIcon,
+  variant = 'standard', // 'standard', 'large', 'compact', 'modal'
+  elevated = false,
+  transparent = false
+}) => {
+  const { isDark, components } = useTheme();
+  
+  // Get pre-computed navigation styles from your design system
+  const navStyles = components.navigation;
+  
+  // Determine which header style to use based on variant
+  const getHeaderContainer = () => {
+    let baseStyle = navStyles.base; // Base header style
+    
+    // Apply variant
+    switch (variant) {
+      case 'large':
+        baseStyle = [baseStyle, navStyles.large];
+        break;
+      case 'compact':
+        baseStyle = [baseStyle, navStyles.compact];
+        break;
+      case 'modal':
+        baseStyle = [baseStyle, navStyles.modal];
+        break;
+      default:
+        baseStyle = [baseStyle, navStyles.standard];
+    }
+    
+    // Apply elevation
+    if (elevated) {
+      baseStyle = [baseStyle, navStyles.elevated];
+    }
+    
+    // Apply transparency
+    if (transparent) {
+      baseStyle = [baseStyle, navStyles.transparent];
+    }
+    
+    return baseStyle;
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.leftContainer}>
+    <View style={getHeaderContainer()}>
+      {/* Left Section */}
+      <View style={navStyles.leftSection}>
         {leftAction && (
-          <TouchableOpacity onPress={leftAction} style={styles.iconButton}>
-            {leftIcon || <Text style={styles.iconText}>←</Text>}
+          <TouchableOpacity 
+            onPress={leftAction} 
+            style={navStyles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            {leftIcon || <Text style={navStyles.iconText}>←</Text>}
           </TouchableOpacity>
         )}
       </View>
-
-      <View style={styles.centerContainer}>
-        <Text style={styles.title}>{title}</Text>
+      
+      {/* Center Section */}
+      <View style={navStyles.centerSection}>
+        <Text 
+          style={navStyles.title}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {title}
+        </Text>
       </View>
-
-      <View style={styles.rightContainer}>
+      
+      {/* Right Section */}
+      <View style={navStyles.rightSection}>
         {rightAction && (
-          <TouchableOpacity onPress={rightAction} style={styles.iconButton}>
-            {rightIcon || <Text style={styles.iconText}>⚙️</Text>}
+          <TouchableOpacity 
+            onPress={rightAction} 
+            style={navStyles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Header action"
+          >
+            {rightIcon || <Text style={navStyles.iconText}>⚙️</Text>}
           </TouchableOpacity>
         )}
       </View>
@@ -31,46 +95,6 @@ const Header = ({ title, leftAction, rightAction, leftIcon, rightIcon }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.medium,
-    paddingVertical: spacing.small,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  leftContainer: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  centerContainer: {
-    flex: 2,
-    alignItems: 'center',
-  },
-  rightContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  title: {
-    fontSize: typography.fontSize?.lg ?? 18, // was fonts.sizes.large
-    color: colors.text,
-    // Prefer explicit family from tokens over weights when you have dedicated faces:
-    fontFamily: typography.fontFamilyBold ?? typography.fontFamily,
-    // If you rely on weights instead of font families, also set:
-    fontWeight: typography.fontWeight?.bold ?? '700',
-  },
-  iconButton: {
-    padding: spacing.small,
-  },
-  iconText: {
-    fontSize: typography.fontSize?.lg ?? 18, // was fonts.sizes.large
-    color: colors.primary,
-    fontFamily: typography.fontFamily,
-    fontWeight: typography.fontWeight?.medium ?? '600',
-  },
-});
-
 export default Header;
+
+// Character count: 1,811

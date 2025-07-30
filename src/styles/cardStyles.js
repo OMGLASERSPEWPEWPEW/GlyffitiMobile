@@ -1,7 +1,7 @@
 // src/styles/cardStyles.js
 // Path: src/styles/cardStyles.js
 import { StyleSheet } from 'react-native';
-import { spacing, typography } from '.';
+import { spacing, typography } from './tokens';
 
 export const cardStyles = StyleSheet.create({
   // StatusCard styles

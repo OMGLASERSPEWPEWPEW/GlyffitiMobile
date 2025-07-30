@@ -1,7 +1,7 @@
 // src/styles/storyViewerStyles.js
 // Path: src/styles/storyViewerStyles.js
 import { StyleSheet } from 'react-native';
-import { colors, spacing } from '.';
+import { colors, spacing } from './tokens';
 
 export const storyViewerStyles = StyleSheet.create({
   container: {
