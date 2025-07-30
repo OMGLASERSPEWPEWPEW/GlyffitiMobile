@@ -1,10 +1,12 @@
 // src/components/publishing/ProgressBar.js
 // Path: src/components/publishing/ProgressBar.js
+
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Card } from '../shared';
-import { publishingStyles } from '../../styles/publishingStyles';
-import { spacing } from '../../styles/tokens';
+import { getContentStyles, createTitleStyle } from '../../styles/components/content';
+import { getCardStyles } from '../../styles/components/cards';
+import { spacing, lightColors, darkColors } from '../../styles/tokens';
 
 export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   if (!publishing || !progress) {
@@ -16,6 +18,36 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   const progressPercent = progress.progress || 0;
   const stage = progress.stage || 'publishing';
   
+  // Get theme-aware styles
+  const contentStyles = getContentStyles(isDarkMode);
+  const cardStyles = getCardStyles(isDarkMode);
+  
+  // Progress bar colors using design tokens
+  const progressColors = {
+    background: isDarkMode ? darkColors.backgroundSecondary : lightColors.backgroundSecondary,
+    fill: isDarkMode ? darkColors.success : lightColors.success,
+  };
+
+  // Status message based on stage
+  const getStatusMessage = () => {
+    switch (stage) {
+      case 'preparing':
+        return '📋 Preparing content...';
+      case 'processing':
+        return '🔄 Processing glyphs...';
+      case 'publishing':
+        return `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`;
+      case 'creating_scroll':
+        return '📜 Creating scroll manifest...';
+      case 'completed':
+        return '✅ Publishing complete!';
+      case 'failed':
+        return '❌ Publishing failed';
+      default:
+        return `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`;
+    }
+  };
+
   return (
     <Card
       isDarkMode={isDarkMode}
@@ -24,46 +56,57 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
       marginBottom={spacing.medium}
       marginHorizontal={0}
     >
+      {/* Progress Title using content styles */}
       <Text style={[
-        publishingStyles.progressTitle,
-        { color: isDarkMode ? '#e5e7eb' : '#1a1a1a' }
+        createTitleStyle('small', isDarkMode),
+        {
+          marginBottom: spacing.medium,
+          fontSize: 16,
+          fontWeight: '600',
+        }
       ]}>
-        {stage === 'preparing' && '📋 Preparing content...'}
-        {stage === 'processing' && '🔄 Processing glyphs...'}
-        {stage === 'publishing' && `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`}
-        {stage === 'creating_scroll' && '📜 Creating scroll manifest...'}
-        {stage === 'completed' && '✅ Publishing complete!'}
-        {stage === 'failed' && '❌ Publishing failed'}
-        {!['preparing', 'processing', 'publishing', 'creating_scroll', 'completed', 'failed'].includes(stage) && 
-         `📤 Publishing glyph ${currentGlyph}/${totalGlyphs}...`}
+        {getStatusMessage()}
       </Text>
       
-      <View style={[
-        publishingStyles.progressBarContainer,
-        { backgroundColor: isDarkMode ? '#374151' : '#e9ecef' }
-      ]}>
-        <View 
-          style={[
-            publishingStyles.progressBar,
-            { 
-              width: `${Math.max(0, Math.min(100, progressPercent))}%`,
-              backgroundColor: isDarkMode ? '#10b981' : '#28a745'
-            }
-          ]}
-        />
+      {/* Progress Bar Container */}
+      <View style={{
+        height: 8,
+        backgroundColor: progressColors.background,
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginBottom: spacing.small,
+      }}>
+        {/* Progress Bar Fill */}
+        <View style={{
+          height: '100%',
+          width: `${Math.max(0, Math.min(100, progressPercent))}%`,
+          backgroundColor: progressColors.fill,
+          borderRadius: 4,
+          // Smooth transition animation would go here in a real app
+        }} />
       </View>
       
+      {/* Progress Percentage Text */}
       <Text style={[
-        publishingStyles.progressText,
-        { color: isDarkMode ? '#9ca3af' : '#495057' }
+        {
+          color: contentStyles.secondaryText.color,
+          fontSize: 14,
+          fontWeight: '500',
+          marginBottom: spacing.small,
+        }
       ]}>
         {progressPercent}% Complete
       </Text>
       
+      {/* Compression Stats (if available) */}
       {progress.compressionStats && (
         <Text style={[
-          publishingStyles.compressionText,
-          { color: isDarkMode ? '#9ca3af' : '#495057' }
+          {
+            color: contentStyles.secondaryText.color,
+            fontSize: 13,
+            opacity: 0.8,
+            fontStyle: 'italic',
+          }
         ]}>
           💾 Compressed {progress.compressionStats.percentSaved}% 
           ({progress.compressionStats.spaceSaved} bytes saved)
@@ -73,4 +116,4 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   );
 };
 
-// Character count: 1842
+// Character count: 2,867
