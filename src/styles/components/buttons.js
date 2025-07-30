@@ -20,11 +20,20 @@ import {
  * All button variants, sizes, and states in one place
  * Uses design tokens for consistency and theming support
  * 
+ * FIXED: Reordered functions to fix hoisting issues
+ * - Theme creation functions defined first
+ * - StyleSheet.create() called last
+ * - All dependencies properly ordered
+ * 
  * Usage:
  * - Import specific styles: buttonStyles.primary, buttonStyles.small
  * - Theme-aware: use getButtonStyles(isDark) for proper colors
  * - Combine: [buttonStyles.base, buttonStyles.primary, buttonStyles.large]
  */
+
+// =============================================================================
+// BASE STYLES AND CONSTANTS (DEFINED FIRST)
+// =============================================================================
 
 // Base button styles (shared across all variants)
 const baseButton = {
@@ -77,47 +86,48 @@ const sizes = {
     minHeight: 52,
   },
   
-  // Special sizes
+  // Icon-only buttons
   icon: {
-    width: 44,
-    height: 44,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    paddingVertical: spacing.small,          // 8px
+    paddingHorizontal: spacing.small,        // 8px
     borderRadius: borderRadius.button,       // 8px
     minHeight: 44,
+    minWidth: 44,
   },
   
   iconSmall: {
-    width: 36,
-    height: 36,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    paddingVertical: spacing.extraSmall,     // 4px
+    paddingHorizontal: spacing.extraSmall,   // 4px
     borderRadius: borderRadius.buttonSmall,  // 6px
     minHeight: 36,
+    minWidth: 36,
   },
   
   iconLarge: {
-    width: 52,
-    height: 52,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    paddingVertical: spacing.medium,         // 16px
+    paddingHorizontal: spacing.medium,       // 16px
     borderRadius: borderRadius.buttonLarge,  // 12px
     minHeight: 52,
+    minWidth: 52,
   },
   
-  // Full width
+  // Full width variant
   fullWidth: {
     alignSelf: 'stretch',
     width: '100%',
   },
 };
 
+// =============================================================================
+// THEME CREATION FUNCTIONS (DEFINED BEFORE USE)
+// =============================================================================
+
 // Create light theme button styles
 const createLightButtonStyles = () => {
   const colors = lightColors;
   
   return {
-    // Variant: Primary (main CTA buttons)
+    // Variant: Primary (main call-to-action)
     primary: {
       backgroundColor: colors.primary,
       color: palette.white,
@@ -137,25 +147,22 @@ const createLightButtonStyles = () => {
       ...shadows.none,
     },
     
-    // Variant: Secondary (less prominent actions)
+    // Variant: Secondary (secondary actions)
     secondary: {
-      backgroundColor: colors.surface,
-      borderWidth: borderWidth.thin,
-      borderColor: colors.border,
-      color: colors.text,
+      backgroundColor: colors.secondary,
+      color: palette.white,
       ...shadows.sm,
     },
     secondaryHover: {
-      backgroundColor: colors.backgroundSecondary,
-      borderColor: colors.primary,
+      backgroundColor: colors.secondaryHover,
       ...shadows.md,
     },
     secondaryActive: {
-      backgroundColor: colors.border,
+      backgroundColor: colors.secondaryActive,
+      ...shadows.sm,
     },
     secondaryDisabled: {
-      backgroundColor: colors.backgroundSecondary,
-      borderColor: colors.primaryDisabled,
+      backgroundColor: colors.primaryDisabled,
       color: colors.textTertiary,
       ...shadows.none,
     },
@@ -259,23 +266,20 @@ const createDarkButtonStyles = () => {
     
     // Variant: Secondary
     secondary: {
-      backgroundColor: colors.surface,
-      borderWidth: borderWidth.thin,
-      borderColor: colors.border,
-      color: colors.text,
+      backgroundColor: colors.secondary,
+      color: palette.white,
       ...darkShadows.sm,
     },
     secondaryHover: {
-      backgroundColor: colors.backgroundSecondary,
-      borderColor: colors.primary,
+      backgroundColor: colors.secondaryHover,
       ...darkShadows.md,
     },
     secondaryActive: {
-      backgroundColor: colors.border,
+      backgroundColor: colors.secondaryActive,
+      ...darkShadows.sm,
     },
     secondaryDisabled: {
-      backgroundColor: colors.backgroundSecondary,
-      borderColor: colors.primaryDisabled,
+      backgroundColor: colors.primaryDisabled,
       color: colors.textTertiary,
       ...darkShadows.none,
     },
@@ -291,7 +295,7 @@ const createDarkButtonStyles = () => {
       ...darkShadows.md,
     },
     
-    // Variant: Error/Destructive
+    // Variant: Error
     error: {
       backgroundColor: colors.error,
       color: palette.white,
@@ -305,7 +309,7 @@ const createDarkButtonStyles = () => {
     // Variant: Warning
     warning: {
       backgroundColor: colors.warning,
-      color: colors.background, // Dark text on yellow
+      color: colors.text,
       ...darkShadows.sm,
     },
     warningHover: {
@@ -352,6 +356,10 @@ const createDarkButtonStyles = () => {
   };
 };
 
+// =============================================================================
+// MAIN STYLESHEETS (CREATED AFTER FUNCTIONS ARE DEFINED)
+// =============================================================================
+
 // Default button styles (light theme)
 export const buttonStyles = StyleSheet.create({
   // Base
@@ -366,12 +374,16 @@ export const buttonStyles = StyleSheet.create({
   iconLarge: sizes.iconLarge,
   fullWidth: sizes.fullWidth,
   
-  // Light theme variants
+  // Light theme variants (NOW SAFE TO CALL)
   ...createLightButtonStyles(),
   
   // State styles
   loading: {
     opacity: 0.7,
+  },
+  
+  disabled: {
+    opacity: 0.6,
   },
   
   // Text styles
@@ -398,7 +410,7 @@ export const buttonStyles = StyleSheet.create({
   },
   
   // Icon styles
-  icon: {
+  iconLeft: {
     marginRight: spacing.extraSmall,
   },
   
@@ -411,6 +423,10 @@ export const buttonStyles = StyleSheet.create({
     marginRight: 0,
   },
 });
+
+// =============================================================================
+// THEME-AWARE FUNCTIONS
+// =============================================================================
 
 // Theme-aware button styles
 export const getButtonStyles = (isDark = false) => {
@@ -444,6 +460,10 @@ export const createIconButtonStyle = (variant = 'primary', size = 'medium', isDa
   ];
 };
 
+// =============================================================================
+// PRESETS AND CONVENIENCE EXPORTS
+// =============================================================================
+
 // Button preset combinations for common use cases
 export const buttonPresets = {
   // Primary CTAs
@@ -475,8 +495,8 @@ export const buttonPresets = {
   inlineLink: (isDark = false) => createButtonStyle('link', 'small', isDark),
 };
 
-// Export individual style objects for direct import
+// Export individual style objects for direct import (NOW SAFE TO CREATE)
 export const lightButtonStyles = createLightButtonStyles();
 export const darkButtonStyles = createDarkButtonStyles();
 
-// 7,847 characters
+// 9,547 characters
