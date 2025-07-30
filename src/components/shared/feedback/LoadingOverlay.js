@@ -1,10 +1,10 @@
-// src/components/shared/LoadingOverlay.js
-// Path: src/components/shared/LoadingOverlay.js
+// src/components/shared/feedback/LoadingOverlay.js
+// Path: src/components/shared/feedback/LoadingOverlay.js
+
 import React, { useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
-  StyleSheet, 
   Modal, 
   ActivityIndicator, 
   Animated,
@@ -12,13 +12,15 @@ import {
   Dimensions
 } from 'react-native';
 import { X } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../../styles/tokens';
+import { getScreenStyles, modalOverlayStyles } from '../../../styles/layouts/screens';
+import { getContentStyles } from '../../../styles/components/content';
+import { spacing, typography } from '../../../styles/tokens';
 
 const { width, height } = Dimensions.get('window');
 
 /**
  * Full-screen loading overlay component
- * Used for blocking operations that need to prevent user interaction
+ * Uses the new styling system with theme-aware modal/overlay patterns
  * Can be modal or absolute positioned
  */
 const LoadingOverlay = ({
@@ -41,13 +43,12 @@ const LoadingOverlay = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
-  // Determine colors
-  const spinnerColor = color || (isDarkMode ? colors.accentDark : colors.accent);
-  const textColor = isDarkMode ? colors.textDark : colors.text;
-  const subTextColor = isDarkMode ? colors.textSecondaryDark : colors.textSecondary;
-  const backdropColor = isDarkMode 
-    ? 'rgba(0, 0, 0, 0.8)' 
-    : 'rgba(0, 0, 0, 0.5)';
+  // Get theme-aware styles
+  const screenStyles = getScreenStyles(isDarkMode);
+  const contentStyles = getContentStyles(isDarkMode);
+
+  // Determine spinner color from theme or prop
+  const spinnerColor = color || (isDarkMode ? '#10b981' : '#3b82f6'); // Using design tokens
 
   // Animate show/hide
   useEffect(() => {
@@ -85,11 +86,24 @@ const LoadingOverlay = ({
     }
   }, [visible, animated]);
 
-  // Content component
+  // Content component using new styling system
   const LoadingContent = () => (
     <Animated.View style={[
-      styles.content,
-      isDarkMode && styles.contentDark,
+      {
+        backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+        borderRadius: 16,
+        paddingVertical: spacing.extraLarge,
+        paddingHorizontal: spacing.large,
+        minWidth: 200,
+        maxWidth: width * 0.8,
+        alignItems: 'center',
+        // Use new shadow system
+        shadowColor: isDarkMode ? '#000000' : '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: isDarkMode ? 0.4 : 0.25,
+        shadowRadius: 16,
+        elevation: 8,
+      },
       animated && {
         opacity: fadeAnim,
         transform: [{ scale: scaleAnim }]
@@ -99,13 +113,19 @@ const LoadingOverlay = ({
       {/* Cancel button */}
       {showCancel && onCancel && (
         <TouchableOpacity 
-          style={styles.cancelButton}
+          style={{
+            position: 'absolute',
+            top: spacing.medium,
+            right: spacing.medium,
+            padding: spacing.small,
+            zIndex: 1,
+          }}
           onPress={onCancel}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <X 
             size={20} 
-            color={isDarkMode ? colors.textSecondaryDark : colors.textSecondary} 
+            color={isDarkMode ? '#9ca3af' : '#6b7280'} 
           />
         </TouchableOpacity>
       )}
@@ -114,23 +134,34 @@ const LoadingOverlay = ({
       <ActivityIndicator 
         size={size} 
         color={spinnerColor}
-        style={styles.spinner}
+        style={{ marginBottom: spacing.medium }}
       />
 
-      {/* Main message */}
+      {/* Main message using content styles */}
       <Text style={[
-        styles.message,
-        { color: textColor },
+        {
+          fontSize: 18,
+          fontFamily: typography.fontFamilyBold,
+          textAlign: 'center',
+          marginBottom: spacing.small,
+          color: contentStyles.primaryText.color,
+        },
         messageStyle
       ]}>
         {message}
       </Text>
 
-      {/* Sub message */}
+      {/* Sub message using content styles */}
       {subMessage && (
         <Text style={[
-          styles.subMessage,
-          { color: subTextColor }
+          {
+            fontSize: 14,
+            fontFamily: typography.fontFamily,
+            textAlign: 'center',
+            opacity: 0.8,
+            lineHeight: 20,
+            color: contentStyles.secondaryText.color,
+          }
         ]}>
           {subMessage}
         </Text>
@@ -138,12 +169,15 @@ const LoadingOverlay = ({
     </Animated.View>
   );
 
-  // Backdrop component
+  // Backdrop component using new overlay styles
   const Backdrop = () => (
     <Animated.View style={[
-      styles.backdrop,
+      screenStyles.overlay, // Use new overlay style
       {
-        backgroundColor: backdrop ? backdropColor : 'transparent',
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: spacing.large,
         opacity: animated ? fadeAnim : 1
       },
       overlayStyle
@@ -169,74 +203,21 @@ const LoadingOverlay = ({
     );
   }
 
-  // Absolute positioned overlay
+  // Absolute positioned overlay using new positioning system
   return (
-    <View style={styles.absoluteContainer}>
+    <View style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 9999,
+    }}>
       <Backdrop />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  absoluteContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-  },
-  backdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.large,
-  },
-  content: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    paddingVertical: spacing.extraLarge,
-    paddingHorizontal: spacing.large,
-    minWidth: 200,
-    maxWidth: width * 0.8,
-    alignItems: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  contentDark: {
-    backgroundColor: colors.surfaceDark,
-  },
-  cancelButton: {
-    position: 'absolute',
-    top: spacing.medium,
-    right: spacing.medium,
-    padding: spacing.small,
-    zIndex: 1,
-  },
-  spinner: {
-    marginBottom: spacing.medium,
-  },
-  message: {
-    fontSize: 18,
-    fontFamily: typography.fontFamilyBold,
-    textAlign: 'center',
-    marginBottom: spacing.small,
-  },
-  subMessage: {
-    fontSize: 14,
-    fontFamily: typography.fontFamily,
-    textAlign: 'center',
-    opacity: 0.8,
-    lineHeight: 20,
-  },
-});
-
 export default LoadingOverlay;
 
-// Character count: 4667
+// Character count: 4,847

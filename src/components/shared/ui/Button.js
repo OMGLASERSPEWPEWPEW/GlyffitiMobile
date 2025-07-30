@@ -1,13 +1,18 @@
-// src/components/shared/Button.js
-// Path: src/components/shared/Button.js
+// src/components/shared/ui/Button.js
+// Path: src/components/shared/ui/Button.js
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../../styles/tokens';
+import { TouchableOpacity, Text } from 'react-native';
+import { getButtonStyles, createButtonStyle } from '../../../styles/components';
 
 /**
  * Standardized button component with consistent styling
  * Replaces scattered TouchableOpacity button usage throughout the app
  * Supports multiple variants, sizes, and states
+ * 
+ * MIGRATED: Now uses the new design system button components
+ * - Replaced manual styling with getButtonStyles() and createButtonStyle()
+ * - Added proper theme-aware styling
+ * - Maintained exact same component interface for backwards compatibility
  */
 const Button = ({
   title,
@@ -24,107 +29,54 @@ const Button = ({
   activeOpacity = 0.7,
   ...otherProps
 }) => {
-  // Get variant-specific colors
-  const getVariantColors = () => {
-    const variants = {
-      primary: {
-        background: isDarkMode ? '#3b82f6' : '#007bff',
-        backgroundDisabled: '#6c757d',
-        text: '#ffffff',
-        textDisabled: '#ffffff',
-      },
-      secondary: {
-        background: isDarkMode ? '#6b7280' : '#6c757d',
-        backgroundDisabled: '#6c757d',
-        text: '#ffffff',
-        textDisabled: '#ffffff',
-      },
-      success: {
-        background: isDarkMode ? '#10b981' : '#28a745',
-        backgroundDisabled: '#6c757d',
-        text: '#ffffff',
-        textDisabled: '#ffffff',
-      },
-      warning: {
-        background: isDarkMode ? '#f59e0b' : '#ffc107',
-        backgroundDisabled: '#6c757d',
-        text: isDarkMode ? '#ffffff' : '#212529',
-        textDisabled: '#ffffff',
-      },
-      danger: {
-        background: isDarkMode ? '#ef4444' : '#dc3545',
-        backgroundDisabled: '#6c757d',
-        text: '#ffffff',
-        textDisabled: '#ffffff',
-      },
-      info: {
-        background: isDarkMode ? '#06b6d4' : '#17a2b8',
-        backgroundDisabled: '#6c757d',
-        text: '#ffffff',
-        textDisabled: '#ffffff',
-      },
+  // Map legacy variant names to new design system variants
+  const mapVariant = (originalVariant) => {
+    const variantMap = {
+      primary: 'primary',
+      secondary: 'secondary', 
+      success: 'success',
+      warning: 'warning',
+      danger: 'error',    // Map danger -> error
+      info: 'primary',    // Map info -> primary (closest match)
     };
-    return variants[variant] || variants.primary;
+    return variantMap[originalVariant] || 'primary';
   };
 
-  // Get size-specific styling
-  const getSizeStyles = () => {
-    const sizes = {
-      small: {
-        paddingVertical: spacing.small,
-        paddingHorizontal: spacing.medium,
-        fontSize: 14,
-        borderRadius: 6,
-      },
-      medium: {
-        paddingVertical: spacing.medium,
-        paddingHorizontal: spacing.large,
-        fontSize: 16,
-        borderRadius: 8,
-      },
-      large: {
-        paddingVertical: spacing.large,
-        paddingHorizontal: spacing.extraLarge || spacing.large * 1.5,
-        fontSize: 18,
-        borderRadius: 12,
-      },
-    };
-    return sizes[size] || sizes.medium;
-  };
-
-  const variantColors = getVariantColors();
-  const sizeStyles = getSizeStyles();
+  // Get theme-aware button styles
+  const buttonStyles = getButtonStyles(isDarkMode);
   const isDisabled = disabled || loading;
+  const mappedVariant = mapVariant(variant);
 
-  // Button style configuration
-  const buttonStyle = [
-    styles.button,
-    {
-      backgroundColor: isDisabled ? variantColors.backgroundDisabled : variantColors.background,
-      paddingVertical: sizeStyles.paddingVertical,
-      paddingHorizontal: sizeStyles.paddingHorizontal,
-      borderRadius: sizeStyles.borderRadius,
-    },
-    isDisabled && styles.disabled,
+  // Create button style using design system
+  const buttonStyle = createButtonStyle(mappedVariant, size, isDarkMode);
+  
+  // Get text styles from the design system
+  const textSizeMap = {
+    small: buttonStyles.textSmall,
+    medium: buttonStyles.textMedium,
+    large: buttonStyles.textLarge,
+  };
+
+  // Build final styles
+  const finalButtonStyle = [
+    ...buttonStyle,
+    isDisabled && buttonStyles.disabled,
+    loading && buttonStyles.loading,
     style
   ];
 
-  // Text style configuration  
-  const buttonTextStyle = [
-    styles.buttonText,
-    {
-      color: isDisabled ? variantColors.textDisabled : variantColors.text,
-      fontSize: sizeStyles.fontSize,
-    },
+  const finalTextStyle = [
+    buttonStyles.text,
+    textSizeMap[size] || textSizeMap.medium,
     textStyle
   ];
 
-  // Loading text replacement
+  // Loading text replacement - preserve exact original behavior
   const displayText = loading ? '⏳ Loading...' : title;
 
   return (
     <TouchableOpacity
-      style={buttonStyle}
+      style={finalButtonStyle}
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={isDisabled ? 1 : activeOpacity}
@@ -134,7 +86,7 @@ const Button = ({
       {children ? (
         children
       ) : (
-        <Text style={buttonTextStyle}>
+        <Text style={finalTextStyle}>
           {displayText}
         </Text>
       )}
@@ -142,29 +94,6 @@ const Button = ({
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  disabled: {
-    opacity: 0.6,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  buttonText: {
-    fontFamily: typography.fontFamily,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-});
-
 export default Button;
 
-// Character count: 3742
+// Character count: 2,157
