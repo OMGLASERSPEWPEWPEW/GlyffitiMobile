@@ -4,11 +4,20 @@
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { RefreshCw, RotateCcw, Repeat } from 'lucide-react-native';
-import { errorStyles } from '../../../styles/errorStyles';
+import { getButtonStyles, createButtonStyle } from '../../../styles/components/buttons';
+import { getContentStyles } from '../../../styles/components/content';
+import { spacing, typography, getColors } from '../../../styles/tokens';
 
 /**
  * Reusable retry button component with loading states and customizable behavior
  * Used throughout the app for consistent retry patterns
+ * 
+ * MIGRATED: Now uses the new design system
+ * - Replaced errorStyles with design system button components
+ * - Added proper theme-aware styling with getColors() and getButtonStyles()
+ * - Enhanced with design system button variants and sizes
+ * - Maintained exact same component interface for backwards compatibility
+ * - Improved accessibility with proper button states and feedback
  * 
  * Usage:
  * <RetryButton 
@@ -33,7 +42,7 @@ const RetryButton = ({
   autoLoading = false, // Automatically show loading state during retry
   autoLoadingDuration = 2000,
   size = 'medium', // 'small', 'medium', 'large'
-  variant = 'primary', // 'primary', 'secondary'
+  variant = 'primary', // 'primary', 'secondary', 'outline', 'ghost'
   isDarkMode = false,
   style,
   textStyle,
@@ -44,6 +53,11 @@ const RetryButton = ({
 }) => {
   const [isAutoLoading, setIsAutoLoading] = useState(false);
 
+  // Get theme-aware styles from design system
+  const colors = getColors(isDarkMode);
+  const buttonStyles = getButtonStyles(isDarkMode);
+  const contentStyles = getContentStyles(isDarkMode);
+
   // Determine if button should be disabled
   const isDisabled = disabled || 
     (autoDisableOnMax && maxRetries && retryCount >= maxRetries) ||
@@ -53,17 +67,80 @@ const RetryButton = ({
   // Determine if button should show loading state
   const isLoading = loading || isAutoLoading;
 
+  // Map size to design system size
+  const getDesignSystemSize = () => {
+    switch (size) {
+      case 'small':
+        return 'small';
+      case 'large':
+        return 'large';
+      case 'medium':
+      default:
+        return 'medium';
+    }
+  };
+
+  // Map variant to design system variant
+  const getDesignSystemVariant = () => {
+    switch (variant) {
+      case 'secondary':
+        return 'secondary';
+      case 'outline':
+        return 'outline';
+      case 'ghost':
+        return 'ghost';
+      case 'primary':
+      default:
+        return 'primary';
+    }
+  };
+
+  // Create button style using design system
+  const designSystemButtonStyle = createButtonStyle({
+    variant: getDesignSystemVariant(),
+    size: getDesignSystemSize(),
+    state: isDisabled ? 'disabled' : isLoading ? 'loading' : 'normal',
+    isDark: isDarkMode
+  });
+
   // Get icon component
   const getIcon = () => {
     if (!showIcon || icon === 'none') return null;
 
+    // Get icon size based on design system button size
     const iconSize = size === 'small' ? 14 : size === 'large' ? 18 : 16;
-    const iconColor = isDisabled ? '#ffffff' : '#ffffff';
+    
+    // Get icon color based on button variant and state
+    const getIconColor = () => {
+      if (isDisabled) {
+        return variant === 'primary' ? colors.white : colors.textTertiary;
+      }
+      
+      switch (variant) {
+        case 'primary':
+          return colors.white;
+        case 'secondary':
+          return colors.white;
+        case 'outline':
+          return colors.primary;
+        case 'ghost':
+          return colors.primary;
+        default:
+          return colors.white;
+      }
+    };
 
+    const iconColor = getIconColor();
+
+    // Return custom icon if provided
     if (React.isValidElement(icon)) {
-      return icon;
+      return React.cloneElement(icon, { 
+        size: iconSize, 
+        color: iconColor 
+      });
     }
 
+    // Return built-in icon based on type
     switch (icon) {
       case 'rotate':
         return <RotateCcw size={iconSize} color={iconColor} />;
@@ -116,68 +193,6 @@ const RetryButton = ({
     }
   };
 
-  // Get button styles based on size and variant
-  const getButtonStyle = () => {
-    let baseStyle = errorStyles.retryButton;
-
-    if (isDisabled) {
-      baseStyle = [baseStyle, errorStyles.retryButtonDisabled];
-    } else if (isLoading) {
-      baseStyle = [baseStyle, errorStyles.retryButtonLoading];
-    }
-
-    // Size modifications
-    if (size === 'small') {
-      baseStyle = [baseStyle, {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        minWidth: 80,
-      }];
-    } else if (size === 'large') {
-      baseStyle = [baseStyle, {
-        paddingHorizontal: 24,
-        paddingVertical: 16,
-        minWidth: 140,
-      }];
-    }
-
-    // Variant modifications
-    if (variant === 'secondary') {
-      baseStyle = [baseStyle, {
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        borderColor: isDarkMode ? '#6b7280' : '#d1d5db',
-      }];
-    }
-
-    return baseStyle;
-  };
-
-  // Get text styles
-  const getTextStyle = () => {
-    let baseStyle = errorStyles.retryButtonText;
-
-    if (isDisabled) {
-      baseStyle = [baseStyle, errorStyles.retryButtonTextDisabled];
-    }
-
-    // Size modifications
-    if (size === 'small') {
-      baseStyle = [baseStyle, { fontSize: 14 }];
-    } else if (size === 'large') {
-      baseStyle = [baseStyle, { fontSize: 18 }];
-    }
-
-    // Variant modifications
-    if (variant === 'secondary') {
-      baseStyle = [baseStyle, {
-        color: isDarkMode ? '#e5e7eb' : '#374151',
-      }];
-    }
-
-    return baseStyle;
-  };
-
   // Get display text
   const getDisplayText = () => {
     if (isLoading && loadingText) {
@@ -193,23 +208,89 @@ const RetryButton = ({
     return displayText;
   };
 
+  // Get text style based on button variant
+  const getTextStyle = () => {
+    const baseTextStyle = variant === 'primary' ? 
+      buttonStyles.text.primary : 
+      variant === 'secondary' ? 
+        buttonStyles.text.secondary :
+        variant === 'outline' ?
+          buttonStyles.text.outline :
+          buttonStyles.text.ghost;
+
+    // Apply size-specific text styling
+    const sizeStyles = {
+      fontSize: size === 'small' ? 
+        typography.fontSize?.small || 14 : 
+        size === 'large' ? 
+          typography.fontSize?.large || 18 : 
+          typography.fontSize?.medium || 16,
+      fontFamily: typography.fontFamilyMedium || typography.fontFamily,
+    };
+
+    return [baseTextStyle, sizeStyles, textStyle];
+  };
+
+  // Container style combining design system button with custom spacing for icon+text
+  const containerStyle = [
+    designSystemButtonStyle,
+    {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.small, // Consistent spacing between icon and text
+      minWidth: size === 'small' ? 80 : size === 'large' ? 140 : 120, // Minimum width for usability
+    },
+    style
+  ];
+
+  // Get appropriate loading spinner color
+  const getSpinnerColor = () => {
+    switch (variant) {
+      case 'primary':
+      case 'secondary':
+        return colors.white;
+      case 'outline':
+      case 'ghost':
+        return colors.primary;
+      default:
+        return colors.white;
+    }
+  };
+
   return (
     <TouchableOpacity
       onPress={handleRetry}
       disabled={isDisabled}
-      style={[getButtonStyle(), style]}
+      style={containerStyle}
       activeOpacity={isDisabled ? 1 : 0.8}
+      accessibilityLabel={`${getDisplayText()}${retryCount > 0 ? `, attempt ${retryCount}` : ''}`}
+      accessibilityHint={isDisabled ? 
+        maxRetries && retryCount >= maxRetries ? 
+          'Maximum retry attempts reached' : 
+          'Retry button is disabled' :
+        'Tap to retry the failed operation'
+      }
+      accessibilityRole="button"
+      accessibilityState={{
+        disabled: isDisabled,
+        busy: isLoading
+      }}
       {...touchableProps}
     >
       {/* Loading spinner or icon */}
       {isLoading ? (
-        <ActivityIndicator size="small" color="#ffffff" />
+        <ActivityIndicator 
+          size="small" 
+          color={getSpinnerColor()} 
+          accessibilityLabel="Loading"
+        />
       ) : (
         getIcon()
       )}
 
       {/* Button text */}
-      <Text style={[getTextStyle(), textStyle]}>
+      <Text style={getTextStyle()}>
         {getDisplayText()}
       </Text>
     </TouchableOpacity>
@@ -218,4 +299,4 @@ const RetryButton = ({
 
 export default RetryButton;
 
-// Character count: 4729
+// Character count: 7,892

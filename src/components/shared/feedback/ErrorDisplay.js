@@ -13,12 +13,21 @@ import {
   RefreshCw,
   ArrowLeft 
 } from 'lucide-react-native';
-import { colors } from '../../../styles/tokens';
-import { errorStyles } from '../../../styles/errorStyles';
+import { getCardStyles, createCardStyle } from '../../../styles/components/cards';
+import { getButtonStyles, createButtonStyle } from '../../../styles/components/buttons';
+import { getContentStyles } from '../../../styles/components/content';
+import { spacing, typography, getColors } from '../../../styles/tokens';
 
 /**
  * Standardized error display component for showing error states
  * Used for network errors, validation errors, load failures, etc.
+ * 
+ * MIGRATED: Now uses the new design system
+ * - Replaced errorStyles with design system components (cards, buttons, content)
+ * - Added proper theme-aware styling with getColors()
+ * - Enhanced with consistent spacing and typography tokens
+ * - Maintained exact same component interface for backwards compatibility
+ * - Added semantic error type styling with design system colors
  * 
  * Usage:
  * <ErrorDisplay 
@@ -47,6 +56,52 @@ const ErrorDisplay = ({
   style,
   ...props
 }) => {
+  // Get theme-aware styles from design system
+  const colors = getColors(isDarkMode);
+  const cardStyles = getCardStyles(isDarkMode);
+  const buttonStyles = getButtonStyles(isDarkMode);
+  const contentStyles = getContentStyles(isDarkMode);
+
+  // Get error color based on type using design system colors
+  const getErrorColor = () => {
+    switch (type) {
+      case 'network':
+        return colors.warning;
+      case 'server':
+        return colors.error;
+      case 'validation':
+        return colors.primary;
+      case 'notFound':
+        return colors.error;
+      case 'permission':
+        return colors.primary;
+      case 'general':
+      default:
+        return colors.error;
+    }
+  };
+
+  // Get error background color with opacity for subtle indication
+  const getErrorBackgroundColor = () => {
+    const baseColor = getErrorColor();
+    // Add subtle background tint based on error type
+    switch (type) {
+      case 'network':
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+      case 'server':
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+      case 'validation':
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+      case 'notFound':
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+      case 'permission':
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+      case 'general':
+      default:
+        return isDarkMode ? colors.surface : colors.backgroundSecondary;
+    }
+  };
+
   // Get icon based on error type
   const getErrorIcon = () => {
     if (icon) return icon;
@@ -70,25 +125,6 @@ const ErrorDisplay = ({
       case 'general':
       default:
         return <AlertTriangle {...iconProps} />;
-    }
-  };
-
-  // Get error color based on type
-  const getErrorColor = () => {
-    switch (type) {
-      case 'network':
-        return isDarkMode ? '#f59e0b' : (colors.warning || '#f59e0b');
-      case 'server':
-        return isDarkMode ? '#ef4444' : (colors.error || '#ef4444');
-      case 'validation':
-        return isDarkMode ? '#3b82f6' : (colors.primary || '#3b82f6');
-      case 'notFound':
-        return isDarkMode ? '#ef4444' : (colors.error || '#ef4444');
-      case 'permission':
-        return isDarkMode ? '#3b82f6' : (colors.primary || '#3b82f6');
-      case 'general':
-      default:
-        return isDarkMode ? '#ef4444' : (colors.error || '#ef4444');
     }
   };
 
@@ -131,92 +167,166 @@ const ErrorDisplay = ({
 
   const { title: displayTitle, message: displayMessage } = getDefaultContent();
 
+  // Create error card style with subtle type-based styling
+  const errorCardStyle = createCardStyle({
+    variant: 'elevated',
+    size: 'medium',
+    isDark: isDarkMode
+  });
+
+  // Create retry button style
+  const retryButtonStyle = createButtonStyle({
+    variant: 'primary',
+    size: 'medium',
+    isDark: isDarkMode
+  });
+
+  // Create secondary button style for go back/custom actions
+  const secondaryButtonStyle = createButtonStyle({
+    variant: 'outline',
+    size: 'medium',
+    isDark: isDarkMode
+  });
+
+  // Container styles
+  const containerStyle = [
+    errorCardStyle,
+    {
+      alignItems: 'center',
+      backgroundColor: getErrorBackgroundColor(),
+      paddingHorizontal: spacing.large,
+      paddingVertical: spacing.extraLarge,
+      maxWidth: 400,
+      width: '100%',
+    },
+    style
+  ];
+
+  // Icon container styles
+  const iconContainerStyle = {
+    marginBottom: spacing.medium,
+  };
+
+  // Title styles using content system
+  const titleStyle = [
+    contentStyles.heading3,
+    {
+      textAlign: 'center',
+      marginBottom: spacing.small,
+      color: colors.text,
+    }
+  ];
+
+  // Message styles using content system
+  const messageStyle = [
+    contentStyles.body,
+    {
+      textAlign: 'center',
+      lineHeight: typography.lineHeight?.relaxed || 22,
+      marginBottom: spacing.large,
+      color: colors.textSecondary,
+    }
+  ];
+
+  // Actions container
+  const actionsContainerStyle = {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.medium,
+    width: '100%',
+    flexWrap: 'wrap',
+  };
+
+  // Button container for consistent sizing
+  const buttonContainerStyle = {
+    minWidth: 120,
+    flex: showRetry && (showGoBack || onCustomAction) ? 1 : 0,
+  };
+
   return (
     <View 
-      style={[
-        errorStyles.displayContainer,
-        isDarkMode && errorStyles.displayContainerDark,
-        style
-      ]}
+      style={containerStyle}
+      accessibilityRole="alert"
+      accessibilityLabel={`Error: ${displayTitle}`}
       {...props}
     >
       {/* Error icon */}
       {showIcon && (
-        <View style={errorStyles.displayIcon}>
+        <View style={iconContainerStyle}>
           {getErrorIcon()}
         </View>
       )}
 
       {/* Error title */}
-      <Text style={[
-        errorStyles.displayTitle,
-        isDarkMode && errorStyles.displayTitleDark
-      ]}>
+      <Text style={titleStyle}>
         {displayTitle}
       </Text>
 
       {/* Error message */}
-      <Text style={[
-        errorStyles.displayMessage,
-        isDarkMode && errorStyles.displayMessageDark
-      ]}>
+      <Text style={messageStyle}>
         {displayMessage}
       </Text>
 
       {/* Action buttons */}
       {(showRetry || showGoBack || onCustomAction) && (
-        <View style={errorStyles.displayActions}>
+        <View style={actionsContainerStyle}>
           {/* Retry button */}
           {showRetry && onRetry && (
-            <TouchableOpacity
-              onPress={onRetry}
-              style={errorStyles.retryButton}
-              activeOpacity={0.8}
-            >
-              <RefreshCw size={16} color="#ffffff" />
-              <Text style={errorStyles.retryButtonText}>
-                {retryText}
-              </Text>
-            </TouchableOpacity>
+            <View style={buttonContainerStyle}>
+              <TouchableOpacity
+                onPress={onRetry}
+                style={retryButtonStyle}
+                activeOpacity={0.8}
+                accessibilityLabel="Retry"
+                accessibilityHint="Attempts to reload or retry the failed operation"
+              >
+                <RefreshCw size={16} color={colors.white} />
+                <Text style={[
+                  buttonStyles.text.primary,
+                  { marginLeft: spacing.small }
+                ]}>
+                  {retryText}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Go back button */}
           {showGoBack && onGoBack && (
-            <TouchableOpacity
-              onPress={onGoBack}
-              style={[
-                errorStyles.boundaryFallbackButton,
-                isDarkMode && errorStyles.boundaryFallbackButtonDark
-              ]}
-              activeOpacity={0.8}
-            >
-              <ArrowLeft size={16} color={isDarkMode ? '#e5e7eb' : colors.text} />
-              <Text style={[
-                errorStyles.boundaryFallbackButtonText,
-                isDarkMode && errorStyles.boundaryFallbackButtonTextDark
-              ]}>
-                {goBackText}
-              </Text>
-            </TouchableOpacity>
+            <View style={buttonContainerStyle}>
+              <TouchableOpacity
+                onPress={onGoBack}
+                style={secondaryButtonStyle}
+                activeOpacity={0.8}
+                accessibilityLabel="Go Back"
+                accessibilityHint="Returns to the previous screen"
+              >
+                <ArrowLeft size={16} color={colors.text} />
+                <Text style={[
+                  buttonStyles.text.outline,
+                  { marginLeft: spacing.small }
+                ]}>
+                  {goBackText}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Custom action button */}
           {onCustomAction && customActionText && (
-            <TouchableOpacity
-              onPress={onCustomAction}
-              style={[
-                errorStyles.boundaryFallbackButton,
-                isDarkMode && errorStyles.boundaryFallbackButtonDark
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                errorStyles.boundaryFallbackButtonText,
-                isDarkMode && errorStyles.boundaryFallbackButtonTextDark
-              ]}>
-                {customActionText}
-              </Text>
-            </TouchableOpacity>
+            <View style={buttonContainerStyle}>
+              <TouchableOpacity
+                onPress={onCustomAction}
+                style={secondaryButtonStyle}
+                activeOpacity={0.8}
+                accessibilityLabel={customActionText}
+                accessibilityHint="Performs a custom action"
+              >
+                <Text style={buttonStyles.text.outline}>
+                  {customActionText}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
@@ -226,4 +336,4 @@ const ErrorDisplay = ({
 
 export default ErrorDisplay;
 
-// Character count: 5087
+// Character count: 8,891

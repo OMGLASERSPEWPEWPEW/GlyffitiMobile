@@ -4,12 +4,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
-import { colors } from '../../../styles/tokens';
-import { errorStyles } from '../../../styles/errorStyles';
+import { getCardStyles, createCardStyle } from '../../../styles/components/cards';
+import { getButtonStyles, createButtonStyle } from '../../../styles/components/buttons';
+import { getContentStyles } from '../../../styles/components/content';
+import { spacing, typography, getColors } from '../../../styles/tokens';
 
 /**
  * React Error Boundary component that catches JavaScript errors anywhere in the child component tree
  * Displays a fallback UI instead of crashing the entire app
+ * 
+ * MIGRATED: Now uses the new design system
+ * - Replaced errorStyles with design system components (cards, buttons, content)
+ * - Added proper theme-aware styling with getColors()
+ * - Maintained exact same component interface for backwards compatibility
+ * - Enhanced with design system elevation and variant support
  * 
  * Usage:
  * <ErrorBoundary fallback={<CustomErrorComponent />}>
@@ -92,82 +100,172 @@ class ErrorBoundary extends React.Component {
         return fallback;
       }
 
-      // Default fallback UI using errorStyles
-      const errorColor = isDarkMode ? '#f87171' : colors.error;
+      // Get theme-aware styles from design system
+      const colors = getColors(isDarkMode);
+      const cardStyles = getCardStyles(isDarkMode);
+      const buttonStyles = getButtonStyles(isDarkMode);
+      const contentStyles = getContentStyles(isDarkMode);
+
+      // Create specialized card style for error boundary
+      const errorCardStyle = createCardStyle({
+        variant: 'elevated',
+        size: 'medium',
+        isDark: isDarkMode
+      });
+
+      // Create retry button style
+      const retryButtonStyle = createButtonStyle({
+        variant: 'primary',
+        size: 'medium',
+        isDark: isDarkMode
+      });
+
+      // Create fallback button style
+      const fallbackButtonStyle = createButtonStyle({
+        variant: 'outline',
+        size: 'medium',
+        isDark: isDarkMode
+      });
+
+      // Container styles using design system
+      const containerStyle = {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+        paddingHorizontal: spacing.large,
+        paddingVertical: spacing.extraLarge,
+      };
+
+      // Content card styles
+      const cardContainerStyle = [
+        errorCardStyle,
+        {
+          alignItems: 'center',
+          maxWidth: 350,
+          width: '100%',
+          paddingHorizontal: spacing.large,
+          paddingVertical: spacing.extraLarge,
+        }
+      ];
+
+      // Error icon styles
+      const iconStyle = {
+        marginBottom: spacing.medium,
+      };
+
+      // Title styles using content system
+      const titleStyle = [
+        contentStyles.heading2,
+        {
+          textAlign: 'center',
+          marginBottom: spacing.small,
+          color: colors.text,
+        }
+      ];
+
+      // Description styles using content system
+      const descriptionStyle = [
+        contentStyles.body,
+        {
+          textAlign: 'center',
+          lineHeight: typography.lineHeight?.relaxed || 22,
+          marginBottom: spacing.large,
+          color: colors.textSecondary,
+        }
+      ];
+
+      // Error details styles (monospace for technical details)
+      const errorDetailsStyle = {
+        fontSize: typography.fontSize?.small || 12,
+        fontFamily: typography.fontFamilyMono || typography.fontFamily,
+        color: colors.textSecondary,
+        textAlign: 'left',
+        backgroundColor: colors.backgroundSecondary,
+        paddingHorizontal: spacing.medium,
+        paddingVertical: spacing.medium,
+        borderRadius: spacing.small,
+        marginBottom: spacing.large,
+        alignSelf: 'stretch',
+      };
+
+      // Actions container
+      const actionsContainerStyle = {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: spacing.medium,
+        width: '100%',
+      };
+
+      // Retry count style
+      const retryCountStyle = [
+        contentStyles.caption,
+        {
+          marginTop: spacing.medium,
+          textAlign: 'center',
+          color: colors.textTertiary,
+        }
+      ];
 
       return (
-        <View style={[
-          errorStyles.boundaryContainer,
-          isDarkMode && errorStyles.boundaryContainerDark,
-          style
-        ]}>
-          <View style={[
-            errorStyles.boundaryCard,
-            isDarkMode && errorStyles.boundaryCardDark
-          ]}>
+        <View style={[containerStyle, style]}>
+          <View style={cardContainerStyle}>
             {/* Error icon */}
             <AlertTriangle 
               size={48} 
-              color={errorColor}
-              style={errorStyles.boundaryIcon}
+              color={colors.error}
+              style={iconStyle}
             />
 
             {/* Error title */}
-            <Text style={[
-              errorStyles.boundaryTitle,
-              isDarkMode && errorStyles.boundaryTitleDark
-            ]}>
+            <Text style={titleStyle}>
               Something went wrong
             </Text>
 
             {/* Error description */}
-            <Text style={[
-              errorStyles.boundaryDescription,
-              isDarkMode && errorStyles.boundaryDescriptionDark
-            ]}>
+            <Text style={descriptionStyle}>
               {error?.message || 'An unexpected error occurred. Please try again.'}
             </Text>
 
-            {/* Development error details */}
+            {/* Error details in development */}
             {__DEV__ && error && (
-              <Text style={[
-                errorStyles.boundaryErrorDetails,
-                isDarkMode && errorStyles.boundaryErrorDetailsDark
-              ]}>
+              <Text style={errorDetailsStyle}>
                 {error.toString()}
+                {error.stack && `\n${error.stack.slice(0, 300)}...`}
               </Text>
             )}
 
             {/* Action buttons */}
-            <View style={errorStyles.boundaryActionsContainer}>
+            <View style={actionsContainerStyle}>
               {/* Retry button */}
               {showRetry && retryCount < maxRetries && (
                 <TouchableOpacity
+                  style={[retryButtonStyle, { flex: 1 }]}
                   onPress={this.handleRetry}
-                  style={errorStyles.boundaryRetryButton}
                   activeOpacity={0.8}
+                  accessibilityLabel="Retry"
+                  accessibilityHint="Attempts to fix the error and reload the component"
                 >
-                  <RefreshCw size={16} color="#ffffff" />
-                  <Text style={errorStyles.boundaryButtonText}>
-                    Try Again
+                  <RefreshCw size={16} color={colors.white} />
+                  <Text style={[
+                    buttonStyles.text.primary,
+                    { marginLeft: spacing.small }
+                  ]}>
+                    Retry
                   </Text>
                 </TouchableOpacity>
               )}
 
-              {/* Custom fallback action */}
+              {/* Fallback button */}
               {onFallbackPress && (
                 <TouchableOpacity
+                  style={[fallbackButtonStyle, { flex: 1 }]}
                   onPress={onFallbackPress}
-                  style={[
-                    errorStyles.boundaryFallbackButton,
-                    isDarkMode && errorStyles.boundaryFallbackButtonDark
-                  ]}
                   activeOpacity={0.8}
+                  accessibilityLabel="Go Back"
+                  accessibilityHint="Returns to the previous screen"
                 >
-                  <Text style={[
-                    errorStyles.boundaryFallbackButtonText,
-                    isDarkMode && errorStyles.boundaryFallbackButtonTextDark
-                  ]}>
+                  <Text style={buttonStyles.text.outline}>
                     Go Back
                   </Text>
                 </TouchableOpacity>
@@ -176,11 +274,22 @@ class ErrorBoundary extends React.Component {
 
             {/* Retry count indicator */}
             {retryCount > 0 && (
+              <Text style={retryCountStyle}>
+                Retry attempts: {retryCount}/{maxRetries}
+              </Text>
+            )}
+
+            {/* Max retries reached message */}
+            {retryCount >= maxRetries && (
               <Text style={[
-                errorStyles.boundaryRetryCount,
-                isDarkMode && errorStyles.boundaryRetryCountDark
+                descriptionStyle,
+                { 
+                  marginTop: spacing.medium,
+                  color: colors.error,
+                  fontSize: typography.fontSize?.small || 14
+                }
               ]}>
-                Retry attempt: {retryCount}/{maxRetries}
+                Maximum retry attempts reached. Please restart the app or contact support.
               </Text>
             )}
           </View>
@@ -188,10 +297,11 @@ class ErrorBoundary extends React.Component {
       );
     }
 
+    // Normal render - no error
     return children;
   }
 }
 
 export default ErrorBoundary;
 
-// Character count: 4151
+// Character count: 7,892

@@ -4,9 +4,9 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Card } from '../shared';
-import { getContentStyles, createTitleStyle } from '../../styles/components/content';
+import { getContentStyles } from '../../styles/components/content';
 import { getCardStyles } from '../../styles/components/cards';
-import { spacing, lightColors, darkColors } from '../../styles/tokens';
+import { spacing, typography, getColors } from '../../styles/tokens';
 
 export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   if (!publishing || !progress) {
@@ -19,13 +19,14 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   const stage = progress.stage || 'publishing';
   
   // Get theme-aware styles
+  const colors = getColors(isDarkMode);
   const contentStyles = getContentStyles(isDarkMode);
   const cardStyles = getCardStyles(isDarkMode);
   
   // Progress bar colors using design tokens
   const progressColors = {
-    background: isDarkMode ? darkColors.backgroundSecondary : lightColors.backgroundSecondary,
-    fill: isDarkMode ? darkColors.success : lightColors.success,
+    background: colors.backgroundSecondary,
+    fill: colors.success,
   };
 
   // Status message based on stage
@@ -48,66 +49,124 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
     }
   };
 
+  // Title style - ensuring visibility
+  const titleStyle = {
+    fontSize: typography.fontSize?.large || 16,
+    fontFamily: typography.fontFamilyMedium || typography.fontFamily,
+    fontWeight: typography.fontWeight?.semibold || '600',
+    color: colors.text, // Use primary text color for maximum visibility
+    marginBottom: spacing.medium,
+    textAlign: 'center',
+    lineHeight: (typography.fontSize?.large || 16) * 1.2,
+  };
+
+  // Progress percentage style
+  const percentageStyle = {
+    fontSize: typography.fontSize?.medium || 14,
+    fontFamily: typography.fontFamilyMedium || typography.fontFamily,
+    fontWeight: typography.fontWeight?.medium || '500',
+    color: colors.textSecondary,
+    marginBottom: spacing.small,
+    textAlign: 'center',
+  };
+
+  // Compression stats style
+  const compressionStyle = {
+    fontSize: typography.fontSize?.small || 12,
+    fontFamily: typography.fontFamily,
+    color: colors.textSecondary,
+    opacity: 0.8,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  };
+
+  // Progress bar container style
+  const progressBarContainerStyle = {
+    height: 8,
+    backgroundColor: progressColors.background,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: spacing.small,
+    width: '100%',
+  };
+
+  // Progress bar fill style
+  const progressBarFillStyle = {
+    height: '100%',
+    width: `${Math.max(0, Math.min(100, progressPercent))}%`,
+    backgroundColor: progressColors.fill,
+    borderRadius: 4,
+    // Add a subtle transition for smooth progress updates
+    transition: 'width 0.3s ease-in-out',
+  };
+
   return (
     <Card
       isDarkMode={isDarkMode}
-      borderRadius={8}
-      padding={spacing.medium}
-      marginBottom={spacing.medium}
-      marginHorizontal={0}
+      elevation="low"
+      variant="default"
+      style={{
+        marginBottom: spacing.medium,
+        marginHorizontal: 0,
+        paddingHorizontal: spacing.medium,
+        paddingVertical: spacing.medium,
+      }}
     >
-      {/* Progress Title using content styles */}
-      <Text style={[
-        createTitleStyle('small', isDarkMode),
-        {
-          marginBottom: spacing.medium,
-          fontSize: 16,
-          fontWeight: '600',
-        }
-      ]}>
+      {/* Progress Title - Made more prominent */}
+      <Text 
+        style={titleStyle}
+        accessibilityLabel={`Publishing status: ${getStatusMessage()}`}
+        accessibilityRole="text"
+      >
         {getStatusMessage()}
       </Text>
       
       {/* Progress Bar Container */}
-      <View style={{
-        height: 8,
-        backgroundColor: progressColors.background,
-        borderRadius: 4,
-        overflow: 'hidden',
-        marginBottom: spacing.small,
-      }}>
+      <View 
+        style={progressBarContainerStyle}
+        accessibilityLabel={`Progress bar at ${progressPercent} percent`}
+        accessibilityRole="progressbar"
+        accessibilityValue={{
+          min: 0,
+          max: 100,
+          now: progressPercent
+        }}
+      >
         {/* Progress Bar Fill */}
-        <View style={{
-          height: '100%',
-          width: `${Math.max(0, Math.min(100, progressPercent))}%`,
-          backgroundColor: progressColors.fill,
-          borderRadius: 4,
-          // Smooth transition animation would go here in a real app
-        }} />
+        <View style={progressBarFillStyle} />
       </View>
       
       {/* Progress Percentage Text */}
-      <Text style={[
-        {
-          color: contentStyles.secondaryText.color,
-          fontSize: 14,
-          fontWeight: '500',
-          marginBottom: spacing.small,
-        }
-      ]}>
+      <Text 
+        style={percentageStyle}
+        accessibilityLabel={`${progressPercent} percent complete`}
+      >
         {progressPercent}% Complete
       </Text>
       
+      {/* Glyph Count Display - Extra visibility for debugging */}
+      {stage === 'publishing' && totalGlyphs > 0 && (
+        <Text 
+          style={[
+            percentageStyle,
+            { 
+              fontSize: typography.fontSize?.medium || 14,
+              color: colors.text, // Use primary text for better visibility
+              marginBottom: spacing.small,
+            }
+          ]}
+          accessibilityLabel={`Publishing glyph ${currentGlyph} of ${totalGlyphs}`}
+        >
+          Glyph {currentGlyph} of {totalGlyphs}
+        </Text>
+      )}
+      
       {/* Compression Stats (if available) */}
       {progress.compressionStats && (
-        <Text style={[
-          {
-            color: contentStyles.secondaryText.color,
-            fontSize: 13,
-            opacity: 0.8,
-            fontStyle: 'italic',
-          }
-        ]}>
+        <Text 
+          style={compressionStyle}
+          accessibilityLabel={`Compression saved ${progress.compressionStats.percentSaved} percent, ${progress.compressionStats.spaceSaved} bytes`}
+        >
           💾 Compressed {progress.compressionStats.percentSaved}% 
           ({progress.compressionStats.spaceSaved} bytes saved)
         </Text>
@@ -116,4 +175,4 @@ export const ProgressBar = ({ publishing, progress, isDarkMode = false }) => {
   );
 };
 
-// Character count: 2,867
+// Character count: 4,847
