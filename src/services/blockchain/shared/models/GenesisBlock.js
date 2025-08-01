@@ -1,7 +1,7 @@
 // src/services/blockchain/shared/models/GenesisBlock.js
 // Path: src/services/blockchain/shared/models/GenesisBlock.js
-import { CompressionService } from '../../../compression/CompressionService';
-import { HashingService } from '../../../hashing/HashingService';
+import { CompressionService } from '../../../compression/CompressionService.js';
+import { HashingService } from '../../../hashing/HashingService.js';
 
 /**
  * Genesis Block Models for Glyffiti Social Network

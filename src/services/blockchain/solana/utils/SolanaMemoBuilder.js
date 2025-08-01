@@ -1,7 +1,7 @@
 // src/services/blockchain/solana/utils/SolanaMemoBuilder.js  
 // Path: src/services/blockchain/solana/utils/SolanaMemoBuilder.js
 import { Connection, Transaction, TransactionInstruction, PublicKey, Keypair } from '@solana/web3.js';
-import { GlyffitiGenesisBlock, UserGenesisBlock } from '../../shared/models/GenesisBlock';
+import { GlyffitiGenesisBlock, UserGenesisBlock } from '../../shared/models/GenesisBlock.js';
 
 /**
  * Solana Memo Builder - Creates memo-only transactions for social graph genesis blocks
