@@ -1,7 +1,8 @@
 // src/services/blockchain/solana/utils/SolanaMemoBuilder.js  
 // Path: src/services/blockchain/solana/utils/SolanaMemoBuilder.js
 import { Connection, Transaction, TransactionInstruction, PublicKey, Keypair } from '@solana/web3.js';
-import { GlyffitiGenesisBlock, UserGenesisBlock } from '../../shared/models/GenesisBlock.js';
+import { GlyffitiGenesisBlock, UserGenesisBlock, GenesisBlockFactory } from '../../shared/models/GenesisBlock.js';
+import { CompressionService } from '../../../compression/CompressionService.js';
 
 /**
  * Solana Memo Builder - Creates memo-only transactions for social graph genesis blocks
@@ -51,96 +52,204 @@ export class SolanaMemoBuilder {
       const signature = await this.submitTransactionWithRetries(transaction, deployerKeypair, 'Secure Glyffiti Genesis');
       
       console.log('✅ Secure Glyffiti Genesis deployed successfully!');
-      console.log(`📝 Genesis Transaction Hash: ${signature}`);
-      console.log(`🔗 This hash will be used as parent for all user accounts`);
-      console.log('🔒 Genesis data is encrypted and obfuscated on-chain');
-      
       return signature;
     } catch (error) {
-      console.error('❌ Failed to deploy Secure Glyffiti Genesis:', error);
-      throw new Error('Failed to deploy Secure Glyffiti Genesis: ' + error.message);
+      console.error('❌ Error deploying secure genesis:', error);
+      throw new Error('Secure genesis deployment failed: ' + error.message);
     }
   }
 
   /**
-   * Build and submit a User Genesis block transaction (user account creation)
-   * @param {string} alias - Optional display name for the user
+   * Build and submit a user genesis block transaction
+   * @param {string} alias - User's display name  
    * @param {string} glyffitiGenesisHash - Transaction hash of the global genesis
-   * @param {Keypair} userKeypair - User's keypair (their identity)
-   * @returns {Promise<string>} Transaction signature hash (becomes user's identity hash)
+   * @param {Keypair} userKeypair - User's keypair for signing
+   * @returns {Promise<string>} Transaction signature hash
    */
-  async createUserGenesis(alias, glyffitiGenesisHash, userKeypair) {
+  async deployUserGenesis(alias, glyffitiGenesisHash, userKeypair) {
     try {
-      console.log(`👤 Creating Secure User Genesis for: ${alias || 'anonymous'}`);
+      console.log('👤 Deploying Secure User Genesis Block...');
       
-      if (!glyffitiGenesisHash) {
-        throw new Error('Glyffiti Genesis hash is required (parent block)');
-      }
       if (!userKeypair) {
-        throw new Error('User keypair is required');
+        throw new Error('User keypair is required for user genesis deployment');
+      }
+      if (!glyffitiGenesisHash) {
+        throw new Error('Glyffiti genesis hash is required for user genesis');
       }
 
       // Create user genesis block
-      const userPublicKey = userKeypair.publicKey.toBase58();
-      const userGenesisBlock = new UserGenesisBlock(alias, glyffitiGenesisHash, userPublicKey);
+      const userGenesis = new UserGenesisBlock(alias, glyffitiGenesisHash, userKeypair.publicKey.toBase58());
       
-      // Get secure wire format data (async due to encryption)
-      const wireData = await userGenesisBlock.toMemoData();
+      // Get secure wire format data
+      const wireData = await userGenesis.toMemoData();
       console.log(`📡 Secure user genesis wire format size: ${wireData.length} bytes`);
       
       // Create transaction with memo instruction
       const transaction = await this.buildMemoTransaction(wireData, userKeypair);
       
       // Submit transaction with retries
-      const signature = await this.submitTransactionWithRetries(transaction, userKeypair, `Secure User Genesis (${alias})`);
+      const signature = await this.submitTransactionWithRetries(transaction, userKeypair, 'Secure User Genesis');
       
-      console.log('✅ Secure User Genesis created successfully!');
-      console.log(`📝 User Genesis Hash: ${signature}`);
-      console.log(`🔗 This hash is the user's permanent identity`);
-      console.log(`👤 Public Key: ${userPublicKey}`);
-      console.log('🔒 User data is encrypted and obfuscated on-chain');
-      
+      console.log('✅ Secure User Genesis deployed successfully!');
       return signature;
     } catch (error) {
-      console.error('❌ Failed to create Secure User Genesis:', error);
-      throw new Error('Failed to create Secure User Genesis: ' + error.message);
+      console.error('❌ Error deploying secure user genesis:', error);
+      throw new Error('Secure user genesis deployment failed: ' + error.message);
     }
   }
 
   /**
-   * Build a memo-only transaction from wire format data
-   * @param {Uint8Array} wireData - Wire format data (version byte + compressed JSON)
-   * @param {Keypair} signerKeypair - Keypair that will sign the transaction
-   * @returns {Promise<Transaction>} Built transaction ready for signing
+   * Helper: Check if data looks like our secure wire format (version 0x01, length ≥ 34)
+   * @param {Uint8Array} buf - Buffer to check
+   * @returns {boolean} True if looks like secure wire format
    */
-  async buildMemoTransaction(wireData, signerKeypair) {
+  static _looksLikeSecureWire(buf) {
+    return buf && buf instanceof Uint8Array && buf.length >= 34 && buf[0] === 0x01;
+  }
+
+  /**
+   * Read and parse a genesis block from a transaction hash
+   * @param {string} transactionHash - Transaction hash containing genesis block
+   * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
+   */
+  async readGenesisFromTransaction(transactionHash) {
     try {
-      if (!wireData || wireData.length === 0) {
-        throw new Error('Wire data is required');
-      }
-      if (!signerKeypair) {
-        throw new Error('Signer keypair is required');
-      }
-
-      console.log(`🔨 Building memo transaction, data size: ${wireData.length} bytes`);
-
-      // Create new transaction
-      const transaction = new Transaction();
+      console.log('🔍 Reading secure genesis from transaction:', transactionHash);
       
-      // Convert wire data to Buffer for memo instruction
-      const memoData = Buffer.from(wireData);
-      
-      // Create memo instruction (following SolanaPublisher pattern)
-      const memoInstruction = new TransactionInstruction({
-        keys: [], // Memo instructions require no accounts
-        programId: this.MEMO_PROGRAM_ID,
-        data: memoData
+      // Get transaction details
+      const tx = await this.connection.getTransaction(transactionHash, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0
       });
       
-      // Add memo instruction to transaction
-      transaction.add(memoInstruction);
+      if (!tx) {
+        throw new Error('Transaction not found');
+      }
       
-      // Get recent blockhash (required for all transactions)
+      // Handle different transaction formats (legacy vs. versioned)
+      const instructions = tx.transaction.message.instructions || 
+                          tx.transaction.message.compiledInstructions || [];
+      
+      console.log(`🔍 Found ${instructions.length} instructions in transaction`);
+      
+      // Find memo instruction - handle both legacy and versioned formats
+      let memoInstruction = null;
+      
+      for (const ix of instructions) {
+        // Check if this instruction uses the memo program
+        const programId = ix.programId || 
+                         (ix.programIdIndex !== undefined ? 
+                          tx.transaction.message.accountKeys[ix.programIdIndex] : null);
+        
+        if (programId && (
+            (typeof programId === 'string' && programId === this.MEMO_PROGRAM_ID.toBase58()) ||
+            (programId.equals && programId.equals(this.MEMO_PROGRAM_ID))
+          )) {
+          memoInstruction = ix;
+          break;
+        }
+      }
+      
+      if (!memoInstruction) {
+        throw new Error('No memo instruction found in transaction');
+      }
+      
+      // JSON-RPC returns instruction data as base64 of the original bytes we sent
+      const rpcBase64 = Buffer.isBuffer(memoInstruction.data)
+        ? memoInstruction.data.toString('utf8')
+        : (typeof memoInstruction.data === 'string'
+            ? memoInstruction.data
+            : Buffer.from(memoInstruction.data).toString('utf8'));
+      
+      console.log(`📝 RPC base64 length: ${rpcBase64.length} chars`);
+      
+      // First decode: base64 → original memo bytes (whatever we wrote into the memo program)
+      const memoBytes = new Uint8Array(Buffer.from(rpcBase64, 'base64'));
+      console.log(`🔄 Decoded memo bytes length: ${memoBytes.length} bytes`);
+      
+      let wireData;
+      
+      if (SolanaMemoBuilder._looksLikeSecureWire(memoBytes)) {
+        // Case A: we wrote raw wire bytes directly to the memo (future-proof path)
+        wireData = memoBytes;
+        console.log('🔎 Detected raw wire bytes in memo (single decode).');
+      } else {
+        // Case B: we wrote base64 TEXT to the memo (current behavior).
+        // The "memoBytes" are actually UTF-8 bytes of a base64 string. 
+        // Convert UTF-8 bytes back to string
+        const innerBase64Text = Buffer.from(memoBytes).toString('utf-8');
+        console.log(`🔁 Inner base64 text length: ${innerBase64Text.length} chars`);
+        
+        // Now decode the base64 string to get the original wire data
+        try {
+          wireData = new Uint8Array(Buffer.from(innerBase64Text, 'base64'));
+          console.log(`📦 Decoded wire data length: ${wireData.length} bytes`);
+          
+          if (!SolanaMemoBuilder._looksLikeSecureWire(wireData)) {
+            console.log(`❌ Wire data validation failed. First byte: 0x${wireData[0]?.toString(16)}, length: ${wireData.length}`);
+            throw new Error('Decoded memo does not match secure wire format');
+          }
+          console.log('✅ Decoded secure wire bytes from base64 text in memo (double decode).');
+        } catch (decodeError) {
+          console.error('❌ Failed to decode inner base64:', decodeError.message);
+          throw new Error('Failed to decode base64 memo data: ' + decodeError.message);
+        }
+      }
+      
+      // Parse using GenesisBlockFactory (expects secure wire format)
+      return await GenesisBlockFactory.parseFromWireData(wireData);
+    } catch (error) {
+      console.error('❌ Error reading secure genesis from transaction:', error);
+      throw new Error('Failed to read secure genesis from transaction: ' + error.message);
+    }
+  }
+
+  /**
+   * Parse genesis block from wire data format
+   * @param {Uint8Array} wireData - Wire format data from memo
+   * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
+   */
+  async parseGenesisFromWireData(wireData) {
+    try {
+      return await GenesisBlockFactory.parseFromWireData(wireData);
+    } catch (error) {
+      console.error('❌ Error parsing secure genesis from wire data:', error);
+      throw new Error('Failed to parse secure genesis from wire data: ' + error.message);
+    }
+  }
+
+  /**
+   * Build a memo transaction with given data
+   * @param {Uint8Array} memoData - Wire format data to include in memo
+   * @param {Keypair} signerKeypair - Keypair to sign the transaction
+   * @returns {Promise<Transaction>} Built transaction ready for submission
+   */
+  async buildMemoTransaction(memoData, signerKeypair) {
+    try {
+      console.log(`🔨 Building memo transaction, data size: ${memoData.length} bytes`);
+      
+      if (memoData.length > 566) {
+        throw new Error(`Memo data too large: ${memoData.length} bytes (max 566)`);
+      }
+      
+      // Convert binary data to Base64 for Solana Memo program (following SolanaPublisher pattern)
+      const base64CompressedData = CompressionService.uint8ArrayToBase64(memoData);
+      const memoDataBuffer = Buffer.from(base64CompressedData, 'utf-8');
+      console.log(`📝 Encoded as Base64: ${base64CompressedData.length} chars`);
+      
+      // Create transaction (following SolanaPublisher pattern)
+      const transaction = new Transaction();
+      
+      // Add memo instruction (following SolanaPublisher pattern)
+      const instruction = new TransactionInstruction({
+        keys: [],
+        programId: this.MEMO_PROGRAM_ID,
+        data: memoDataBuffer
+      });
+      
+      transaction.add(instruction);
+      
+      // Get recent blockhash (following SolanaPublisher pattern)
       const { blockhash } = await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = signerKeypair.publicKey;
@@ -157,189 +266,80 @@ export class SolanaMemoBuilder {
   /**
    * Submit transaction with retry logic (following SolanaPublisher pattern)
    * @param {Transaction} transaction - Transaction to submit
-   * @param {Keypair} signerKeypair - Keypair to sign the transaction
+   * @param {Keypair} signerKeypair - Keypair to sign transaction
    * @param {string} description - Description for logging
    * @returns {Promise<string>} Transaction signature
    */
   async submitTransactionWithRetries(transaction, signerKeypair, description = 'Transaction') {
-    let retryCount = 0;
+    let lastError;
     
-    while (retryCount < this.txConfig.maxRetries) {
+    for (let attempt = 1; attempt <= this.txConfig.maxRetries; attempt++) {
       try {
-        console.log(`📤 Submitting ${description} (attempt ${retryCount + 1}/${this.txConfig.maxRetries})`);
+        console.log(`📡 Submitting ${description} (attempt ${attempt}/${this.txConfig.maxRetries})...`);
         
-        // Get fresh blockhash for retry attempts
-        if (retryCount > 0) {
-          const { blockhash } = await this.connection.getLatestBlockhash();
-          transaction.recentBlockhash = blockhash;
-        }
-        
-        // Sign transaction
+        // Sign transaction (following SolanaPublisher pattern)
         transaction.sign(signerKeypair);
         
-        // Send transaction
+        // Submit transaction (following SolanaPublisher pattern)
         const signature = await this.connection.sendRawTransaction(
           transaction.serialize(),
-          {
-            skipPreflight: this.txConfig.skipPreflight,
-            preflightCommitment: this.txConfig.preflightCommitment
-          }
+          { skipPreflight: false, preflightCommitment: 'confirmed' }
         );
         
-        console.log(`⏳ ${description} submitted, waiting for confirmation: ${signature}`);
-        
-        // Wait for confirmation
+        // Wait for confirmation (following SolanaPublisher pattern)
         const confirmation = await this.connection.confirmTransaction(
           signature,
-          this.txConfig.commitment
+          'confirmed'
         );
         
         if (confirmation.value.err) {
-          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+          throw new Error(`Transaction failed: ${confirmation.value.err}`);
         }
         
         console.log(`✅ ${description} confirmed: ${signature}`);
         return signature;
-        
       } catch (error) {
-        retryCount++;
-        console.error(`❌ ${description} attempt ${retryCount} failed:`, error.message);
+        lastError = error;
+        console.log(`❌ Attempt ${attempt} failed:`, error.message);
         
-        if (retryCount >= this.txConfig.maxRetries) {
-          throw new Error(`${description} failed after ${this.txConfig.maxRetries} attempts: ${error.message}`);
+        if (attempt < this.txConfig.maxRetries) {
+          console.log(`⏳ Retrying in ${this.txConfig.retryDelay / 1000} seconds...`);
+          await this.sleep(this.txConfig.retryDelay);
         }
-        
-        // Wait before retry
-        console.log(`⏳ Retrying in ${this.txConfig.retryDelay}ms...`);
-        await this.sleep(this.txConfig.retryDelay);
       }
     }
+    
+    throw new Error(`${description} failed after ${this.txConfig.maxRetries} attempts: ${lastError?.message}`);
   }
 
   /**
-   * Read and parse genesis block from a transaction hash
-   * @param {string} transactionHash - Transaction hash to read from
-   * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
-   */
-  async readGenesisFromTransaction(transactionHash) {
-    try {
-      console.log(`🔍 Reading genesis block from transaction: ${transactionHash}`);
-      
-      // Fetch transaction
-      const transaction = await this.connection.getTransaction(transactionHash, {
-        commitment: 'confirmed'
-      });
-      
-      if (!transaction) {
-        throw new Error(`Transaction not found: ${transactionHash}`);
-      }
-
-      // Find memo instruction
-      const instructions = transaction.transaction.message.instructions;
-      let memoInstruction = null;
-      
-      for (const instruction of instructions) {
-        if (instruction.programId === this.MEMO_PROGRAM_ID.toString() || 
-            (instruction.programId && new PublicKey(instruction.programId).equals(this.MEMO_PROGRAM_ID))) {
-          memoInstruction = instruction;
-          break;
-        }
-      }
-      
-      if (!memoInstruction) {
-        throw new Error('No memo instruction found in transaction');
-      }
-
-      // Extract wire data from memo instruction
-      let wireData;
-      if (memoInstruction.data) {
-        // Raw instruction data - it's a Buffer containing the wire format
-        wireData = new Uint8Array(Buffer.from(memoInstruction.data, 'base64'));
-      } else {
-        throw new Error('No data found in memo instruction');
-      }
-
-      // Parse genesis block from wire data  
-      const genesisBlock = this.parseGenesisFromWireData(wireData);
-      
-      console.log(`✅ Successfully parsed ${genesisBlock.kind} block`);
-      return genesisBlock;
-      
-    } catch (error) {
-      console.error('❌ Error reading genesis from transaction:', error);
-      throw new Error('Failed to read genesis from transaction: ' + error.message);
-    }
-  }
-
-  /**
-   * Parse genesis block from wire format data
-   * @param {Uint8Array} wireData - Wire format data
-   * @returns {GlyffitiGenesisBlock|UserGenesisBlock} Parsed genesis block
-   */
-  parseGenesisFromWireData(wireData) {
-    try {
-      if (!wireData || wireData.length < 2) {
-        throw new Error('Invalid wire data: too short');
-      }
-      
-      // Check version byte
-      if (wireData[0] !== 0x01) {
-        throw new Error(`Unsupported version: ${wireData[0]} (expected 0x01)`);
-      }
-      
-      // Peek at the kind to determine type
-      const compressedData = wireData.slice(1);
-      
-      // We can use the GenesisBlockFactory from our models
-      if (wireData[0] === 0x01) {
-        // Try to parse as Glyffiti Genesis first
-        try {
-          return GlyffitiGenesisBlock.fromWireData(wireData);
-        } catch (genesisError) {
-          // If that fails, try User Genesis
-          try {
-            return UserGenesisBlock.fromWireData(wireData);
-          } catch (userError) {
-            throw new Error('Failed to parse as either genesis type: ' + userError.message);
-          }
-        }
-      } else {
-        throw new Error(`Unsupported version byte: ${wireData[0]}`);
-      }
-    } catch (error) {
-      console.error('❌ Error parsing genesis from wire data:', error);
-      throw new Error('Failed to parse genesis from wire data: ' + error.message);
-    }
-  }
-
-  /**
-   * Check Solana network connection health
-   * @returns {Promise<boolean>} True if connection is healthy
+   * Check connection to Solana network
+   * @returns {Promise<boolean>} True if connection is working
    */
   async checkConnection() {
     try {
-      await this.connection.getVersion();
-      return true;
+      const version = await this.connection.getVersion();
+      return !!version;
     } catch (error) {
-      console.error('❌ Solana connection check failed:', error);
+      console.error('❌ Connection check failed:', error);
       return false;
     }
   }
 
   /**
    * Get network information
-   * @returns {Object} Network information
+   * @returns {object} Network information
    */
   getNetworkInfo() {
     return {
       endpoint: this.connection.rpcEndpoint,
-      commitment: this.txConfig.commitment,
-      memoProgramId: this.MEMO_PROGRAM_ID.toString()
+      memoProgramId: this.MEMO_PROGRAM_ID.toBase58(),
+      commitment: this.txConfig.commitment
     };
   }
 
   /**
-   * Sleep utility for retry delays
+   * Sleep utility for delays
    * @param {number} ms - Milliseconds to sleep
    * @returns {Promise<void>} Promise that resolves after delay
    */
@@ -409,4 +409,4 @@ export class SolanaMemoBuilder {
   }
 }
 
-// Character count: 12,177
+// Character count: 12,266

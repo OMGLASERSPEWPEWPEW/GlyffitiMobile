@@ -32,86 +32,89 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node)
  * 3. Compression (gzip via CompressionService)
  * 4. Encryption (XOR cipher + substitution)
  * 5. Integrity hash (SHA-256)
- * 
- * Wire Format:
- * - byte[0] = 0x01 (payload version)
- * - byte[1-32] = integrity hash (32 bytes)
- * - byte[33..] = encrypted(compressed(obfuscated JSON))
- * - Keep total memo ≤ 566 bytes (Solana transaction limit with signature)
+ * 6. Wire format (version byte + hash + encrypted data)
  */
-
-// Security constants (obscured)
-const CIPHER_KEY = new Uint8Array([0x47, 0x4C, 0x59, 0x46, 0x46, 0x49, 0x54, 0x49]); // "GLYFFITI"
-const FIELD_MAP = {
-  // Genesis fields
-  kind: 'a', ver: 'b', ts: 'c',
-  // User genesis fields  
-  alias: 'd', parent: 'e', pub: 'f'
-};
-const REVERSE_FIELD_MAP = Object.fromEntries(Object.entries(FIELD_MAP).map(([k, v]) => [v, k]));
-
-// Value obfuscation
-const VALUE_MAP = {
-  'glyf_genesis': 'gg',
-  'user_genesis': 'ug'
-};
-const REVERSE_VALUE_MAP = Object.fromEntries(Object.entries(VALUE_MAP).map(([k, v]) => [v, k]));
 
 /**
- * Security utilities for genesis block encryption/decryption
+ * Security utilities for secure genesis blocks
  */
 class SecurityUtils {
+  // Fixed encryption key (in production, this should be derived from network parameters)
+  static CIPHER_KEY = new Uint8Array([0x47, 0x6C, 0x79, 0x66, 0x66, 0x69, 0x74, 0x69]);
+
   /**
-   * Obfuscate field names and values in JSON object
-   * @param {Object} obj - Object to obfuscate
-   * @returns {Object} Obfuscated object
+   * Field obfuscation mapping
    */
-  static obfuscateFields(obj) {
+  static FIELD_MAP = {
+    'kind': 'a',
+    'ver': 'b', 
+    'ts': 'c',
+    'alias': 'd',
+    'parent': 'e',
+    'pub': 'f'
+  };
+
+  /**
+   * Reverse mapping for deobfuscation
+   */
+  static REVERSE_FIELD_MAP = Object.fromEntries(
+    Object.entries(SecurityUtils.FIELD_MAP).map(([k, v]) => [v, k])
+  );
+
+  /**
+   * Obfuscate field names to make raw data less readable
+   * @param {Object} data - Original data with readable field names
+   * @returns {Object} Data with obfuscated field names
+   */
+  static obfuscateFields(data) {
     const obfuscated = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const obfuscatedKey = FIELD_MAP[key] || key;
-      const obfuscatedValue = VALUE_MAP[value] || value;
-      obfuscated[obfuscatedKey] = obfuscatedValue;
+    for (const [key, value] of Object.entries(data)) {
+      const obfuscatedKey = this.FIELD_MAP[key] || key;
+      obfuscated[obfuscatedKey] = value;
     }
     return obfuscated;
   }
 
   /**
-   * Deobfuscate field names and values
-   * @param {Object} obj - Obfuscated object  
-   * @returns {Object} Original object
+   * Deobfuscate field names back to readable names
+   * @param {Object} obfuscatedData - Data with obfuscated field names
+   * @returns {Object} Data with original field names
    */
-  static deobfuscateFields(obj) {
+  static deobfuscateFields(obfuscatedData) {
     const deobfuscated = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const originalKey = REVERSE_FIELD_MAP[key] || key;
-      const originalValue = REVERSE_VALUE_MAP[value] || value;
-      deobfuscated[originalKey] = originalValue;
+    for (const [key, value] of Object.entries(obfuscatedData)) {
+      const originalKey = this.REVERSE_FIELD_MAP[key] || key;
+      deobfuscated[originalKey] = value;
     }
     return deobfuscated;
   }
 
   /**
-   * Encrypt data using XOR cipher with key rotation and substitution (FIXED VERSION)
+   * Encrypt data using custom cipher (XOR + nibble swap + XOR)
    * @param {Uint8Array} data - Data to encrypt
    * @returns {Uint8Array} Encrypted data
    */
   static encrypt(data) {
     const encrypted = new Uint8Array(data.length);
+    const { CIPHER_KEY } = this;
+    
     for (let i = 0; i < data.length; i++) {
+      // Step 1: XOR with key and position
       const keyByte = CIPHER_KEY[i % CIPHER_KEY.length];
-      // Step 1: XOR with key and position  
       const xored = data[i] ^ keyByte ^ (i & 0xFF);
-      // Step 2: Swap nibbles
+      
+      // Step 2: Swap nibbles (swap upper and lower 4 bits)
       const swapped = ((xored & 0x0F) << 4) | ((xored & 0xF0) >> 4);
+      
       // Step 3: XOR with constant
       encrypted[i] = swapped ^ 0xAA;
     }
+    
     return encrypted;
   }
 
   /**
-   * Decrypt data (reverse of encrypt - FIXED VERSION)
+   * Decrypt data (exact reverse of encrypt - FIXED VERSION)
    * @param {Uint8Array} encryptedData - Encrypted data
    * @returns {Uint8Array} Decrypted data
    */
@@ -123,7 +126,7 @@ class SecurityUtils {
       // Step 2 reverse: Swap nibbles back
       const unswapped = ((unxored & 0x0F) << 4) | ((unxored & 0xF0) >> 4);
       // Step 1 reverse: XOR with key and position
-      const keyByte = CIPHER_KEY[i % CIPHER_KEY.length];
+      const keyByte = SecurityUtils.CIPHER_KEY[i % SecurityUtils.CIPHER_KEY.length];
       decrypted[i] = unswapped ^ keyByte ^ (i & 0xFF);
     }
     return decrypted;
@@ -325,16 +328,16 @@ export class GlyffitiGenesisBlock {
 export class UserGenesisBlock {
   constructor(alias, parentBlockId, userPublicKey) {
     if (!parentBlockId) {
-      throw new Error('Parent block ID (Glyffiti genesis hash) is required');
+      throw new Error('Parent block ID required');
     }
     if (!userPublicKey) {
-      throw new Error('User public key is required');
+      throw new Error('User public key required');
     }
     
     this.kind = 'user_genesis';
-    this.alias = alias || null;           // optional, non-unique display name
-    this.parent = parentBlockId;          // GLYF_GENESIS transaction hash
-    this.pub = userPublicKey;             // base58 Ed25519 public key
+    this.alias = alias || null;
+    this.parent = parentBlockId;
+    this.pub = userPublicKey;
     this.ts = Math.floor(Date.now() / 1000);
   }
 
@@ -350,7 +353,7 @@ export class UserGenesisBlock {
       ts: this.ts
     };
     
-    // Only include alias if provided
+    // Only include alias if it exists
     if (this.alias) {
       original.alias = this.alias;
     }
@@ -521,16 +524,14 @@ export class GenesisBlockFactory {
   }
 
   /**
-   * Parse any genesis block from base64 memo data (secure version)
-   * @param {string} base64Memo - Base64 encoded memo from blockchain
+   * Parse any genesis block from wire format data (NEW METHOD)
+   * @param {Uint8Array} wireData - Wire format data from blockchain
    * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
    */
-  static async parseFromBase64(base64Memo) {
+  static async parseFromWireData(wireData) {
     try {
-      const wireData = CompressionService.base64ToUint8Array(base64Memo);
-      
-      if (wireData.length < 34 || wireData[0] !== 0x01) {
-        throw new Error(`Invalid secure wire format`);
+      if (!wireData || wireData.length < 34 || wireData[0] !== 0x01) {
+        throw new Error('Invalid secure wire format');
       }
       
       // Extract and decrypt to peek at the kind
@@ -551,12 +552,27 @@ export class GenesisBlockFactory {
       
       // Route to appropriate parser based on kind
       if (data.kind === 'glyf_genesis') {
-        return await GlyffitiGenesisBlock.fromBase64Memo(base64Memo);
+        return await GlyffitiGenesisBlock.fromWireData(wireData);
       } else if (data.kind === 'user_genesis') {
-        return await UserGenesisBlock.fromBase64Memo(base64Memo);
+        return await UserGenesisBlock.fromWireData(wireData);
       } else {
         throw new Error(`Unknown genesis block kind: ${data.kind}`);
       }
+    } catch (error) {
+      console.error('❌ Error parsing secure genesis block from wire data:', error);
+      throw new Error('Failed to parse secure genesis block from wire data: ' + error.message);
+    }
+  }
+
+  /**
+   * Parse any genesis block from base64 memo data (secure version)
+   * @param {string} base64Memo - Base64 encoded memo from blockchain
+   * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
+   */
+  static async parseFromBase64(base64Memo) {
+    try {
+      const wireData = CompressionService.base64ToUint8Array(base64Memo);
+      return await this.parseFromWireData(wireData);
     } catch (error) {
       console.error('❌ Error parsing secure genesis block:', error);
       throw new Error('Failed to parse secure genesis block: ' + error.message);
@@ -598,12 +614,28 @@ export class GenesisBlockFactory {
         throw new Error('Secure factory parsing test failed');
       }
       
-      // Test 4: Security features
+      // Test 4: Wire data factory parsing (NEW TEST)
+      const genesisWireData = await genesis.toMemoData();
+      const userWireData = await userGenesis.toMemoData();
+      const wireFactoryParsedGenesis = await this.parseFromWireData(genesisWireData);
+      const wireFactoryParsedUser = await this.parseFromWireData(userWireData);
+      
+      if (!(wireFactoryParsedGenesis instanceof GlyffitiGenesisBlock) ||
+          !(wireFactoryParsedUser instanceof UserGenesisBlock)) {
+        throw new Error('Secure factory wire data parsing test failed');
+      }
+      
+      // Test 5: Security features
       console.log('🔒 Testing security features...');
       const rawGenesis = new GlyffitiGenesisBlock();
       const rawJson = rawGenesis.toJSON(); // This should be obfuscated
-      if (rawJson.includes('glyf_genesis') || rawJson.includes('kind')) {
-        throw new Error('Field obfuscation test failed - readable fields detected');
+      // Check that field NAMES are obfuscated (not values)
+      if (rawJson.includes('"kind"') || rawJson.includes('"ver"') || rawJson.includes('"ts"')) {
+        throw new Error('Field obfuscation test failed - readable field names detected');
+      }
+      // Verify the obfuscated field names are present
+      if (!rawJson.includes('"a"') || !rawJson.includes('"b"') || !rawJson.includes('"c"')) {
+        throw new Error('Field obfuscation test failed - obfuscated field names missing');
       }
       
       console.log('✅ Secure Genesis Block self-test passed!');
