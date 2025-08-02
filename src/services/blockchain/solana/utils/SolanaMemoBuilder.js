@@ -3,6 +3,7 @@
 import { Connection, Transaction, TransactionInstruction, PublicKey, Keypair } from '@solana/web3.js';
 import { GlyffitiGenesisBlock, UserGenesisBlock, GenesisBlockFactory } from '../../shared/models/GenesisBlock.js';
 import { CompressionService } from '../../../compression/CompressionService.js';
+import bs58 from 'bs58';
 
 /**
  * Solana Memo Builder - Creates memo-only transactions for social graph genesis blocks
@@ -112,97 +113,81 @@ export class SolanaMemoBuilder {
    * @param {string} transactionHash - Transaction hash containing genesis block
    * @returns {Promise<GlyffitiGenesisBlock|UserGenesisBlock>} Parsed genesis block
    */
-  async readGenesisFromTransaction(transactionHash) {
+    async readGenesisFromTransaction(transactionHash) {
     try {
       console.log('🔍 Reading secure genesis from transaction:', transactionHash);
-      
-      // Get transaction details
+
       const tx = await this.connection.getTransaction(transactionHash, {
         commitment: 'confirmed',
         maxSupportedTransactionVersion: 0
       });
-      
-      if (!tx) {
-        throw new Error('Transaction not found');
+      if (!tx) throw new Error('Transaction not found');
+
+      const ix = (tx.transaction.message.instructions || [])
+        .find(ix => {
+          const pid = ix.programId ||
+            (ix.programIdIndex != null
+              ? tx.transaction.message.accountKeys[ix.programIdIndex]
+              : null);
+          return pid && (
+            (typeof pid === 'string' && pid === this.MEMO_PROGRAM_ID.toBase58()) ||
+            (pid.equals && pid.equals(this.MEMO_PROGRAM_ID))
+          );
+        });
+      if (!ix) throw new Error('No memo instruction found');
+
+      // RPC returns instruction data as a Base58 string
+      const rpcDataString = typeof ix.data === 'string'
+        ? ix.data
+        : Buffer.from(ix.data).toString('utf8');
+      console.log(`📝 RPC gave base58 string (${rpcDataString.length} chars)`);
+
+      // Step 1: Base58-decode the RPC string
+      let rawBytes;
+      try {
+        rawBytes = bs58.decode(rpcDataString);
+        console.log(`🔄 Base58 → bytes: ${rawBytes.length} bytes`);
+      } catch {
+        throw new Error('RPC data was not valid base58');
       }
-      
-      // Handle different transaction formats (legacy vs. versioned)
-      const instructions = tx.transaction.message.instructions || 
-                          tx.transaction.message.compiledInstructions || [];
-      
-      console.log(`🔍 Found ${instructions.length} instructions in transaction`);
-      
-      // Find memo instruction - handle both legacy and versioned formats
-      let memoInstruction = null;
-      
-      for (const ix of instructions) {
-        // Check if this instruction uses the memo program
-        const programId = ix.programId || 
-                         (ix.programIdIndex !== undefined ? 
-                          tx.transaction.message.accountKeys[ix.programIdIndex] : null);
-        
-        if (programId && (
-            (typeof programId === 'string' && programId === this.MEMO_PROGRAM_ID.toBase58()) ||
-            (programId.equals && programId.equals(this.MEMO_PROGRAM_ID))
-          )) {
-          memoInstruction = ix;
-          break;
-        }
-      }
-      
-      if (!memoInstruction) {
-        throw new Error('No memo instruction found in transaction');
-      }
-      
-      // JSON-RPC returns instruction data as base64 of the original bytes we sent
-      const rpcBase64 = Buffer.isBuffer(memoInstruction.data)
-        ? memoInstruction.data.toString('utf8')
-        : (typeof memoInstruction.data === 'string'
-            ? memoInstruction.data
-            : Buffer.from(memoInstruction.data).toString('utf8'));
-      
-      console.log(`📝 RPC base64 length: ${rpcBase64.length} chars`);
-      
-      // First decode: base64 → original memo bytes (whatever we wrote into the memo program)
-      const memoBytes = new Uint8Array(Buffer.from(rpcBase64, 'base64'));
-      console.log(`🔄 Decoded memo bytes length: ${memoBytes.length} bytes`);
-      
+
+      // Convert those bytes to UTF-8 text
+      const payloadText = Buffer.from(rawBytes).toString('utf8').trim();
+
       let wireData;
-      
-      if (SolanaMemoBuilder._looksLikeSecureWire(memoBytes)) {
-        // Case A: we wrote raw wire bytes directly to the memo (future-proof path)
-        wireData = memoBytes;
-        console.log('🔎 Detected raw wire bytes in memo (single decode).');
+
+      // A) Raw-wire bytes
+      if (SolanaMemoBuilder._looksLikeSecureWire(rawBytes)) {
+        wireData = rawBytes;
+        console.log('🔎 Detected raw-wire bytes (single decode).');
+
+      // B) New Base58 path
+      } else if (/^[1-9A-HJ-NP-Za-km-z]+$/.test(payloadText)) {
+        console.log(`🔁 Detected Base58 payload (${payloadText.length} chars)`);
+        wireData = bs58.decode(payloadText);
+        console.log(`📦 Base58 → wire: ${wireData.length} bytes`);
+        if (!SolanaMemoBuilder._looksLikeSecureWire(wireData)) {
+          throw new Error('Base58 decode did not yield valid wire frame');
+        }
+
+      // C) Legacy Base64 path
       } else {
-        // Case B: we wrote base64 TEXT to the memo (current behavior).
-        // The "memoBytes" are actually UTF-8 bytes of a base64 string. 
-        // Convert UTF-8 bytes back to string
-        const innerBase64Text = Buffer.from(memoBytes).toString('utf-8');
-        console.log(`🔁 Inner base64 text length: ${innerBase64Text.length} chars`);
-        
-        // Now decode the base64 string to get the original wire data
-        try {
-          wireData = new Uint8Array(Buffer.from(innerBase64Text, 'base64'));
-          console.log(`📦 Decoded wire data length: ${wireData.length} bytes`);
-          
-          if (!SolanaMemoBuilder._looksLikeSecureWire(wireData)) {
-            console.log(`❌ Wire data validation failed. First byte: 0x${wireData[0]?.toString(16)}, length: ${wireData.length}`);
-            throw new Error('Decoded memo does not match secure wire format');
-          }
-          console.log('✅ Decoded secure wire bytes from base64 text in memo (double decode).');
-        } catch (decodeError) {
-          console.error('❌ Failed to decode inner base64:', decodeError.message);
-          throw new Error('Failed to decode base64 memo data: ' + decodeError.message);
+        console.log(`🔄 Falling back to Base64 payload (${payloadText.length} chars)`);
+        wireData = new Uint8Array(Buffer.from(payloadText, 'base64'));
+        console.log(`📦 Base64 → wire: ${wireData.length} bytes`);
+        if (!SolanaMemoBuilder._looksLikeSecureWire(wireData)) {
+          throw new Error('Base64 decode did not yield valid wire frame');
         }
       }
-      
-      // Parse using GenesisBlockFactory (expects secure wire format)
+
+      // Finally parse it
       return await GenesisBlockFactory.parseFromWireData(wireData);
+
     } catch (error) {
       console.error('❌ Error reading secure genesis from transaction:', error);
       throw new Error('Failed to read secure genesis from transaction: ' + error.message);
     }
-  }
+  }  
 
   /**
    * Parse genesis block from wire data format
@@ -219,7 +204,7 @@ export class SolanaMemoBuilder {
   }
 
   /**
-   * Build a memo transaction with given data
+   * Build a memo transaction with given data, encoding wire bytes in Base58
    * @param {Uint8Array} memoData - Wire format data to include in memo
    * @param {Keypair} signerKeypair - Keypair to sign the transaction
    * @returns {Promise<Transaction>} Built transaction ready for submission
@@ -227,35 +212,33 @@ export class SolanaMemoBuilder {
   async buildMemoTransaction(memoData, signerKeypair) {
     try {
       console.log(`🔨 Building memo transaction, data size: ${memoData.length} bytes`);
-      
+
       if (memoData.length > 566) {
         throw new Error(`Memo data too large: ${memoData.length} bytes (max 566)`);
       }
-      
-      // Convert binary data to Base64 for Solana Memo program (following SolanaPublisher pattern)
-      const base64CompressedData = CompressionService.uint8ArrayToBase64(memoData);
-      const memoDataBuffer = Buffer.from(base64CompressedData, 'utf-8');
-      console.log(`📝 Encoded as Base64: ${base64CompressedData.length} chars`);
-      
-      // Create transaction (following SolanaPublisher pattern)
+
+      // Encode the wire-format bytes in Base58 (pure ASCII, no padding)
+      const memoText = bs58.encode(memoData);
+      console.log(`📝 Encoded as Base58: ${memoText.length} chars`);
+
+      // Create UTF-8 buffer from Base58 string
+      const memoDataBuffer = Buffer.from(memoText, 'utf8');
+
+      // Build transaction and add memo instruction
       const transaction = new Transaction();
-      
-      // Add memo instruction (following SolanaPublisher pattern)
       const instruction = new TransactionInstruction({
         keys: [],
         programId: this.MEMO_PROGRAM_ID,
         data: memoDataBuffer
       });
-      
       transaction.add(instruction);
-      
-      // Get recent blockhash (following SolanaPublisher pattern)
+
+      // Attach recent blockhash and fee payer
       const { blockhash } = await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = signerKeypair.publicKey;
-      
+
       console.log(`⚙️ Transaction prepared with blockhash: ${blockhash.slice(0, 8)}...`);
-      
       return transaction;
     } catch (error) {
       console.error('❌ Error building memo transaction:', error);
