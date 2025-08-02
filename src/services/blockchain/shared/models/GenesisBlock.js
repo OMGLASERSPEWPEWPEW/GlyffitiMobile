@@ -1,7 +1,26 @@
 // src/services/blockchain/shared/models/GenesisBlock.js
 // Path: src/services/blockchain/shared/models/GenesisBlock.js
 import { CompressionService } from '../../../compression/CompressionService.js';
-import { HashingService } from '../../../hashing/HashingService.js';
+
+let HashingService;
+if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+  // Node.js environment
+  const crypto = await import('crypto');
+  HashingService = {
+    async hashContent(content) {
+      if (!content || !(content instanceof Uint8Array)) {
+        throw new Error('Content must be a Uint8Array');
+      }
+      const hash = crypto.createHash('sha256');
+      hash.update(Buffer.from(content));
+      return hash.digest('hex');
+    }
+  };
+} else {
+  // React Native environment
+  const { HashingService: HS } = await import('../../../hashing/HashingService.js');
+  HashingService = HS;
+}
 
 /**
  * Genesis Block Models for Glyffiti Social Network
