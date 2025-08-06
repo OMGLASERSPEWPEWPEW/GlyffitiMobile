@@ -2,12 +2,12 @@
   "deployments": {
     "devnet": {
       "network": "devnet",
-      "transactionHash": "3My35hswgFRFMbiHwr4NdYZpBcXz95ej29cNb3TMBdhZRB8sYZE57P2nqiA8uXXW7x4deDEAF44NWgYsvXmPacA4",
-      "deployedAt": "2025-08-02T19:08:34.070Z",
+      "transactionHash": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "deployedAt": "2025-08-06T21:01:03.773Z",
       "deployerPublicKey": "BHm8JGaseHkhk99C7DSgiFiaNTTXLN8mGrEU3dwdwXKz",
-      "genesisTimestamp": 1754161713,
+      "genesisTimestamp": 1754514060,
       "genesisVersion": 1,
-      "explorerUrl": "https://explorer.solana.com/tx/3My35hswgFRFMbiHwr4NdYZpBcXz95ej29cNb3TMBdhZRB8sYZE57P2nqiA8uXXW7x4deDEAF44NWgYsvXmPacA4?cluster=devnet",
+      "explorerUrl": "https://explorer.solana.com/tx/3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL?cluster=devnet",
       "networkConfig": {
         "name": "Solana Devnet",
         "rpcUrl": "https://api.devnet.solana.com",
@@ -18,5 +18,5 @@
     }
   },
   "created": "2025-08-02T19:08:33.116Z",
-  "lastUpdated": "2025-08-02T19:08:34.071Z"
+  "lastUpdated": "2025-08-06T21:01:03.773Z"
 }

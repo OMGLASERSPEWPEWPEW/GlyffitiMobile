@@ -272,6 +272,19 @@ async function deployGlyffitiGenesis(network) {
     // Verify deployment by reading it back
     console.log('\n🔍 Verifying deployment...');
     const verifiedGenesis = await memoBuilder.readGenesisFromTransaction(genesisTransactionHash);
+
+
+    // ⭐ ADD THESE LINES HERE ⭐
+    console.log('\n📖 Retrieved Genesis Block Contents:');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 Full Genesis Object:');
+    console.log(JSON.stringify(verifiedGenesis, null, 2));
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📝 Kind: ${verifiedGenesis.kind}`);
+    console.log(`🔢 Version: ${verifiedGenesis.ver}`);
+    console.log(`⏰ Timestamp: ${verifiedGenesis.ts} (${new Date(verifiedGenesis.ts * 1000).toISOString()})`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
     
     if (verifiedGenesis.kind !== 'glyf_genesis') {
       throw new Error('Deployment verification failed - could not read genesis back from blockchain');

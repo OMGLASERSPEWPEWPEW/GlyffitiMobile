@@ -117,6 +117,9 @@ export class SolanaMemoBuilder {
     try {
       console.log('🔍 Reading secure genesis from transaction:', transactionHash);
 
+      console.log('⏳ Waiting 3 seconds for transaction indexing...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       const tx = await this.connection.getTransaction(transactionHash, {
         commitment: 'confirmed',
         maxSupportedTransactionVersion: 0

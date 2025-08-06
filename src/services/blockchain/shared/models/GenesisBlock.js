@@ -1,26 +1,21 @@
 // src/services/blockchain/shared/models/GenesisBlock.js
 // Path: src/services/blockchain/shared/models/GenesisBlock.js
 import { CompressionService } from '../../../compression/CompressionService.js';
+import { sha256 } from 'js-sha256';
 
-let HashingService;
-if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-  // Node.js environment
-  const crypto = await import('crypto');
-  HashingService = {
-    async hashContent(content) {
-      if (!content || !(content instanceof Uint8Array)) {
-        throw new Error('Content must be a Uint8Array');
-      }
-      const hash = crypto.createHash('sha256');
-      hash.update(Buffer.from(content));
-      return hash.digest('hex');
+/**
+ * Universal HashingService using js-sha256 (works in both Node.js and Expo)
+ */
+const HashingService = {
+  async hashContent(content) {
+    if (!content || !(content instanceof Uint8Array)) {
+      throw new Error('Content must be a Uint8Array');
     }
-  };
-} else {
-  // React Native environment
-  const { HashingService: HS } = await import('../../../hashing/HashingService.js');
-  HashingService = HS;
-}
+    // js-sha256 works universally across Node.js and React Native
+    const hashHex = sha256(content);
+    return hashHex;
+  }
+};
 
 /**
  * Genesis Block Models for Glyffiti Social Network
@@ -651,4 +646,4 @@ export class GenesisBlockFactory {
   }
 }
 
-// Character count: 19,347
+// Character count: 19,278
