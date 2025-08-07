@@ -1,0 +1,16 @@
+{
+  "network": "devnet",
+  "glyffitiGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+  "users": [
+    {
+      "username": "alice",
+      "publicKey": "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
+      "transactionHash": "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-06T21:27:52.155Z",
+      "explorer": "https://explorer.solana.com/tx/4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3?cluster=devnet"
+    }
+  ],
+  "createdAt": "2025-08-06T21:27:43.472Z",
+  "lastUpdated": "2025-08-06T21:27:52.155Z"
+}
