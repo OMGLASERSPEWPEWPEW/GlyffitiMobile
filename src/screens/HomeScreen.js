@@ -1,5 +1,6 @@
-// src/screens/HomeScreen.js  
+// src/screens/HomeScreen.js
 // Path: src/screens/HomeScreen.js
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,6 +10,7 @@ import {
   Dimensions
 } from 'react-native';
 import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
+import { UserSelector } from '../components/UserSelector';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
 
@@ -81,136 +83,94 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
         loadCacheData();
       }}
       onFallbackPress={() => navigation?.goBack?.()}
-      isDarkMode={isDarkMode}
     >
       <SafeAreaView style={[
         homeStyles.container,
-        isDarkMode && { backgroundColor: '#1f2937' }
+        { backgroundColor: isDarkMode ? '#111827' : colors.background }
       ]}>
-        <ScrollView 
-          contentContainerStyle={homeStyles.scrollContainer}
+        <ScrollView
+          style={homeStyles.scrollView}
+          contentContainerStyle={homeStyles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
           <View style={homeStyles.header}>
             <Text style={[
-              homeStyles.appTitle,
-              { color: isDarkMode ? '#3b82f6' : colors.primary }
+              homeStyles.title,
+              { color: isDarkMode ? '#e5e7eb' : colors.text }
             ]}>
               Glyffiti
             </Text>
             <Text style={[
-              homeStyles.tagline,
+              homeStyles.subtitle,
               { color: isDarkMode ? '#9ca3af' : colors.textSecondary }
             ]}>
-              Decentralized storytelling on Solana
+              Blockchain Social Network
             </Text>
           </View>
 
-          {/* Error display for loading issues */}
-          {loadingError && (
-            <ErrorDisplay
-              type={loadingError.type}
-              title="Loading Error"
-              message={loadingError.message}
-              onRetry={() => loadCacheData()}
-              isDarkMode={isDarkMode}
-              style={{ margin: spacing.medium }}
-            />
-          )}
-
-          {/* Main Action Section */}
-          <View style={homeStyles.mainSection}>
+          {/* User Selector Section */}
+          <View style={homeStyles.userSection}>
             <Text style={[
               homeStyles.sectionTitle,
               { color: isDarkMode ? '#e5e7eb' : colors.text }
             ]}>
-              What would you like to do?
+              Active User
             </Text>
-            
-            {/* Publishing Button - Main Feature */}
+            <UserSelector isDarkMode={isDarkMode} />
+          </View>
+
+          {/* Main Content */}
+          <View style={homeStyles.mainContent}>
+            {/* Publishing Card */}
             <Card
-              backgroundColor={isDarkMode ? '#3b82f6' : colors.primary}
+              onPress={handlePublishing}
+              backgroundColor={colors.primary}
               borderRadius={16}
               padding={spacing.large}
-              shadowColor={isDarkMode ? '#3b82f6' : colors.primary}
-              shadowOffset={{ width: 0, height: 4 }}
-              shadowOpacity={0.3}
-              shadowRadius={8}
-              elevation={8}
-              onPress={handlePublishing}
               marginHorizontal={0}
-              marginBottom={0}
+              marginBottom={spacing.medium}
               isDarkMode={isDarkMode}
             >
-              <View style={homeStyles.primaryButtonContent}>
-                <Text style={homeStyles.primaryButtonIcon}>📤</Text>
-                <View style={homeStyles.primaryButtonTextContainer}>
-                  <Text style={homeStyles.primaryButtonTitle}>Publishing</Text>
-                  <Text style={homeStyles.primaryButtonSubtitle}>
-                    Write and publish your stories to the blockchain
+              <View style={homeStyles.publishingCard}>
+                <Text style={homeStyles.publishingIcon}>✍️</Text>
+                <View style={homeStyles.publishingContent}>
+                  <Text style={homeStyles.publishingTitle}>
+                    Start Publishing
+                  </Text>
+                  <Text style={homeStyles.publishingDescription}>
+                    Create and share your stories on the blockchain
                   </Text>
                 </View>
+                <Text style={homeStyles.arrow}>→</Text>
               </View>
             </Card>
-          </View>
 
-          {/* Secondary Actions */}
-          <View style={homeStyles.secondarySection}>
+            {/* Feature Grid */}
             <Text style={[
               homeStyles.sectionTitle,
               { color: isDarkMode ? '#e5e7eb' : colors.text }
             ]}>
-              Explore
+              Features
             </Text>
-            
-            <View style={homeStyles.buttonRow}>
-              <View style={homeStyles.secondaryButtonContainer}>
+            <View style={homeStyles.featureGrid}>
+              {/* Library Card */}
+              <View style={homeStyles.featureItem}>
                 <Card
-                  backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
-                  borderRadius={12}
-                  padding={spacing.medium}
-                  borderWidth={1}
-                  borderColor={isDarkMode ? '#6b7280' : colors.border}
-                  onPress={() => handlePlaceholderPress('Discover')}
-                  marginHorizontal={0}
-                  marginBottom={0}
-                  isDarkMode={isDarkMode}
-                >
-                  <View style={homeStyles.secondaryButtonContent}>
-                    <Text style={homeStyles.secondaryButtonIcon}>🔍</Text>
-                    <Text style={[
-                      homeStyles.secondaryButtonText,
-                      { color: isDarkMode ? '#e5e7eb' : colors.text }
-                    ]}>
-                      Discover
-                    </Text>
-                    <Text style={[
-                      homeStyles.comingSoon,
-                      { color: isDarkMode ? '#9ca3af' : colors.textLight }
-                    ]}>
-                      Coming Soon
-                    </Text>
-                  </View>
-                </Card>
-              </View>
-              
-              <View style={homeStyles.secondaryButtonContainer}>
-                <Card
-                  backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
-                  borderRadius={12}
-                  padding={spacing.medium}
-                  borderWidth={1}
-                  borderColor={isDarkMode ? '#6b7280' : colors.border}
                   onPress={() => handlePlaceholderPress('Library')}
+                  backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
+                  borderRadius={12}
+                  padding={spacing.medium}
+                  borderWidth={1}
+                  borderColor={isDarkMode ? '#6b7280' : colors.border}
                   marginHorizontal={0}
                   marginBottom={0}
                   isDarkMode={isDarkMode}
                 >
-                  <View style={homeStyles.secondaryButtonContent}>
-                    <Text style={homeStyles.secondaryButtonIcon}>📚</Text>
+                  <View style={homeStyles.featureContent}>
+                    <Text style={homeStyles.featureIcon}>📚</Text>
                     <Text style={[
-                      homeStyles.secondaryButtonText,
+                      homeStyles.featureTitle,
                       { color: isDarkMode ? '#e5e7eb' : colors.text }
                     ]}>
                       Library
@@ -224,28 +184,27 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
                   </View>
                 </Card>
               </View>
-            </View>
-            
-            <View style={homeStyles.buttonRow}>
-              <View style={homeStyles.secondaryButtonContainer}>
+
+              {/* Discover Card */}
+              <View style={homeStyles.featureItem}>
                 <Card
+                  onPress={() => handlePlaceholderPress('Discover')}
                   backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
                   borderRadius={12}
                   padding={spacing.medium}
                   borderWidth={1}
                   borderColor={isDarkMode ? '#6b7280' : colors.border}
-                  onPress={() => handlePlaceholderPress('Community')}
                   marginHorizontal={0}
                   marginBottom={0}
                   isDarkMode={isDarkMode}
                 >
-                  <View style={homeStyles.secondaryButtonContent}>
-                    <Text style={homeStyles.secondaryButtonIcon}>👥</Text>
+                  <View style={homeStyles.featureContent}>
+                    <Text style={homeStyles.featureIcon}>🔍</Text>
                     <Text style={[
-                      homeStyles.secondaryButtonText,
+                      homeStyles.featureTitle,
                       { color: isDarkMode ? '#e5e7eb' : colors.text }
                     ]}>
-                      Community
+                      Discover
                     </Text>
                     <Text style={[
                       homeStyles.comingSoon,
@@ -256,23 +215,55 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
                   </View>
                 </Card>
               </View>
-              
-              <View style={homeStyles.secondaryButtonContainer}>
+
+              {/* Network Card */}
+              <View style={homeStyles.featureItem}>
                 <Card
+                  onPress={() => handlePlaceholderPress('Network')}
                   backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
                   borderRadius={12}
                   padding={spacing.medium}
                   borderWidth={1}
                   borderColor={isDarkMode ? '#6b7280' : colors.border}
-                  onPress={() => handlePlaceholderPress('Profile')}
                   marginHorizontal={0}
                   marginBottom={0}
                   isDarkMode={isDarkMode}
                 >
-                  <View style={homeStyles.secondaryButtonContent}>
-                    <Text style={homeStyles.secondaryButtonIcon}>👤</Text>
+                  <View style={homeStyles.featureContent}>
+                    <Text style={homeStyles.featureIcon}>🌐</Text>
                     <Text style={[
-                      homeStyles.secondaryButtonText,
+                      homeStyles.featureTitle,
+                      { color: isDarkMode ? '#e5e7eb' : colors.text }
+                    ]}>
+                      Network
+                    </Text>
+                    <Text style={[
+                      homeStyles.comingSoon,
+                      { color: isDarkMode ? '#9ca3af' : colors.textLight }
+                    ]}>
+                      Coming Soon
+                    </Text>
+                  </View>
+                </Card>
+              </View>
+
+              {/* Profile Card */}
+              <View style={homeStyles.featureItem}>
+                <Card
+                  onPress={() => handlePlaceholderPress('Profile')}
+                  backgroundColor={isDarkMode ? '#374151' : colors.backgroundSecondary}
+                  borderRadius={12}
+                  padding={spacing.medium}
+                  borderWidth={1}
+                  borderColor={isDarkMode ? '#6b7280' : colors.border}
+                  marginHorizontal={0}
+                  marginBottom={0}
+                  isDarkMode={isDarkMode}
+                >
+                  <View style={homeStyles.featureContent}>
+                    <Text style={homeStyles.featureIcon}>👤</Text>
+                    <Text style={[
+                      homeStyles.featureTitle,
                       { color: isDarkMode ? '#e5e7eb' : colors.text }
                     ]}>
                       Profile
@@ -336,4 +327,4 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
 export default HomeScreen;
 
-// Character count: 7451
+// Character count: 8143
