@@ -22,7 +22,8 @@ export const WalletSection = ({
   handleWalletAction,
   handleMigration,
   isDarkMode = false,
-  bypassLock = false 
+  customTitle = null,  // New prop for custom wallet titles
+  bypassLock = false   // New prop to bypass lock and always show wallet info
 }) => {
   
   // Get theme-aware styles
@@ -54,11 +55,14 @@ export const WalletSection = ({
     marginTop: spacing.small,
   };
 
-  // Unlocked wallet state
-  if (walletStatus === 'unlocked') {
+  // Determine the wallet title
+  const walletTitle = customTitle || '💳 The Glyffiti Wallet';
+
+  // Unlocked wallet state OR bypass lock for user wallets
+  if (walletStatus === 'unlocked' || bypassLock) {
     return (
       <StatusCard
-        title="💳 Secure Encrypted Wallet"
+        title={walletTitle}
         status="success"
         actionText={isRequestingAirdrop ? '⏳ Requesting...' : '🎁 Request 1 SOL'}
         onActionPress={handleRequestAirdrop}
@@ -66,15 +70,45 @@ export const WalletSection = ({
         actionLoading={isRequestingAirdrop}
         isDarkMode={isDarkMode}
       >
-        {/* Wallet address display using new styling system */}
-        <Text style={walletAddressStyle}>
-          {walletAddress.slice(0, 8)}...{walletAddress.slice(-8)}
-        </Text>
+        {/* Show address if available */}
+        {walletAddress && (
+          <Text style={walletAddressStyle}>
+            {walletAddress.slice(0, 8)}...{walletAddress.slice(-8)}
+          </Text>
+        )}
         
-        {/* Wallet balance using design token colors */}
-        <Text style={walletBalanceStyle}>
-          Balance: {walletBalance.toFixed(4)} SOL
-        </Text>
+        {/* Show balance if available */}
+        {typeof walletBalance === 'number' && (
+          <Text style={walletBalanceStyle}>
+            Balance: {walletBalance.toFixed(4)} SOL
+          </Text>
+        )}
+        
+        {/* Show status if bypassing lock and not actually unlocked */}
+        {bypassLock && walletStatus !== 'unlocked' && (
+          <Text style={{
+            fontSize: 12,
+            color: isDarkMode ? '#9ca3af' : '#6b7280',
+            textAlign: 'center',
+            marginTop: 4,
+            fontStyle: 'italic'
+          }}>
+            Status: {walletStatus} (showing for development)
+          </Text>
+        )}
+
+        {/* Show loading state for user wallet balance */}
+        {isLoading && (
+          <Text style={{
+            fontSize: 12,
+            color: isDarkMode ? '#60a5fa' : '#3b82f6',
+            textAlign: 'center',
+            marginTop: 4,
+            fontStyle: 'italic'
+          }}>
+            Loading balance...
+          </Text>
+        )}
       </StatusCard>
     );
   }
@@ -93,7 +127,7 @@ export const WalletSection = ({
     );
   }
   
-  // Locked or no wallet state
+  // Locked or no wallet state (only shown when not bypassing lock)
   const isNoWallet = walletStatus === 'none';
   const title = isNoWallet ? '🔒 No Wallet Found' : '🔒 Wallet Locked';
   const subtitle = isNoWallet 
@@ -153,4 +187,4 @@ export const WalletSection = ({
   );
 };
 
-// Character count: 4,207
+// Character count: 5,089

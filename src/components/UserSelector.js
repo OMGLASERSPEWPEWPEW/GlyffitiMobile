@@ -11,19 +11,19 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { userTransactionReader } from '../services/blockchain/UserTransactionReader';
 import { useWallet } from '../hooks/useWallet';
 import { WalletSection } from './publishing/WalletSection';
 import userRegistry from '../data/user-registry.json';
 import { userSelectorStyles } from '../styles/userSelectorStyles';
 import { WalletUpgradePrompt } from './WalletUpgradePrompt';
-// Add a state: const [showUpgrade, setShowUpgrade] = useState(false);
 
 /**
  * UserSelector Component
  * Displays current user and allows switching between users
  * Fetches user data directly from blockchain transactions
- * Now includes wallet information using existing WalletSection component
+ * Shows each user's individual wallet balance
  */
 export const UserSelector = ({ isDarkMode = false }) => {
   
@@ -38,26 +38,37 @@ export const UserSelector = ({ isDarkMode = false }) => {
   // Loading states
   const [loadingUser, setLoadingUser] = useState(false);
   const [loadingUserData, setLoadingUserData] = useState(false);
+  const [loadingUserBalance, setLoadingUserBalance] = useState(false);
   
   // Error state
   const [error, setError] = useState(null);
-
-  const [showUpgrade, setShowUpgrade] = useState(false); 
-  // Use existing wallet hook - no need to recreate anything
+  
+  // User wallet state
+  const [userWalletBalance, setUserWalletBalance] = useState(0);
+  const [userWalletAddress, setUserWalletAddress] = useState('');
+  
+  // UI state
+  const [showUserData, setShowUserData] = useState(false); // Collapsed by default
+  
+  // System wallet hook (for comparison/development)
   const {
-    walletStatus,
-    walletAddress,
-    walletBalance,
-    isRequestingAirdrop,
-    showWalletUnlock,
-    password,
-    isLoadingWallet,
-    setPassword,
-    setShowWalletUnlock,
-    handleRequestAirdrop,
-    handleWalletAction,
-    handleMigration
+    walletStatus: systemWalletStatus,
+    walletAddress: systemWalletAddress,
+    walletBalance: systemWalletBalance,
+    isRequestingAirdrop: systemIsRequestingAirdrop,
+    showWalletUnlock: systemShowWalletUnlock,
+    password: systemPassword,
+    isLoadingWallet: systemIsLoadingWallet,
+    setPassword: systemSetPassword,
+    setShowWalletUnlock: systemSetShowWalletUnlock,
+    handleRequestAirdrop: systemHandleRequestAirdrop,
+    handleWalletAction: systemHandleWalletAction,
+    handleMigration: systemHandleMigration,
+    createPersonalWallet
   } = useWallet();
+
+  // Solana connection for getting user balances
+  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
   /**
    * Initialize component with users from registry
@@ -65,6 +76,40 @@ export const UserSelector = ({ isDarkMode = false }) => {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  /**
+ * Load user's wallet balance from their public key (from registry)
+ */
+const loadUserWalletBalance = async (user) => {
+  if (!user || !user.publicKey) {
+    console.warn('⚠️ No user or public key found');
+    setUserWalletBalance(0);
+    setUserWalletAddress('Not available');
+    return;
+  }
+
+  try {
+    setLoadingUserBalance(true);
+    
+    console.log(`💰 Getting balance for ${user.username}'s wallet: ${user.publicKey}`);
+    
+    // Get balance using the publicKey directly from registry
+    const lamports = await connection.getBalance(new PublicKey(user.publicKey));
+    const sol = lamports / LAMPORTS_PER_SOL;
+    
+    console.log(`💰 ${user.username}'s Balance: ${sol.toFixed(4)} SOL`);
+    
+    setUserWalletBalance(sol);
+    setUserWalletAddress(user.publicKey); // Use registry publicKey
+    
+  } catch (error) {
+    console.error('❌ Error loading user wallet balance:', error);
+    setUserWalletBalance(0);
+    setUserWalletAddress('Error loading address');
+  } finally {
+    setLoadingUserBalance(false);
+  }
+};
 
   /**
    * Load users from the registry file
@@ -105,6 +150,10 @@ export const UserSelector = ({ isDarkMode = false }) => {
       setSelectedUser(user);
       setModalVisible(false);
       
+      // Reset wallet data
+      setUserWalletBalance(0);
+      setUserWalletAddress('');
+      
       // Fetch user data from blockchain transaction
       const userData = await userTransactionReader.fetchUserDataFromTransaction(
         user.transactionHash
@@ -113,6 +162,9 @@ export const UserSelector = ({ isDarkMode = false }) => {
       if (userData) {
         setSelectedUserData(userData);
         console.log('✅ User data loaded:', userData);
+        
+        // Load the user's wallet balance
+        await loadUserWalletBalance(user);
       } else {
         setError('Failed to fetch user data from blockchain');
         console.error('❌ No user data returned for:', user.username);
@@ -219,113 +271,138 @@ export const UserSelector = ({ isDarkMode = false }) => {
         </Text>
       </TouchableOpacity>
 
-      {/* User Data Display */}
+        {/* Collapsible User Data Display */}
       {selectedUser && (
         <View style={[
           userSelectorStyles.userDataContainer,
           { backgroundColor: isDarkMode ? '#1f2937' : '#f9fafb' }
         ]}>
-          {loadingUserData ? (
-            <View style={userSelectorStyles.loadingContainer}>
-              <ActivityIndicator 
-                size="small" 
-                color={isDarkMode ? '#60a5fa' : '#3b82f6'} 
-              />
-              <Text style={[
-                userSelectorStyles.loadingText,
-                { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-              ]}>
-                Fetching from blockchain...
-              </Text>
-            </View>
-          ) : selectedUserData ? (
-            <View style={userSelectorStyles.dataFields}>
-              {/* Show all available user data fields dynamically */}
-              {Object.entries(selectedUserData).map(([key, value]) => (
-                <View key={key} style={userSelectorStyles.dataRow}>
+          {/* Collapsible Header */}
+          <TouchableOpacity
+            style={userSelectorStyles.dataRow}
+            onPress={() => setShowUserData(!showUserData)}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              userSelectorStyles.dataLabel,
+              { 
+                color: isDarkMode ? '#9ca3af' : '#6b7280',
+                fontWeight: 'bold'
+              }
+            ]}>
+              Genesis Block Data
+            </Text>
+            <Text style={[
+              userSelectorStyles.dataValue,
+              { color: isDarkMode ? '#9ca3af' : '#6b7280' }
+            ]}>
+              {showUserData ? '▼' : '▶'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Expandable Content */}
+          {showUserData && (
+            <>
+              {loadingUserData ? (
+                <View style={userSelectorStyles.loadingContainer}>
+                  <ActivityIndicator 
+                    size="small" 
+                    color={isDarkMode ? '#60a5fa' : '#3b82f6'} 
+                  />
                   <Text style={[
-                    userSelectorStyles.dataLabel,
+                    userSelectorStyles.loadingText,
                     { color: isDarkMode ? '#9ca3af' : '#6b7280' }
                   ]}>
-                    {key.charAt(0).toUpperCase() + key.slice(1)}:
-                  </Text>
-                  <Text style={[
-                    userSelectorStyles.dataValue,
-                    { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                  ]}>
-                    {key === 'ts' || key === 'createdAt' 
-                      ? formatTimestamp(value)
-                      : (value ? String(value) : 'N/A')
-                    }
+                    Fetching from blockchain...
                   </Text>
                 </View>
-              ))}
-            </View>
-          ) : error ? (
-            <View style={userSelectorStyles.errorContainer}>
-              <Text style={[
-                userSelectorStyles.errorText,
-                { color: isDarkMode ? '#f87171' : '#dc2626' }
-              ]}>
-                {error}
-              </Text>
-              <TouchableOpacity
-                style={userSelectorStyles.retryButton}
-                onPress={() => handleUserSelect(selectedUser)}
-              >
-                <Text style={userSelectorStyles.retryButtonText}>
-                  Retry
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+              ) : selectedUserData ? (
+                <View style={userSelectorStyles.dataFields}>
+                  {/* Show all available user data fields dynamically */}
+                  {Object.entries(selectedUserData).map(([key, value]) => (
+                    <View key={key} style={userSelectorStyles.dataRow}>
+                      <Text style={[
+                        userSelectorStyles.dataLabel,
+                        { color: isDarkMode ? '#9ca3af' : '#6b7280' }
+                      ]}>
+                        {key.charAt(0).toUpperCase() + key.slice(1)}:
+                      </Text>
+                      <Text style={[
+                        userSelectorStyles.dataValue,
+                        { color: isDarkMode ? '#e5e7eb' : '#111827' }
+                      ]}>
+                        {key === 'ts' || key === 'createdAt' 
+                          ? formatTimestamp(value)
+                          : (value ? String(value) : 'N/A')
+                        }
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : error ? (
+                <View style={userSelectorStyles.errorContainer}>
+                  <Text style={[
+                    userSelectorStyles.errorText,
+                    { color: isDarkMode ? '#f87171' : '#dc2626' }
+                  ]}>
+                    {error}
+                  </Text>
+                  <TouchableOpacity
+                    style={userSelectorStyles.retryButton}
+                    onPress={() => handleUserSelect(selectedUser)}
+                  >
+                    <Text style={userSelectorStyles.retryButtonText}>
+                      Retry
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
       )}
 
- {/* Wallet Information Display - Use existing WalletSection component */}
-      <WalletSection 
-        walletStatus={walletStatus}
-        walletAddress={walletAddress}
-        walletBalance={walletBalance}
-        isRequestingAirdrop={isRequestingAirdrop}
-        showWalletUnlock={showWalletUnlock}
-        password={password}
-        isLoading={isLoadingWallet}
-        setPassword={setPassword}
-        setShowWalletUnlock={setShowWalletUnlock}
-        handleRequestAirdrop={handleRequestAirdrop}
-        handleWalletAction={handleWalletAction}
-        handleMigration={handleMigration}
-        isDarkMode={isDarkMode}
-      />
 
-      {/* Test button to show upgrade prompt */}
-      <TouchableOpacity
-        style={{
-          backgroundColor: '#3b82f6',
-          padding: 12,
-          borderRadius: 8,
-          marginTop: 16,
-          alignItems: 'center'
-        }}
-        onPress={() => setShowUpgrade(true)}
-      >
-        <Text style={{ color: 'white', fontWeight: 'bold' }}>
-          🧪 Test Wallet Upgrade
-        </Text>
-      </TouchableOpacity>
-
-      {/* Wallet Upgrade Prompt */}
-      {showUpgrade && (
-        <WalletUpgradePrompt 
-          onCreateWallet={(password) => {
-            console.log('Create wallet with:', password);
-            setShowUpgrade(false);
-          }}
-          onCancel={() => setShowUpgrade(false)}
+      {/* User's Personal Wallet Display */}
+      {selectedUser && (
+        <WalletSection 
+          walletStatus="unlocked" // Always show as unlocked for user wallets
+          walletAddress={userWalletAddress}
+          walletBalance={userWalletBalance}
+          isRequestingAirdrop={false}
+          showWalletUnlock={false}
+          password=""
+          isLoading={loadingUserBalance}
+          setPassword={() => {}}
+          setShowWalletUnlock={() => {}}
+          handleRequestAirdrop={() => Alert.alert('Info', `Send SOL directly to ${selectedUser.username}'s address: ${userWalletAddress}`)}
+          handleWalletAction={() => {}}
+          handleMigration={() => {}}
           isDarkMode={isDarkMode}
+          customTitle={`💳 ${selectedUser.username}'s Wallet`} // Custom title for each user
+          bypassLock={true} // Always show wallet info
         />
       )}
+
+      {/* System Wallet Display (for development/comparison) */}
+      <WalletSection 
+        walletStatus={systemWalletStatus}
+        walletAddress={systemWalletAddress}
+        walletBalance={systemWalletBalance}
+        isRequestingAirdrop={systemIsRequestingAirdrop}
+        showWalletUnlock={systemShowWalletUnlock}
+        password={systemPassword}
+        isLoading={systemIsLoadingWallet}
+        setPassword={systemSetPassword}
+        setShowWalletUnlock={systemSetShowWalletUnlock}
+        handleRequestAirdrop={systemHandleRequestAirdrop}
+        handleWalletAction={systemHandleWalletAction}
+        handleMigration={systemHandleMigration}
+        isDarkMode={isDarkMode}
+        customTitle="💳 The Glyffiti Wallet" // System wallet
+        bypassLock={false} // Use normal lock behavior for system wallet
+      />
+
 
       {/* User Selection Modal */}
       <Modal
@@ -390,4 +467,4 @@ export const UserSelector = ({ isDarkMode = false }) => {
 
 export default UserSelector;
 
-// Character count: 10,067
+// Character count: 11,589
