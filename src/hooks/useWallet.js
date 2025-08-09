@@ -268,6 +268,66 @@ export const useWallet = () => {
     return walletService.getWalletPublicKey() || '';
   };
 
+    // Transfer SOL from system wallet to another address
+  const transferSOL = async (toAddress, amount = 1) => {
+    if (!walletService || walletStatus !== 'unlocked') {
+      Alert.alert('Error', 'System wallet must be unlocked first');
+      return false;
+    }
+
+    try {
+      setIsRequestingAirdrop(true); // Reuse loading state
+      
+      const { Transaction, SystemProgram, PublicKey } = require('@solana/web3.js');
+      
+      // Create transfer transaction
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: walletService.getWalletKeypair().publicKey,
+          toPubkey: new PublicKey(toAddress),
+          lamports: amount * 1000000000, // Convert SOL to lamports
+        })
+      );
+      
+      // Get recent blockhash
+      const { blockhash } = await walletService.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletService.getWalletKeypair().publicKey;
+      
+      // Sign and send
+      transaction.sign(walletService.getWalletKeypair());
+      const signature = await walletService.connection.sendRawTransaction(
+        transaction.serialize(),
+        { skipPreflight: false, preflightCommitment: 'confirmed' }
+      );
+      
+      // Wait for confirmation
+      const confirmation = await walletService.connection.confirmTransaction(
+        signature,
+        'confirmed'
+      );
+      
+      if (confirmation.value.err) {
+        throw new Error(`Transfer failed: ${confirmation.value.err}`);
+      }
+      
+      console.log(`✅ Transfer successful: ${signature}`);
+      Alert.alert('✅ Success!', `Sent ${amount} SOL successfully!`);
+      
+      // Refresh system wallet balance
+      await loadWalletBalance(walletService, 'post-transfer');
+      
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Transfer failed:', error);
+      Alert.alert('Error', 'Transfer failed: ' + error.message);
+      return false;
+    } finally {
+      setIsRequestingAirdrop(false);
+    }
+  };
+
   return {
     // State
     walletService,
@@ -300,6 +360,7 @@ export const useWallet = () => {
     lockWallet,
     refreshBalance,
     checkWalletStatus,
+    transferSOL,
     
     // Getters
     getWalletInfo,

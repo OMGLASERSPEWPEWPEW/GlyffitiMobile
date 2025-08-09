@@ -23,7 +23,9 @@ export const WalletSection = ({
   handleMigration,
   isDarkMode = false,
   customTitle = null,  // New prop for custom wallet titles
-  bypassLock = false   // New prop to bypass lock and always show wallet info
+  bypassLock = false,
+  hideActionButton = false,     // New prop
+  customActionText = null    // New prop to bypass lock and always show wallet info
 }) => {
   
   // Get theme-aware styles
@@ -64,8 +66,8 @@ export const WalletSection = ({
       <StatusCard
         title={walletTitle}
         status="success"
-        actionText={isRequestingAirdrop ? '⏳ Requesting...' : '🎁 Request 1 SOL'}
-        onActionPress={handleRequestAirdrop}
+        actionText={hideActionButton ? undefined : (customActionText || (isRequestingAirdrop ? '⏳ Processing...' : '🎁 Request 1 SOL'))}
+        onActionPress={hideActionButton ? undefined : handleRequestAirdrop}
         actionDisabled={isRequestingAirdrop}
         actionLoading={isRequestingAirdrop}
         isDarkMode={isDarkMode}

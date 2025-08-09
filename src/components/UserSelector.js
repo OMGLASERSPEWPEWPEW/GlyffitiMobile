@@ -64,7 +64,7 @@ export const UserSelector = ({ isDarkMode = false }) => {
     handleRequestAirdrop: systemHandleRequestAirdrop,
     handleWalletAction: systemHandleWalletAction,
     handleMigration: systemHandleMigration,
-    createPersonalWallet
+    transferSOL
   } = useWallet();
 
   // Solana connection for getting user balances
@@ -193,6 +193,34 @@ const loadUserWalletBalance = async (user) => {
       return 'Invalid date';
     }
   };
+
+  /**
+ * Handle giving SOL to selected user
+ */
+const handleGiveUserSOL = async () => {
+  if (!selectedUser || !selectedUser.publicKey) {
+    Alert.alert('Error', 'No user selected');
+    return;
+  }
+
+  Alert.alert(
+    '🎁 Give SOL',
+    `Send 1 SOL from Glyffiti Wallet to ${selectedUser.username}?`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Send', 
+        onPress: async () => {
+          const success = await transferSOL(selectedUser.publicKey, 1);
+          if (success) {
+            // Refresh user's balance after transfer
+            await loadUserWalletBalance(selectedUser);
+          }
+        }
+      }
+    ]
+  );
+};
 
   /**
    * Render user item in the selection list
@@ -363,45 +391,58 @@ const loadUserWalletBalance = async (user) => {
       )}
 
 
-      {/* User's Personal Wallet Display */}
+      {/* Horizontal Wallet Layout */}
       {selectedUser && (
-        <WalletSection 
-          walletStatus="unlocked" // Always show as unlocked for user wallets
-          walletAddress={userWalletAddress}
-          walletBalance={userWalletBalance}
-          isRequestingAirdrop={false}
-          showWalletUnlock={false}
-          password=""
-          isLoading={loadingUserBalance}
-          setPassword={() => {}}
-          setShowWalletUnlock={() => {}}
-          handleRequestAirdrop={() => Alert.alert('Info', `Send SOL directly to ${selectedUser.username}'s address: ${userWalletAddress}`)}
-          handleWalletAction={() => {}}
-          handleMigration={() => {}}
-          isDarkMode={isDarkMode}
-          customTitle={`💳 ${selectedUser.username}'s Wallet`} // Custom title for each user
-          bypassLock={true} // Always show wallet info
-        />
-      )}
+        <View style={{
+          flexDirection: 'row',
+          gap: 12,
+          marginTop: 16
+        }}>
+          {/* User's Personal Wallet - Left Half */}
+          <View style={{ flex: 1 }}>
+            <WalletSection 
+              walletStatus="unlocked"
+              walletAddress={userWalletAddress}
+              walletBalance={userWalletBalance}
+              isRequestingAirdrop={false}
+              showWalletUnlock={false}
+              password=""
+              isLoading={loadingUserBalance}
+              setPassword={() => {}}
+              setShowWalletUnlock={() => {}}
+              handleRequestAirdrop={() => {}} // No button
+              handleWalletAction={() => {}}
+              handleMigration={() => {}}
+              isDarkMode={isDarkMode}
+              customTitle={`💳 ${selectedUser.username}'s Wallet`}
+              bypassLock={true}
+              hideActionButton={true} // New prop to hide button
+            />
+          </View>
 
-      {/* System Wallet Display (for development/comparison) */}
-      <WalletSection 
-        walletStatus={systemWalletStatus}
-        walletAddress={systemWalletAddress}
-        walletBalance={systemWalletBalance}
-        isRequestingAirdrop={systemIsRequestingAirdrop}
-        showWalletUnlock={systemShowWalletUnlock}
-        password={systemPassword}
-        isLoading={systemIsLoadingWallet}
-        setPassword={systemSetPassword}
-        setShowWalletUnlock={systemSetShowWalletUnlock}
-        handleRequestAirdrop={systemHandleRequestAirdrop}
-        handleWalletAction={systemHandleWalletAction}
-        handleMigration={systemHandleMigration}
-        isDarkMode={isDarkMode}
-        customTitle="💳 The Glyffiti Wallet" // System wallet
-        bypassLock={false} // Use normal lock behavior for system wallet
-      />
+          {/* System Wallet - Right Half */}
+          <View style={{ flex: 1 }}>
+            <WalletSection 
+              walletStatus={systemWalletStatus}
+              walletAddress={systemWalletAddress}
+              walletBalance={systemWalletBalance}
+              isRequestingAirdrop={systemIsRequestingAirdrop}
+              showWalletUnlock={systemShowWalletUnlock}
+              password={systemPassword}
+              isLoading={systemIsLoadingWallet}
+              setPassword={systemSetPassword}
+              setShowWalletUnlock={systemSetShowWalletUnlock}
+              handleRequestAirdrop={() => handleGiveUserSOL()} // Custom function
+              handleWalletAction={systemHandleWalletAction}
+              handleMigration={systemHandleMigration}
+              isDarkMode={isDarkMode}
+              customTitle="💳 Glyffiti Wallet"
+              bypassLock={false}
+              customActionText={`🎁 Give ${selectedUser.username} 1 SOL`} // New prop
+            />
+          </View>
+        </View>
+      )}
 
 
       {/* User Selection Modal */}
