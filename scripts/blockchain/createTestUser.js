@@ -40,7 +40,7 @@ const CONFIG = {
   // Paths
   USERS_DIR: path.join(__dirname, 'test-users'),
   GENESIS_REGISTRY: path.join(__dirname, 'genesis-registry.json'),
-  USER_REGISTRY: path.join(__dirname, 'user-registry.json')
+  USER_REGISTRY: path.join(__dirname, '../../src/data/user-registry.json')
 };
 
 /**
@@ -98,6 +98,39 @@ async function getUserKeypair(username) {
     );
     console.log(`🔑 Generated new keypair for ${username}: ${keypair.publicKey.toBase58()}`);
     return keypair;
+  }
+}
+
+
+/**
+ * Load the system wallet that pays for user creation
+ */
+async function getSystemWallet() {
+  try {
+    // Try common locations for the system wallet
+    const possiblePaths = [
+      './scripts/blockchain/deployment-wallet.json',
+      './wallet.json',
+      './deployer-devnet.json'
+    ];
+    
+    for (const walletPath of possiblePaths) {
+      try {
+        const walletData = await fs.readFile(walletPath, 'utf8');
+        const secretKey = new Uint8Array(JSON.parse(walletData));
+        const systemKeypair = Keypair.fromSecretKey(secretKey);
+        console.log(`💳 Loaded system wallet: ${systemKeypair.publicKey.toBase58()}`);
+        return systemKeypair;
+      } catch (e) {
+        // Try next path
+      }
+    }
+    
+    throw new Error('No system wallet found');
+  } catch (error) {
+    console.error('❌ Could not load system wallet:', error.message);
+    console.log('💡 Create one with: node scripts/blockchain/findWallet.js');
+    throw error;
   }
 }
 
@@ -172,11 +205,12 @@ async function createTestUser(username, connection, registry) {
     
     // Deploy to blockchain
     console.log('\n📡 Deploying to Solana...');
+    const systemWallet = await getSystemWallet();
     const memoBuilder = new SolanaMemoBuilder(connection);
     const transactionHash = await memoBuilder.deployUserGenesis(
       username,
       CONFIG.GLYFFITI_GENESIS_HASH,
-      userKeypair
+      systemWallet 
     );
     
     console.log(`✅ User Genesis deployed: ${transactionHash}`);
