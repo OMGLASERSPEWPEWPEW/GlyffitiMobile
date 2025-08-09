@@ -12,13 +12,18 @@ import {
   Alert
 } from 'react-native';
 import { userTransactionReader } from '../services/blockchain/UserTransactionReader';
+import { useWallet } from '../hooks/useWallet';
+import { WalletSection } from './publishing/WalletSection';
 import userRegistry from '../data/user-registry.json';
 import { userSelectorStyles } from '../styles/userSelectorStyles';
+import { WalletUpgradePrompt } from './WalletUpgradePrompt';
+// Add a state: const [showUpgrade, setShowUpgrade] = useState(false);
 
 /**
  * UserSelector Component
  * Displays current user and allows switching between users
  * Fetches user data directly from blockchain transactions
+ * Now includes wallet information using existing WalletSection component
  */
 export const UserSelector = ({ isDarkMode = false }) => {
   
@@ -36,6 +41,23 @@ export const UserSelector = ({ isDarkMode = false }) => {
   
   // Error state
   const [error, setError] = useState(null);
+
+  const [showUpgrade, setShowUpgrade] = useState(false); 
+  // Use existing wallet hook - no need to recreate anything
+  const {
+    walletStatus,
+    walletAddress,
+    walletBalance,
+    isRequestingAirdrop,
+    showWalletUnlock,
+    password,
+    isLoadingWallet,
+    setPassword,
+    setShowWalletUnlock,
+    handleRequestAirdrop,
+    handleWalletAction,
+    handleMigration
+  } = useWallet();
 
   /**
    * Initialize component with users from registry
@@ -218,84 +240,33 @@ export const UserSelector = ({ isDarkMode = false }) => {
             </View>
           ) : selectedUserData ? (
             <View style={userSelectorStyles.dataFields}>
-              <View style={userSelectorStyles.dataRow}>
-                <Text style={[
-                  userSelectorStyles.dataLabel,
-                  { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-                ]}>
-                  Kind:
-                </Text>
-                <Text style={[
-                  userSelectorStyles.dataValue,
-                  { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                ]}>
-                  {selectedUserData.kind}
-                </Text>
-              </View>
-              
-              <View style={userSelectorStyles.dataRow}>
-                <Text style={[
-                  userSelectorStyles.dataLabel,
-                  { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-                ]}>
-                  Timestamp:
-                </Text>
-                <Text style={[
-                  userSelectorStyles.dataValue,
-                  { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                ]}>
-                  {formatTimestamp(selectedUserData.ts)}
-                </Text>
-              </View>
-              
-              <View style={userSelectorStyles.dataRow}>
-                <Text style={[
-                  userSelectorStyles.dataLabel,
-                  { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-                ]}>
-                  Alias:
-                </Text>
-                <Text style={[
-                  userSelectorStyles.dataValue,
-                  { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                ]}>
-                  {selectedUserData.alias}
-                </Text>
-              </View>
-              
-              <View style={userSelectorStyles.dataRow}>
-                <Text style={[
-                  userSelectorStyles.dataLabel,
-                  { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-                ]}>
-                  Parent:
-                </Text>
-                <Text style={[
-                  userSelectorStyles.dataValue,
-                  { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                ]}>
-                  {selectedUserData.parent || 'None'}
-                </Text>
-              </View>
-              
-              <View style={userSelectorStyles.dataRow}>
-                <Text style={[
-                  userSelectorStyles.dataLabel,
-                  { color: isDarkMode ? '#9ca3af' : '#6b7280' }
-                ]}>
-                  Public Key:
-                </Text>
-                <Text style={[
-                  userSelectorStyles.dataValue,
-                  { color: isDarkMode ? '#e5e7eb' : '#111827' }
-                ]}>
-                  {selectedUserData.pub || 'None'}
-                </Text>
-              </View>
+              {/* Show all available user data fields dynamically */}
+              {Object.entries(selectedUserData).map(([key, value]) => (
+                <View key={key} style={userSelectorStyles.dataRow}>
+                  <Text style={[
+                    userSelectorStyles.dataLabel,
+                    { color: isDarkMode ? '#9ca3af' : '#6b7280' }
+                  ]}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}:
+                  </Text>
+                  <Text style={[
+                    userSelectorStyles.dataValue,
+                    { color: isDarkMode ? '#e5e7eb' : '#111827' }
+                  ]}>
+                    {key === 'ts' || key === 'createdAt' 
+                      ? formatTimestamp(value)
+                      : (value ? String(value) : 'N/A')
+                    }
+                  </Text>
+                </View>
+              ))}
             </View>
           ) : error ? (
             <View style={userSelectorStyles.errorContainer}>
-              <Text style={userSelectorStyles.errorText}>
+              <Text style={[
+                userSelectorStyles.errorText,
+                { color: isDarkMode ? '#f87171' : '#dc2626' }
+              ]}>
                 {error}
               </Text>
               <TouchableOpacity
@@ -311,6 +282,51 @@ export const UserSelector = ({ isDarkMode = false }) => {
         </View>
       )}
 
+ {/* Wallet Information Display - Use existing WalletSection component */}
+      <WalletSection 
+        walletStatus={walletStatus}
+        walletAddress={walletAddress}
+        walletBalance={walletBalance}
+        isRequestingAirdrop={isRequestingAirdrop}
+        showWalletUnlock={showWalletUnlock}
+        password={password}
+        isLoading={isLoadingWallet}
+        setPassword={setPassword}
+        setShowWalletUnlock={setShowWalletUnlock}
+        handleRequestAirdrop={handleRequestAirdrop}
+        handleWalletAction={handleWalletAction}
+        handleMigration={handleMigration}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* Test button to show upgrade prompt */}
+      <TouchableOpacity
+        style={{
+          backgroundColor: '#3b82f6',
+          padding: 12,
+          borderRadius: 8,
+          marginTop: 16,
+          alignItems: 'center'
+        }}
+        onPress={() => setShowUpgrade(true)}
+      >
+        <Text style={{ color: 'white', fontWeight: 'bold' }}>
+          🧪 Test Wallet Upgrade
+        </Text>
+      </TouchableOpacity>
+
+      {/* Wallet Upgrade Prompt */}
+      {showUpgrade && (
+        <WalletUpgradePrompt 
+          onCreateWallet={(password) => {
+            console.log('Create wallet with:', password);
+            setShowUpgrade(false);
+          }}
+          onCancel={() => setShowUpgrade(false)}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
       {/* User Selection Modal */}
       <Modal
         animationType="slide"
@@ -320,7 +336,7 @@ export const UserSelector = ({ isDarkMode = false }) => {
       >
         <View style={userSelectorStyles.modalOverlay}>
           <View style={[
-            userSelectorStyles.modalContent,
+            userSelectorStyles.modalContainer,
             { backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }
           ]}>
             <View style={userSelectorStyles.modalHeader}>
@@ -374,4 +390,4 @@ export const UserSelector = ({ isDarkMode = false }) => {
 
 export default UserSelector;
 
-// Character count: 10892
+// Character count: 10,067

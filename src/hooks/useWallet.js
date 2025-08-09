@@ -5,6 +5,10 @@ import { Alert } from 'react-native';
 import { MobileWalletService } from '../services/wallet/MobileWalletService';
 import { SolanaAirdropService } from '../services/wallet/SolanaAirdropService';
 
+
+
+const isDevelopment = __DEV__ || process.env.NODE_ENV === 'development';
+const DEV_PASSWORD = 'qwerty';
 /**
  * Custom hook for wallet management
  * Centralizes all wallet-related state and operations
@@ -18,6 +22,8 @@ export const useWallet = () => {
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
   const [showWalletUnlock, setShowWalletUnlock] = useState(false);
   const [isRequestingAirdrop, setIsRequestingAirdrop] = useState(false);
+  const [isSystemWallet, setIsSystemWallet] = useState(true);
+  const [hasPersonalWallet, setHasPersonalWallet] = useState(false);
 
   // Refs to prevent duplicate operations
   const initRef = useRef(false);
@@ -35,14 +41,25 @@ export const useWallet = () => {
 
   // Check if wallet exists
   const checkWalletStatus = async () => {
-    try {
-      const hasWallet = await MobileWalletService.hasWallet();
-      setWalletStatus(hasWallet ? 'locked' : 'none');
-    } catch (error) {
-      console.error('Error checking wallet status:', error);
+  try {
+    const hasWallet = await MobileWalletService.hasWallet();
+    
+    if (hasWallet) {
+      // Auto-unlock in development
+      if (isDevelopment) {
+        console.log('🔧 Development: Auto-unlocking system wallet');
+        await unlockWallet(DEV_PASSWORD);
+      } else {
+        setWalletStatus('locked');
+      }
+    } else {
       setWalletStatus('none');
     }
-  };
+  } catch (error) {
+    console.error('Error checking wallet status:', error);
+    setWalletStatus('none');
+  }
+};
 
   // Load wallet balance
   const loadWalletBalance = async (wallet = walletService, context = 'manual') => {
@@ -260,6 +277,11 @@ export const useWallet = () => {
     isLoadingWallet,
     showWalletUnlock,
     isRequestingAirdrop,
+    isSystemWallet,
+    hasPersonalWallet,
+    createPersonalWallet: () => console.log('createPersonalWallet coming soon'),
+    switchToPersonalWallet: () => console.log('switchToPersonalWallet coming soon'),
+    
     
     // Computed values
     walletAddress: getWalletAddress(),

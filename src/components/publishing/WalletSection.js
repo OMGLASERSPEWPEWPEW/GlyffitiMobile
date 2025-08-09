@@ -21,7 +21,8 @@ export const WalletSection = ({
   handleRequestAirdrop,
   handleWalletAction,
   handleMigration,
-  isDarkMode = false 
+  isDarkMode = false,
+  bypassLock = false 
 }) => {
   
   // Get theme-aware styles
