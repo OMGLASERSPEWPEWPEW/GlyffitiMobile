@@ -52,31 +52,19 @@ export const SocialFeed = ({
     try {
       setError(null);
       
-      const feedOptions = {
-        maxTotalPosts: maxPosts,
-        limit: postsPerUser,
-        useCache: useCache
-      };
+      // Progressive loading - show posts as they come in
+      await feedService.buildFeedProgressive(
+        { maxTotalPosts: maxPosts, limit: postsPerUser },
+        (currentPosts) => {
+          setPosts([...currentPosts]); // Update display immediately
+        }
+      );
       
-      const feedPosts = await feedService.buildFeed(feedOptions);
-      
-      setPosts(feedPosts);
       setLastFetchTime(Date.now());
-      
-      console.log('📰 Feed loaded:', {
-        postsCount: feedPosts.length,
-        fromCache: useCache && feedService.isCacheValid()
-      });
-      
     } catch (loadError) {
-      console.error('❌ Error loading feed:', loadError);
       setError(loadError.message || 'Failed to load feed');
-      
-      if (onError) {
-        onError(loadError);
-      }
     }
-  }, [maxPosts, postsPerUser, onError]);
+  }, [maxPosts, postsPerUser]);
   
   /**
    * Handle pull-to-refresh

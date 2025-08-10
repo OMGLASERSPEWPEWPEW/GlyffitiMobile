@@ -171,6 +171,49 @@ export class FeedService {
       return [];
     }
   }
+
+    /**
+   * Build feed progressively, calling onPostsAvailable as posts are fetched
+   * @param {Object} options - Feed options  
+   * @param {Function} onPostsAvailable - Callback(posts) called with each user's posts
+   * @returns {Promise<Array>} Final complete feed
+   */
+  async buildFeedProgressive(options = {}, onPostsAvailable = null) {
+    const { limit = 3, maxTotalPosts = 20 } = options;
+    
+    try {
+      const activeUsers = await PostHeaderService.getActiveUsers();
+      const allPosts = [];
+      
+      for (const user of activeUsers) {
+        try {
+          const userPosts = await this.getUserRecentPosts(
+            user.publicKey, user.username, user.latestPostHash, limit
+          );
+          
+          if (userPosts.length > 0) {
+            allPosts.push(...userPosts);
+            
+            // Sort current posts and show them immediately
+            const sortedPosts = allPosts.sort((a, b) => b.timestamp - a.timestamp);
+            const currentFeed = sortedPosts.slice(0, maxTotalPosts);
+            
+            // Call callback with current posts
+            if (onPostsAvailable) {
+              onPostsAvailable(currentFeed);
+            }
+          }
+        } catch (error) {
+          console.error(`Error loading ${user.username}:`, error);
+        }
+      }
+      
+      return allPosts;
+    } catch (error) {
+      console.error('Progressive feed error:', error);
+      return [];
+    }
+  }
   
   /**
    * Read and parse a single post from a blockchain transaction
