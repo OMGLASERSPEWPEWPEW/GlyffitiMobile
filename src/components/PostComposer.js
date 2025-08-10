@@ -15,6 +15,7 @@ import { Keypair } from '@solana/web3.js';
 import { spacing, colors, typography, borderRadius } from '../styles/tokens';
 import { useWallet } from '../hooks/useWallet';
 import { PublishingService } from '../services/publishing/PublishingService';
+import { PostHeaderService } from '../services/feed/PostHeaderService';
 import userKeys from '../data/user-keys.json';
 
 /**
@@ -33,7 +34,7 @@ import userKeys from '../data/user-keys.json';
  * - Responsive design for different screen sizes
  * 
  * Architecture Integration:
- * - Uses PostPublishingService for blockchain publishing
+ * - Uses PublishingService for blockchain publishing
  * - Maintains user post chains (genesis -> post1 -> post2...)
  * - Stores posts permanently on Solana blockchain
  * - Updates user's lastPostHash for chain integrity
@@ -47,7 +48,7 @@ export const PostComposer = ({
 }) => {
   
   // Wallet integration for accessing user keypairs
-  const { walletManager } = useWallet();
+  const { walletService } = useWallet();
   
   // Publishing service instance
   const [publishingService, setPublishingService] = useState(null);
@@ -70,65 +71,80 @@ export const PostComposer = ({
    */
   const remainingChars = MAX_POST_LENGTH - postContent.length;
   const isOverLimit = remainingChars < 0;
-  const isNearLimit = remainingChars <= 20 && remainingChars >= 0;
-  
-  /**
-   * Check if post can be published
-   */
-  const canPost = postContent.trim().length > 0 && 
-                  !isOverLimit && 
-                  selectedUser && 
-                  publishingService &&
-                  userWalletBalance >= estimatedCost &&
-                  !isPosting &&
-                  !publishProgress;
+  const isNearLimit = remainingChars <= 20 && remainingChars > 0;
+  const canPost = postContent.trim().length > 0 && !isOverLimit && selectedUser && !isPosting;
 
   /**
-   * Set up publishing service when user changes
+   * Set up publishing service when user is selected
    */
   useEffect(() => {
-    if (selectedUser) {
-      try {
-        const service = new PublishingService();
-        
-        // Create a temporary wallet object for the user
-        const userWallet = {
-          getWalletKeypair: () => {
-            const privateKeyArray = userKeys[selectedUser.username];
-            if (!privateKeyArray) {
-              throw new Error(`No private key found for user: ${selectedUser.username}`);
+    const setupPublishingService = async () => {
+      console.log('🔵 setupPublishingService called');
+      console.log('🔵 selectedUser:', selectedUser?.username);
+      
+      if (selectedUser) {
+        try {
+          console.log('✅ Setting up publishing service for:', selectedUser.username);
+          
+          // Create and configure publishing service
+          console.log('🔵 Creating new PublishingService...');
+          const service = new PublishingService();
+          console.log('🔵 PublishingService created:', !!service);
+          
+          // ✅ FIX: Create Alice's individual wallet instead of using system wallet
+          console.log('🔵 Creating user wallet for:', selectedUser.username);
+          const userWallet = {
+            getWalletKeypair: () => {
+              const privateKeyArray = userKeys[selectedUser.username];
+              if (!privateKeyArray) {
+                throw new Error(`No private key found for user: ${selectedUser.username}`);
+              }
+              const keypair = Keypair.fromSecretKey(new Uint8Array(privateKeyArray));
+              console.log('🔑 Using keypair for:', selectedUser.username, keypair.publicKey.toBase58());
+              return keypair;
+            },
+            getWalletPublicKey: () => {
+              const privateKeyArray = userKeys[selectedUser.username];
+              if (!privateKeyArray) {
+                throw new Error(`No private key found for user: ${selectedUser.username}`);
+              }
+              const keypair = Keypair.fromSecretKey(new Uint8Array(privateKeyArray));
+              return keypair.publicKey.toBase58();
             }
-            return Keypair.fromSecretKey(new Uint8Array(privateKeyArray));
-          }
-        };
-        
-        service.setWallet(userWallet);
-        setPublishingService(service);
-        console.log('✅ Publishing service set up for:', selectedUser.username);
-      } catch (error) {
-        console.error('❌ Error setting up publishing service:', error);
+          };
+          
+          console.log('🔵 Setting Alice\'s wallet on service...');
+          service.setWallet(userWallet);
+          console.log('🔵 Alice\'s wallet set successfully');
+          
+          console.log('🔵 Setting publishingService state...');
+          setPublishingService(service);
+          console.log('✅ Publishing service setup complete for:', selectedUser.username);
+          console.log('💰 Alice will pay for her own posts with wallet:', selectedUser.publicKey);
+        } catch (error) {
+          console.error('❌ Error setting up publishing service:', error);
+          console.error('❌ Error stack:', error.stack);
+        }
+      } else {
+        console.log('❌ Cannot setup publishing service - no selectedUser');
+        setPublishingService(null);
       }
-    }
+    };
+    
+    setupPublishingService();
   }, [selectedUser]);
 
   /**
-   * Update cost estimation using existing publishing service
+   * Estimate cost for current post content
    */
   useEffect(() => {
-    const updateCostEstimate = async () => {
-      if (postContent.length > 0 && publishingService) {
+    const updateCostEstimate = () => {
+      if (postContent.trim().length > 0 && publishingService) {
         try {
-          // Use existing content preparation to get accurate cost
-          const tempContent = {
-            content: postContent,
-            filename: `${selectedUser?.username}_post.txt`,
-            size: postContent.length,
-            type: 'text/plain'
-          };
-          
-          // This uses your proven cost estimation logic
-          const stats = publishingService.getContentStats(postContent);
-          setEstimatedCost(0.001); // Conservative estimate for now
+          // ✅ FIX: Use estimatePublishing instead of getContentStats for cost estimation
+          // estimatePublishing only needs the text content, not a full content object
+          const estimation = publishingService.estimatePublishing(postContent.trim());
+          setEstimatedCost(estimation.estimatedCost || 0.001);
         } catch (error) {
           console.error('Error estimating cost:', error);
           setEstimatedCost(0.001); // Fallback
@@ -145,52 +161,90 @@ export const PostComposer = ({
    * Handle post creation using existing PublishingService infrastructure
    */
   const handleCreatePost = async () => {
-    if (!canPost || !publishingService) return;
+    console.log('🔵 handleCreatePost called');
+    console.log('🔵 canPost:', canPost);
+    console.log('🔵 publishingService:', !!publishingService);
+    console.log('🔵 selectedUser:', selectedUser?.username);
+    console.log('🔵 postContent length:', postContent.trim().length);
+    
+    if (!canPost) {
+      console.log('❌ Cannot post - canPost is false');
+      return;
+    }
+    
+    if (!publishingService) {
+      console.log('❌ Cannot post - no publishing service');
+      return;
+    }
     
     try {
+      console.log('🔵 Setting isPosting to true...');
       setIsPosting(true);
       setPublishProgress(null);
       
-      // Prepare content in the format your existing PublishingService expects
+      // ✅ FIX #2: Create complete content object with all required fields
       const contentData = {
         content: postContent.trim(),
+        title: `Post by ${selectedUser.username}`,
         filename: `${selectedUser.username}_post_${Date.now()}.txt`,
         size: postContent.trim().length,
-        type: 'text/plain'
+        type: 'text/plain',
+        authorName: selectedUser.username,
+        socialPost: true
       };
       
-      const postTitle = `Post by ${selectedUser.username}`;
-      const authorName = selectedUser.username;
+      console.log('🔵 Content data created:', contentData);
+      console.log('🔵 Showing confirmation dialog...');
       
       // Show confirmation dialog with cost
       Alert.alert(
         '🚀 Publish Post',
-        `"${postContent.trim().substring(0, 50)}${postContent.length > 50 ? '...' : ''}"\n\nCost: ${estimatedCost.toFixed(4)} SOL\nFrom: ${selectedUser.username}'s wallet\n\nThis will be permanently stored on the blockchain.`,
+        `"${postContent.trim().substring(0, 50)}${postContent.length > 50 ? '...' : ''}"\n\nCost: ${estimatedCost.toFixed(5)} SOL\nFrom: ${selectedUser.username}'s wallet\n\nThis will be permanently stored on the blockchain.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: () => {
+            console.log('🔵 User cancelled post');
+            setIsPosting(false);
+          }},
           { 
             text: 'Publish', 
             onPress: async () => {
               try {
-                console.log('🚀 Publishing post using existing PublishingService...');
+                console.log('🚀 User confirmed - Publishing post using existing PublishingService...');
+                console.log('🔵 Publishing service type:', typeof publishingService);
+                console.log('🔵 Publishing service methods:', Object.getOwnPropertyNames(publishingService));
                 
-                // Use your existing, proven publishing pipeline
+                // ✅ ADD: Debug which wallet the publishing service will actually use
+                const currentWallet = publishingService.getCurrentWallet();
+                console.log('🔍 PublishingService current wallet:', !!currentWallet);
+                if (currentWallet && currentWallet.getWalletKeypair) {
+                  const keypair = currentWallet.getWalletKeypair();
+                  console.log('🔍 Wallet keypair public key:', keypair.publicKey.toBase58());
+                  console.log('🔍 Expected Alice key:', selectedUser.publicKey);
+                  console.log('🔍 Keys match:', keypair.publicKey.toBase58() === selectedUser.publicKey);
+                }
+                
+                // ✅ FIX #3: Use correct PublishingService method signature
+                // publishContent(content, onProgress) - only 2 parameters
                 const result = await publishingService.publishContent(
                   contentData,
-                  postTitle,
-                  { authorName },
                   (progress) => {
-                    setPublishProgress(progress);
                     console.log('📊 Publishing progress:', progress);
+                    setPublishProgress(progress);
                   }
                 );
                 
                 // Success!
                 console.log('✅ Post published successfully using existing service:', result);
+
+                await PostHeaderService.updateUserHead(
+                    selectedUser.publicKey,
+                    selectedUser.username,
+                    result.transactionIds[0]
+                );
                 
                 Alert.alert(
                   '🎉 Post Published!',
-                  `Your post has been permanently stored on the blockchain!\n\nScroll: ${result.contentId}\nCost: ${result.totalCost?.toFixed(4) || estimatedCost.toFixed(4)} SOL`,
+                  `Your post has been permanently stored on the blockchain!\n\nScroll: ${result.contentId}\nCost: ${result.totalCost?.toFixed(5) || estimatedCost.toFixed(5)} SOL`,
                   [{ text: 'OK' }]
                 );
                 
@@ -200,11 +254,13 @@ export const PostComposer = ({
                 setPublishProgress(null);
                 Keyboard.dismiss();
                 
-                // Notify parent component if callback provided
+                // ✅ FIX: Notify parent to refresh Alice's balance since she paid for this post
                 if (onPostCreate) {
                   onPostCreate({
                     success: true,
-                    result
+                    result,
+                    shouldRefreshBalance: true, // Signal that Alice's balance changed
+                    userPaidTransaction: true
                   });
                 }
                 
@@ -226,6 +282,8 @@ export const PostComposer = ({
                     error: publishError.message
                   });
                 }
+              } finally {
+                setIsPosting(false);
               }
             }
           }
@@ -235,7 +293,6 @@ export const PostComposer = ({
     } catch (error) {
       console.error('❌ Error creating post:', error);
       Alert.alert('Error', 'Failed to create post. Please try again.');
-    } finally {
       setIsPosting(false);
     }
   };
@@ -285,34 +342,53 @@ export const PostComposer = ({
   const renderCollapsedState = () => (
     <TouchableOpacity
       style={{
-        backgroundColor: isDarkMode ? '#374151' : colors.backgroundSecondary,
-        borderRadius: borderRadius.medium,
-        padding: spacing.medium,
+        backgroundColor: isDarkMode ? '#1f2937' : '#f9fafb',
+        borderColor: isDarkMode ? '#374151' : '#e5e7eb',
         borderWidth: 1,
-        borderColor: isDarkMode ? '#6b7280' : colors.border,
+        borderRadius: borderRadius.large,
+        paddingHorizontal: spacing.medium,
+        paddingVertical: spacing.medium,
         marginVertical: spacing.small
       }}
       onPress={handleToggleExpanded}
-      disabled={!selectedUser}
+      activeOpacity={0.7}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text style={{
-          flex: 1,
-          color: selectedUser ? (isDarkMode ? '#9ca3af' : '#6b7280') : '#9ca3af',
-          fontSize: typography?.fontSize?.body || 14,
-          fontFamily: typography?.fontFamily || 'System'
+        {/* User avatar placeholder */}
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: isDarkMode ? '#4b5563' : '#d1d5db',
+          marginRight: spacing.medium,
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
-          {selectedUser 
-            ? `What's on your mind, ${selectedUser.username}?` 
-            : 'Select a user to create a post'
-          }
+          <Text style={{
+            color: isDarkMode ? '#f3f4f6' : '#374151',
+            fontSize: 16,
+            fontWeight: '600'
+          }}>
+            {selectedUser?.username?.charAt(0)?.toUpperCase() || '?'}
+          </Text>
+        </View>
+        
+        {/* Prompt text */}
+        <Text style={{
+          color: isDarkMode ? '#9ca3af' : '#6b7280',
+          fontSize: typography?.fontSize?.body || 16,
+          flex: 1
+        }}>
+          What's happening?
         </Text>
+        
+        {/* Estimated cost indicator */}
         <Text style={{
           color: isDarkMode ? '#60a5fa' : '#3b82f6',
           fontSize: typography?.fontSize?.caption || 12,
-          fontWeight: typography?.fontWeight?.medium || '500'
+          fontWeight: '500'
         }}>
-          ✏️ Post
+          ~{estimatedCost.toFixed(5)} SOL
         </Text>
       </View>
     </TouchableOpacity>
@@ -323,29 +399,61 @@ export const PostComposer = ({
    */
   const renderExpandedState = () => (
     <View style={{
-      backgroundColor: isDarkMode ? '#374151' : colors.backgroundSecondary,
-      borderRadius: borderRadius.medium,
+      backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+      borderColor: isDarkMode ? '#374151' : '#e5e7eb',
       borderWidth: 1,
-      borderColor: isDarkMode ? '#6b7280' : colors.border,
+      borderRadius: borderRadius.large,
+      padding: spacing.medium,
       marginVertical: spacing.small,
-      overflow: 'hidden'
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3
     }}>
-      {/* Header */}
+      {/* Header with user info and close button */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: spacing.medium,
-        borderBottomWidth: 1,
-        borderBottomColor: isDarkMode ? '#4b5563' : colors.border
+        marginBottom: spacing.medium
       }}>
-        <Text style={{
-          color: isDarkMode ? '#e5e7eb' : colors.text,
-          fontSize: typography?.fontSize?.large || 18,
-          fontWeight: typography?.fontWeight?.medium || '500'
+        {/* User avatar */}
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: isDarkMode ? '#4b5563' : '#d1d5db',
+          marginRight: spacing.medium,
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
-          Create Post
-        </Text>
+          <Text style={{
+            color: isDarkMode ? '#f3f4f6' : '#374151',
+            fontSize: 16,
+            fontWeight: '600'
+          }}>
+            {selectedUser?.username?.charAt(0)?.toUpperCase() || '?'}
+          </Text>
+        </View>
+        
+        {/* User info */}
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            color: isDarkMode ? '#f3f4f6' : '#111827',
+            fontSize: typography?.fontSize?.body || 16,
+            fontWeight: '600'
+          }}>
+            {selectedUser?.username || 'Unknown User'}
+          </Text>
+          <Text style={{
+            color: isDarkMode ? '#9ca3af' : '#6b7280',
+            fontSize: typography?.fontSize?.caption || 12
+          }}>
+            Balance: {userWalletBalance.toFixed(5)} SOL
+          </Text>
+        </View>
+        
+        {/* Close button */}
         <TouchableOpacity
           onPress={handleToggleExpanded}
           style={{
@@ -355,47 +463,51 @@ export const PostComposer = ({
         >
           <Text style={{
             color: isDarkMode ? '#9ca3af' : '#6b7280',
-            fontSize: typography.fontSize.body
+            fontSize: 18,
+            fontWeight: '600'
           }}>
-            ✕
+            ×
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Content Input */}
-      <View style={{ padding: spacing.medium }}>
-        <TextInput
-          style={{
-            color: isDarkMode ? '#e5e7eb' : colors.text,
-            fontSize: typography?.fontSize?.body || 14,
-            fontFamily: typography?.fontFamily || 'System',
-            lineHeight: (typography?.lineHeight?.normal || 1.4) * (typography?.fontSize?.body || 14),
-            minHeight: 100,
-            textAlignVertical: 'top',
-            padding: 0
-          }}
-          placeholder={`What's happening, ${selectedUser?.username || 'user'}?`}
-          placeholderTextColor={isDarkMode ? '#9ca3af' : '#6b7280'}
-          value={postContent}
-          onChangeText={setPostContent}
-          multiline
-          autoFocus
-          maxLength={MAX_POST_LENGTH + 50} // Allow slight overflow for visual feedback
-        />
-      </View>
+      {/* Text input */}
+      <TextInput
+        style={{
+          fontSize: typography?.fontSize?.body || 16,
+          color: isDarkMode ? '#f3f4f6' : '#111827',
+          textAlignVertical: 'top',
+          paddingHorizontal: 0,
+          paddingVertical: spacing.small,
+          minHeight: 100,
+          maxHeight: 200
+        }}
+        multiline
+        placeholder="What's happening?"
+        placeholderTextColor={isDarkMode ? '#6b7280' : '#9ca3af'}
+        value={postContent}
+        onChangeText={setPostContent}
+        maxLength={MAX_POST_LENGTH + 50} // Allow slight overrun for visual feedback
+        autoFocus={true}
+        textAlign="left"
+      />
 
-      {/* Footer with actions */}
+      {/* Footer with stats and post button */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: spacing.medium,
-        backgroundColor: isDarkMode ? '#1f2937' : '#f9fafb',
-        borderTopWidth: 1,
-        borderTopColor: isDarkMode ? '#4b5563' : colors.border
+        marginTop: spacing.medium,
+        paddingTop: spacing.medium,
+        borderTopColor: isDarkMode ? '#374151' : '#e5e7eb',
+        borderTopWidth: 1
       }}>
-        {/* Left side - cost and character count OR progress */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.medium }}>
+        {/* Left side - cost and character count */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.medium
+        }}>
           {publishProgress ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.small }}>
               <ActivityIndicator size="small" color={isDarkMode ? '#60a5fa' : '#3b82f6'} />
@@ -413,7 +525,7 @@ export const PostComposer = ({
                 color: isDarkMode ? '#9ca3af' : '#6b7280',
                 fontSize: typography.fontSize.caption
               }}>
-                ~{estimatedCost.toFixed(4)} SOL
+                ~{estimatedCost.toFixed(5)} SOL
               </Text>
               
               <Text style={{
@@ -463,4 +575,4 @@ export const PostComposer = ({
 
 export default PostComposer;
 
-// Character count: 13,742
+// Character count: 13,247

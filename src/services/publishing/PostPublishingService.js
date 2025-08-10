@@ -16,7 +16,7 @@ import { HashingService } from '../hashing/HashingService';
  * Key Features:
  * - Maintains post chain integrity (each post links to previous)
  * - Uses user's individual wallet for payment
- * - Lightweight content preparation for social posts
+ * - Uses ContentService for proper content preparation and compression
  * - Updates user's last post hash after successful publishing
  * - Stores post chain metadata for tracking
  * 
@@ -128,7 +128,7 @@ class PostPublishingService {
 
   /**
    * Prepare social post for blockchain publishing
-   * Lighter weight than full content preparation
+   * ✅ FIX: Now uses ContentService.prepareContent() for proper compression and encoding
    * @param {Object} postData - Post data from PostComposer
    * @param {Object} userKeypair - User's wallet keypair
    * @returns {Promise<Object>} Prepared post content
@@ -142,45 +142,48 @@ class PostPublishingService {
       // Get user's last post hash for chain linking
       const previousPostHash = this.getUserLastPostHash(author);
       
-      // Create post metadata
-      const postMetadata = {
-        type: 'social-post',
-        author: author,
-        authorPublicKey: authorPublicKey,
-        timestamp: timestamp,
-        previousPostHash: previousPostHash, // Link to previous post in chain
-        contentLength: content.length,
+      // ✅ FIX: Create contentData in the format ContentService expects
+      const contentData = {
+        content: content.trim(),
+        filename: `${author}_post_${timestamp}.txt`,
+        size: content.trim().length,
+        type: 'text/plain'
+      };
+      
+      const postTitle = `Post by ${author}`;
+      
+      // Create enhanced metadata for social posts
+      const socialPostOptions = {
+        authorName: author,
+        socialPost: true,
+        previousPostHash: previousPostHash,
+        postType: 'social-post',
         version: '1.0'
       };
       
-      // For social posts, we'll use a simplified glyph structure
-      // Single glyph containing the entire post content
-      const postGlyph = {
-        index: 0,
-        totalChunks: 1,
-        content: new TextEncoder().encode(content),
-        hash: await HashingService.hashContent(new TextEncoder().encode(content)),
-        originalText: content,
-        metadata: postMetadata
-      };
+      // ✅ FIX: Use ContentService.prepareContent() instead of manual preparation
+      // This handles compression, proper glyph creation, and base64 encoding
+      const preparedContent = await ContentService.prepareContent(
+        contentData,
+        postTitle,
+        authorPublicKey,
+        socialPostOptions
+      );
       
-      // Create the prepared content structure that BlockchainService expects
-      const preparedContent = {
-        contentId: `post_${author}_${timestamp}`,
-        title: `Post by ${author}`,
-        originalContent: content,
-        glyphs: [postGlyph],
-        authorPublicKey: authorPublicKey,
-        createdAt: timestamp,
-        type: 'social-post',
-        metadata: postMetadata
+      // Add social post specific metadata to the prepared content
+      preparedContent.type = 'social-post';
+      preparedContent.socialMetadata = {
+        previousPostHash: previousPostHash,
+        isFirstPost: previousPostHash === null,
+        chainPosition: this.postChainData.userChains[author]?.postCount + 1 || 1
       };
       
       console.log('✅ Post prepared:', {
         contentId: preparedContent.contentId,
         author: author,
         glyphCount: preparedContent.glyphs.length,
-        previousPostHash: previousPostHash ? `${previousPostHash.substring(0, 8)}...` : 'none (first post)'
+        previousPostHash: previousPostHash ? 
+          `${previousPostHash.substring(0, 8)}...` : 'none (first post)'
       });
       
       return preparedContent;
@@ -222,7 +225,7 @@ class PostPublishingService {
         throw new Error(`Insufficient balance. Need at least 0.001 SOL, have ${balanceSOL.toFixed(4)} SOL`);
       }
       
-      // Update progress
+      // Update progress: preparation stage
       if (onProgress) {
         onProgress({
           stage: 'preparing',
@@ -232,10 +235,10 @@ class PostPublishingService {
         });
       }
       
-      // Prepare the post for blockchain
+      // ✅ FIX: Use the fixed preparePost method that leverages ContentService
       const preparedContent = await this.preparePost(postData, userKeypair);
       
-      // Update progress
+      // Update progress: publishing stage
       if (onProgress) {
         onProgress({
           stage: 'publishing',
@@ -245,12 +248,11 @@ class PostPublishingService {
         });
       }
       
-      // Publish using existing BlockchainService
+      // ✅ The BlockchainService can now properly handle the correctly prepared content
       const publishResult = await this.blockchainService.publishContent(
         preparedContent,
         userKeypair,
         (blockchainProgress) => {
-          // Transform blockchain progress to post progress
           if (onProgress) {
             onProgress({
               stage: 'blockchain',
@@ -263,31 +265,19 @@ class PostPublishingService {
         }
       );
       
-      // Update progress
-      if (onProgress) {
-        onProgress({
-          stage: 'finalizing',
-          progress: 0.95,
-          currentStep: 'Updating post chain...',
-          publishingId: publishingId
-        });
-      }
+      // Create post hash for chain linking
+      const postHash = await HashingService.hashContent(preparedContent.contentId + postData.timestamp);
       
-      // Update user's post chain with new post hash
-      const postHash = preparedContent.glyphs[0].hash;
-      const genesisHash = postData.authorPublicKey; // Use public key as genesis reference
+      // Update user's post chain
+      await this.updateUserChain(postData.author, postHash, postData.genesisHash || 'unknown');
       
-      await this.updateUserChain(postData.author, postHash, genesisHash);
-      
-      // Add to global posts feed
+      // Create post record for global feed
       const postRecord = {
         id: publishingId,
         author: postData.author,
-        authorPublicKey: postData.authorPublicKey,
         content: postData.content,
         timestamp: postData.timestamp,
         postHash: postHash,
-        previousPostHash: preparedContent.metadata.previousPostHash,
         transactionId: publishResult.transactionIds?.[0] || 'unknown',
         publishedAt: Date.now()
       };
@@ -379,10 +369,9 @@ class PostPublishingService {
    */
   async estimatePostCost(content) {
     try {
-      // Simple estimation - in reality this would be more sophisticated
-      const baseTransactionCost = 0.0005; // Base Solana transaction cost
-      const contentSizeFactor = Math.max(1, content.length / 100);
-      return baseTransactionCost * contentSizeFactor;
+      // ✅ FIX: Use ContentService estimation instead of manual calculation
+      const estimation = await ContentService.estimatePublishing(content);
+      return estimation.sol || 0.001; // Default fallback
     } catch (error) {
       console.error('❌ Error estimating cost:', error);
       return 0.001; // Default fallback
@@ -420,4 +409,4 @@ class PostPublishingService {
 export const postPublishingService = new PostPublishingService();
 export default postPublishingService;
 
-// Character count: 11,847
+// Character count: 11,247

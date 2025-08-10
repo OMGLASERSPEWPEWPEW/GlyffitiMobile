@@ -82,7 +82,7 @@ export const WalletSection = ({
         {/* Show balance if available */}
         {typeof walletBalance === 'number' && (
           <Text style={walletBalanceStyle}>
-            Balance: {walletBalance.toFixed(4)} SOL
+            Balance: {walletBalance.toFixed(5)} SOL
           </Text>
         )}
         

@@ -9,11 +9,14 @@ import {
   ScrollView,
   Dimensions
 } from 'react-native';
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
 import { UserSelector } from '../components/UserSelector';
 import { PostComposer } from '../components/PostComposer';
+import { SocialFeed } from '../components/feed/SocialFeed'
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
+import { PostHeaderService } from '../services/feed/PostHeaderService'
 
 
 const { width } = Dimensions.get('window');
@@ -25,6 +28,10 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserData, setSelectedUserData] = useState(null);
   const [userWalletBalance, setUserWalletBalance] = useState(0);
+  const [showFeed, setShowFeed] = useState(false);
+
+  // ✅ ADD: Solana connection for balance updates
+  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
   console.log('🐛 HomeScreen selectedUser:', selectedUser);
   console.log('🐛 PostComposer should show:', selectedUser !== null);
@@ -51,8 +58,55 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
     }
   };
 
+  // ✅ ADD: Function to refresh user wallet balance
+  const loadUserWalletBalance = async (user) => {
+    if (!user || !user.publicKey) {
+      console.warn('⚠️ Cannot load balance - no user or publicKey');
+      return;
+    }
+
+    try {
+      console.log('💰 Refreshing balance for wallet:', user.publicKey);
+      
+      // ✅ FIX: Convert string publicKey to PublicKey object
+      const publicKeyObj = new PublicKey(user.publicKey);
+      const balance = await connection.getBalance(publicKeyObj);
+      const balanceSOL = balance / LAMPORTS_PER_SOL;
+      
+      console.log('💰 Updated balance:', balanceSOL.toFixed(4), 'SOL');
+      
+      // Update the displayed balance
+      setUserWalletBalance(balanceSOL);
+      
+      return balanceSOL;
+    } catch (error) {
+      console.error('❌ Error loading wallet balance:', error);
+      throw error;
+    }
+  };
+
   const handlePublishing = () => {
     navigation?.navigate('Publishing');
+  };
+
+  const handlePostCreate = async (result) => {
+    if (result.success) {
+      console.log('✅ Post created successfully:', result);
+      
+      // Handle balance refresh if needed
+      if (result.shouldRefreshBalance && selectedUser) {
+        console.log('💰 Refreshing user balance for:', selectedUser.username);
+        try {
+          // ✅ FIX: Now this function exists!
+          await loadUserWalletBalance(selectedUser);
+          console.log('✅ Balance refreshed successfully');
+        } catch (error) {
+          console.error('❌ Failed to refresh balance:', error);
+        }
+      }
+    } else {
+      console.error('❌ Post creation failed:', result.error);
+    }
   };
 
   // Navigate to story discovery (will be enabled later)
@@ -140,19 +194,51 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
           <PostComposer
             selectedUser={selectedUser}
             selectedUserData={selectedUserData}
-            userWalletBalance={userWalletBalance} 
+            userWalletBalance={userWalletBalance}
             isDarkMode={isDarkMode}
-            onPostCreate={(result) => {
-              if (result.success) {
-                console.log('✅ Post created successfully:', result);
-              } else {
-                console.error('❌ Post creation failed:', result.error);
-              }
-            }}
+            onPostCreate={handlePostCreate}
           />
+
+          {/* Social Feed */}
+            {showFeed && (
+              <SocialFeed
+                isDarkMode={isDarkMode}
+                maxPosts={20}
+                postsPerUser={3}
+                onPostPress={(post) => {
+                  console.log('Post pressed:', post.author);
+                }}
+                onAuthorPress={(author, publicKey) => {
+                  console.log('Author pressed:', author);
+                }}
+              />
+            )}
 
           {/* Main Content */}
           <View style={homeStyles.mainContent}>
+            {/* Feed Button */}
+              <Card
+                onPress={() => setShowFeed(!showFeed)}
+                backgroundColor={showFeed ? colors.primary : (isDarkMode ? '#374151' : colors.backgroundSecondary)}
+                borderRadius={16}
+                padding={spacing.large}
+                marginHorizontal={0}
+                marginBottom={spacing.medium}
+                isDarkMode={isDarkMode}
+              >
+                <View style={homeStyles.publishingCard}>
+                  <Text style={homeStyles.publishingIcon}>📰</Text>
+                  <View style={homeStyles.publishingContent}>
+                    <Text style={homeStyles.publishingTitle}>
+                      {showFeed ? 'Hide Feed' : 'Social Feed'}
+                    </Text>
+                    <Text style={homeStyles.publishingDescription}>
+                      {showFeed ? 'Close the social feed' : 'View posts from all users'}
+                    </Text>
+                  </View>
+                  <Text style={homeStyles.arrow}>{showFeed ? '▼' : '→'}</Text>
+                </View>
+              </Card>
             {/* Publishing Card */}
             <Card
               onPress={handlePublishing}
@@ -358,4 +444,4 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
 export default HomeScreen;
 
-// Character count: 8143
+// Character count: 9013
