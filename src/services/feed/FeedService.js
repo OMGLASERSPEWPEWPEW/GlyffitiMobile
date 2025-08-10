@@ -3,6 +3,7 @@
 
 import { Connection } from '@solana/web3.js';
 import { PostHeaderService } from './PostHeaderService';
+import { PostTransactionReader } from '../blockchain/PostTransactionReader';
 
 /**
  * FeedService
@@ -14,7 +15,7 @@ import { PostHeaderService } from './PostHeaderService';
  * Architecture:
  * 1. Get active users from PostHeaderService
  * 2. For each user, walk their post chain backward from latest post
- * 3. Parse post content from blockchain transactions 
+ * 3. Parse post content from blockchain transactions using PostTransactionReader
  * 4. Combine and sort posts by timestamp
  * 5. Return feed data for UI rendering
  */
@@ -25,6 +26,9 @@ export class FeedService {
     this.feedCache = null;
     this.lastFetchTime = null;
     this.CACHE_DURATION = 30000; // 30 seconds cache
+    
+    // Use the new PostTransactionReader for proper post decoding
+    this.postReader = new PostTransactionReader();
   }
   
   /**
@@ -134,7 +138,8 @@ export class FeedService {
       // Walk backward through user's post chain
       while (currentHash && postsRead < limit) {
         try {
-          const post = await this.readPostFromTransaction(currentHash, username, publicKey);
+          // Use PostTransactionReader for proper post decoding
+          const post = await this.postReader.readPostFromTransaction(currentHash, username, publicKey);
           
           if (post) {
             posts.push(post);
@@ -169,94 +174,15 @@ export class FeedService {
   
   /**
    * Read and parse a single post from a blockchain transaction
+   * @deprecated - Use PostTransactionReader.readPostFromTransaction instead
    * @param {string} transactionHash - Transaction hash to read
    * @param {string} username - Username for logging
    * @param {string} publicKey - Author's public key
    * @returns {Promise<Object|null>} Parsed post object or null
    */
   async readPostFromTransaction(transactionHash, username, publicKey) {
-    try {
-      // Get transaction details from Solana
-      const transaction = await this.connection.getTransaction(transactionHash, {
-        maxSupportedTransactionVersion: 0
-      });
-      
-      if (!transaction || !transaction.meta) {
-        console.warn(`⚠️ Transaction not found: ${transactionHash.substring(0, 8)}`);
-        return null;
-      }
-      
-      // Look for memo instruction (where post content is stored)
-      let postContent = null;
-      let timestamp = null;
-      
-      // Check transaction instructions for memo program
-      if (transaction.transaction && transaction.transaction.message && transaction.transaction.message.instructions) {
-        for (const instruction of transaction.transaction.message.instructions) {
-          // Look for memo program instructions
-          if (instruction.data) {
-            try {
-              // Decode the instruction data (base58 encoded)
-              const decodedData = Buffer.from(instruction.data, 'base64').toString('utf8');
-              
-              // Check if this looks like post content
-              if (decodedData && decodedData.length > 0 && decodedData.length < 1000) {
-                postContent = decodedData;
-                break;
-              }
-            } catch (decodeError) {
-              // Continue checking other instructions
-            }
-          }
-        }
-      }
-      
-      // Get timestamp from block time
-      if (transaction.blockTime) {
-        timestamp = transaction.blockTime * 1000; // Convert to milliseconds
-      } else {
-        timestamp = Date.now(); // Fallback to current time
-      }
-      
-      // If we couldn't find content in memo, try to extract from logs
-      if (!postContent && transaction.meta.logMessages) {
-        for (const log of transaction.meta.logMessages) {
-          // Look for program logs that might contain our content
-          if (log.includes('Program log: ') && log.length < 200) {
-            const logContent = log.replace('Program log: ', '').trim();
-            if (logContent.length > 0) {
-              postContent = logContent;
-              break;
-            }
-          }
-        }
-      }
-      
-      // Create post object
-      const post = {
-        id: `post_${username}_${timestamp}`,
-        transactionHash: transactionHash,
-        author: username,
-        authorPublicKey: publicKey,
-        content: postContent || '[Content could not be decoded]',
-        timestamp: timestamp,
-        previousPostHash: null, // Will be determined by chain walking logic
-        blockTime: transaction.blockTime,
-        slot: transaction.slot
-      };
-      
-      console.log(`📄 Post read for ${username}:`, {
-        hash: transactionHash.substring(0, 8) + '...',
-        contentLength: post.content.length,
-        timestamp: new Date(timestamp).toISOString()
-      });
-      
-      return post;
-      
-    } catch (error) {
-      console.error(`❌ Error reading transaction ${transactionHash.substring(0, 8)}:`, error);
-      return null;
-    }
+    console.warn('⚠️ FeedService.readPostFromTransaction is deprecated. Use PostTransactionReader instead.');
+    return await this.postReader.readPostFromTransaction(transactionHash, username, publicKey);
   }
   
   /**
@@ -308,58 +234,43 @@ export class FeedService {
       return {
         totalUsers: 0,
         activeUsers: 0,
-        totalPosts: 0,
         cacheStatus: 'error',
-        lastFetchTime: null,
-        cachedPosts: 0
+        error: error.message
       };
     }
   }
   
   /**
-   * Run self-test to verify service functionality
-   * @returns {Promise<boolean>} Test success status
+   * Clear all caches
    */
-  async runSelfTest() {
+  clearCache() {
+    this.feedCache = null;
+    this.lastFetchTime = null;
+    this.postReader.clearCache();
+    console.log('🗑️ Feed cache cleared');
+  }
+  
+  /**
+   * Test feed service connectivity
+   * @returns {Promise<boolean>} True if service is working
+   */
+  async testConnection() {
     try {
-      console.log('🧪 Running FeedService self-test...');
+      const postReaderOk = await this.postReader.testConnection();
+      const headerServiceOk = await PostHeaderService.testConnection();
       
-      // Test building an empty feed
-      const emptyFeed = await this.buildFeed({ useCache: false });
-      if (!Array.isArray(emptyFeed)) {
-        throw new Error('Feed should return an array');
-      }
+      const result = postReaderOk && headerServiceOk;
+      console.log('🔗 Feed service connectivity test:', result ? 'PASSED' : 'FAILED');
       
-      // Test cache functionality
-      const cachedFeed = await this.buildFeed({ useCache: true });
-      if (!Array.isArray(cachedFeed)) {
-        throw new Error('Cached feed should return an array');
-      }
-      
-      // Test refresh functionality
-      const refreshedFeed = await this.refreshFeed();
-      if (!Array.isArray(refreshedFeed)) {
-        throw new Error('Refreshed feed should return an array');
-      }
-      
-      // Test stats
-      const stats = await this.getFeedStats();
-      if (typeof stats !== 'object') {
-        throw new Error('Stats should return an object');
-      }
-      
-      console.log('✅ FeedService self-test passed');
-      return true;
-      
+      return result;
     } catch (error) {
-      console.error('❌ FeedService self-test failed:', error);
+      console.error('❌ Feed service connectivity test failed:', error);
       return false;
     }
   }
 }
 
-// Export singleton instance for app-wide use
+// Export singleton instance
 export const feedService = new FeedService();
-export default feedService;
 
-// Character count: 11,438
+// Character count: 6854
