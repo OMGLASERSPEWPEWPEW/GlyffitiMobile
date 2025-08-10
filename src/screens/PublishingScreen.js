@@ -305,7 +305,7 @@ export const PublishingScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               const { ClearPublishedScript } = await import('../utils/ClearPublishedScript');
-              await ClearPublishedScript.clearAll();
+              await ClearPublishedScript.clearOnlyLongFormContent();
               await loadExistingContent(); // Use hook's method
               Alert.alert('Success', 'All test data cleared!');
             } catch (error) {
@@ -448,7 +448,11 @@ export const PublishingScreen = ({ navigation }) => {
           <ContentSections 
             inProgressContent={inProgressContent}
             drafts={drafts}
-            publishedContent={publishedContent}
+            publishedContent={publishedContent.filter(item => 
+              item.type !== 'social_post' && 
+              !item.socialPost &&
+              !item.title?.startsWith('Post by ')
+            )}
             publishingStats={publishingStats}
             walletStatus={walletStatus}
             publishing={publishing}

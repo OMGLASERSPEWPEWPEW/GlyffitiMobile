@@ -26,8 +26,6 @@ export class ChunkManager {
       // Calculate how many chunks we'll need
       const totalChunks = Math.ceil(originalText.length / config.targetChunkSize);
       
-      console.log(`Creating ${totalChunks} glyphs from ${originalText.length} characters`);
-      
       // Split content into chunks and compress each chunk individually
       for (let i = 0; i < totalChunks; i++) {
         const start = i * config.targetChunkSize;
@@ -91,7 +89,6 @@ export class ChunkManager {
         });
       }
       
-      console.log(`Successfully created ${chunks.length} glyphs`);
       return chunks;
     } catch (error) {
       console.error('Error creating glyphs:', error);

@@ -89,6 +89,32 @@ export class ClearPublishedScript {
       return false;
     }
   }
+
+    /**
+   * Clear only long-form published content (keep social posts)
+   */
+  static async clearOnlyLongFormContent() {
+    try {
+      // Get all published content
+      const published = await StorageService.getPublishedContent();
+      
+      // Filter to only clear non-social posts
+      for (const [contentId, item] of Object.entries(published)) {
+        // Only delete if it's NOT a social post
+        if (item.type !== 'social_post' && 
+            !item.socialPost && 
+            !item.title?.startsWith('Post by ')) {
+          await StorageService.deletePublishedContent(contentId);
+        }
+      }
+      
+      console.log('✅ Long-form published content cleared (social posts preserved)');
+      return true;
+    } catch (error) {
+      console.error('❌ Error clearing long-form content:', error);
+      return false;
+    }
+  }
   
   /**
    * Clear only in-progress content (for testing interruptions)

@@ -157,7 +157,9 @@ export const ContentSections = ({
           ]}>
             Tap any story to read it
           </Text>
-          {publishedContent.map((item, index) => (
+          {publishedContent
+            .filter(item => item.type !== 'social_post' && !item.socialPost)
+            .map((item, index) => (
             <TouchableOpacity 
               key={`published-${item.contentId || index}`}
               onPress={() => handleViewStory && handleViewStory(item)}
@@ -355,53 +357,6 @@ export const ContentSections = ({
         </Card>
       )}
       
-      {/* Debug Info (only in development) */}
-      {__DEV__ && (
-        <Card
-          isDarkMode={isDarkMode}
-          borderRadius={12}
-          padding={spacing.medium}
-          marginBottom={spacing.medium}
-          marginHorizontal={0}
-        >
-          <Text style={[
-            publishingStyles.debugTitle,
-            { color: isDarkMode ? '#e5e7eb' : '#1a1a1a' }
-          ]}>
-            🔧 Debug Info
-          </Text>
-          <Text style={[
-            publishingStyles.debugText,
-            { color: isDarkMode ? '#9ca3af' : '#6c757d' }
-          ]}>
-            In Progress: {inProgressContent.length}
-          </Text>
-          <Text style={[
-            publishingStyles.debugText,
-            { color: isDarkMode ? '#9ca3af' : '#6c757d' }
-          ]}>
-            Drafts: {drafts.length}
-          </Text>
-          <Text style={[
-            publishingStyles.debugText,
-            { color: isDarkMode ? '#9ca3af' : '#6c757d' }
-          ]}>
-            Published: {publishedContent.length}
-          </Text>
-          <Text style={[
-            publishingStyles.debugText,
-            { color: isDarkMode ? '#9ca3af' : '#6c757d' }
-          ]}>
-            Publishing: {publishing ? 'Yes' : 'No'}
-          </Text>
-          <Text style={[
-            publishingStyles.debugText,
-            { color: isDarkMode ? '#9ca3af' : '#6c757d' }
-          ]}>
-            Wallet: {walletStatus}
-          </Text>
-        </Card>
-      )}
     </>
   );
 };
