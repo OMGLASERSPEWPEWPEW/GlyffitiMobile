@@ -25,7 +25,9 @@ import { WalletUpgradePrompt } from './WalletUpgradePrompt';
  * Fetches user data directly from blockchain transactions
  * Shows each user's individual wallet balance
  */
-export const UserSelector = ({ isDarkMode = false }) => {
+export const UserSelector = ({ 
+  isDarkMode = false,
+  onUserSelect = null }) => {
   
   // State for selected user
   const [selectedUser, setSelectedUser] = useState(null);
@@ -165,6 +167,13 @@ const loadUserWalletBalance = async (user) => {
         
         // Load the user's wallet balance
         await loadUserWalletBalance(user);
+
+        const freshBalance = await connection.getBalance(new PublicKey(user.publicKey));
+        const freshBalanceSOL = freshBalance / LAMPORTS_PER_SOL;
+
+        if (onUserSelect) {
+        onUserSelect(user, userData, freshBalanceSOL);
+      }
       } else {
         setError('Failed to fetch user data from blockchain');
         console.error('❌ No user data returned for:', user.username);

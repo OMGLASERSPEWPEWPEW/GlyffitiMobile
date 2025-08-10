@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
 import { UserSelector } from '../components/UserSelector';
+import { PostComposer } from '../components/PostComposer';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +22,12 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [cachedStories, setCachedStories] = useState([]);
   const [cacheStats, setCacheStats] = useState(null);
   const [loadingError, setLoadingError] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserData, setSelectedUserData] = useState(null);
+  const [userWalletBalance, setUserWalletBalance] = useState(0);
+
+  console.log('🐛 HomeScreen selectedUser:', selectedUser);
+  console.log('🐛 PostComposer should show:', selectedUser !== null);
 
   useEffect(() => {
     // loadCacheData();
@@ -117,8 +125,31 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
             ]}>
               Active User
             </Text>
-            <UserSelector isDarkMode={isDarkMode} />
+            <UserSelector 
+              isDarkMode={isDarkMode}
+              selectedUser={selectedUser}
+              onUserSelect={(user, userData, balance) => {
+                setSelectedUser(user)
+                setSelectedUserData(userData)
+                setUserWalletBalance(balance)
+              }} />
           </View>
+
+
+           {/* Post Creation */}
+          <PostComposer
+            selectedUser={selectedUser}
+            selectedUserData={selectedUserData}
+            userWalletBalance={userWalletBalance} 
+            isDarkMode={isDarkMode}
+            onPostCreate={(result) => {
+              if (result.success) {
+                console.log('✅ Post created successfully:', result);
+              } else {
+                console.error('❌ Post creation failed:', result.error);
+              }
+            }}
+          />
 
           {/* Main Content */}
           <View style={homeStyles.mainContent}>
