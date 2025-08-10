@@ -33,9 +33,6 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   // ✅ ADD: Solana connection for balance updates
   const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
-  console.log('🐛 HomeScreen selectedUser:', selectedUser);
-  console.log('🐛 PostComposer should show:', selectedUser !== null);
-
   useEffect(() => {
     // loadCacheData();
   }, []);
