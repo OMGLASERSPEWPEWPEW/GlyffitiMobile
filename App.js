@@ -13,6 +13,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { PublishingScreen } from './src/screens/PublishingScreen';
 import { StoryViewScreen } from './src/screens/StoryViewScreen';
 import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
+import { ComposerModal } from './src/screens/ComposerModal';
 import { ErrorBoundary } from './src/components/shared';
 
 const Stack = createStackNavigator();
@@ -76,6 +77,29 @@ export default function App() {
               title: 'Discover Stories',
             }}
           />
+          <Stack.Screen 
+            name="ComposeModal" 
+            component={ComposerModal}
+            options={{
+              title: 'New Post',
+              presentation: 'modal',
+              gestureEnabled: true,
+              cardStyleInterpolator: ({ current, layouts }) => {
+                return {
+                  cardStyle: {
+                    transform: [
+                      {
+                        translateY: current.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [layouts.screen.height, 0],
+                        }),
+                      },
+                    ],
+                  },
+                };
+              },
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />
@@ -84,4 +108,4 @@ export default function App() {
   );
 }
 
-// 1,675 characters
+// Character count: 2,436
