@@ -306,7 +306,7 @@ export const UserPanel = ({
                 </View>
                 <Text style={panelStyles.userName}>{selectedUser.username}</Text>
                 <Text style={panelStyles.userBalance}>
-                  Balance: {userWalletBalance.toFixed(4)} SOL
+                  Balance: {userWalletBalance.toFixed(5)} SOL
                 </Text>
               </View>
 
@@ -382,7 +382,7 @@ export const UserPanel = ({
               {walletBalance !== undefined && (
                 <View style={panelStyles.dataRow}>
                   <Text style={panelStyles.dataLabel}>Balance</Text>
-                  <Text style={panelStyles.dataValue}>{walletBalance.toFixed(4)} SOL</Text>
+                  <Text style={panelStyles.dataValue}>{walletBalance.toFixed(5)} SOL</Text>
                 </View>
               )}
               

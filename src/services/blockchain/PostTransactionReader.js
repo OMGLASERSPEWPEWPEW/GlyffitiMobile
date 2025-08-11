@@ -8,17 +8,19 @@ import { CompressionService } from '../compression/CompressionService';
 
 /**
  * Service for reading post transaction data directly from the blockchain
- * Posts are stored as simple compressed glyph data (NOT secure wire format like genesis blocks)
+ * Posts are stored as compressed glyph data with metadata including previousPostHash
  * 
  * Post storage format:
- * 1. Glyph content is compressed using CompressionService
- * 2. Compressed data is base64 encoded
- * 3. Base64 string is stored in memo instruction
+ * 1. Full glyph structure (with metadata) is stored as JSON
+ * 2. JSON is compressed using CompressionService
+ * 3. Compressed data is base64 encoded
+ * 4. Base64 string is stored in memo instruction
  * 
  * Decoding process:
  * 1. Base58 decode RPC data → Base64 string  
  * 2. Base64 decode → Compressed Uint8Array
- * 3. Decompress → Original glyph content
+ * 3. Decompress → JSON string
+ * 4. Parse JSON → Full glyph structure with previousPostHash
  */
 export class PostTransactionReader {
   constructor() {
@@ -113,38 +115,91 @@ export class PostTransactionReader {
         throw new Error('Invalid base64 data in memo');
       }
 
-      // Step 4: Decompress to get original glyph content
-      let glyphContent;
+      // Step 4: Decompress to get original glyph JSON data
+      let decompressedJson;
       try {
-        glyphContent = CompressionService.decompress(compressedData);
-        console.log(`🔓 Decompressed content: ${glyphContent.length} chars`);
-        console.log(`📝 Content preview: "${glyphContent.substring(0, 50)}..."`);
+        decompressedJson = CompressionService.decompress(compressedData);
+        console.log(`🔓 Decompressed JSON: ${decompressedJson.length} chars`);
+        console.log(`📝 JSON preview: "${decompressedJson.substring(0, 100)}..."`);
       } catch (error) {
         console.error('❌ Failed to decompress glyph data:', error);
-        throw new Error('Invalid compressed data in memo');
+        
+        // 🔄 FALLBACK: Try to treat as plain text content (backward compatibility)
+        try {
+          const fallbackContent = CompressionService.decompress(compressedData);
+          console.log('🔄 Falling back to plain text content');
+          return await this.createFallbackPost(fallbackContent, transactionHash, username, publicKey, transaction);
+        } catch (fallbackError) {
+          throw new Error('Invalid compressed data in memo');
+        }
+      }
+
+      // Step 5: Parse JSON to get full glyph structure
+      let glyphStructure;
+      try {
+        glyphStructure = JSON.parse(decompressedJson);
+        console.log(`📊 Parsed glyph structure:`, {
+          hasGlyphs: !!glyphStructure.glyphs,
+          glyphCount: glyphStructure.glyphs?.length || 0,
+          hasContent: !!glyphStructure.content
+        });
+      } catch (error) {
+        console.error('❌ Failed to parse glyph JSON:', error);
+        
+        // 🔄 FALLBACK: Treat as plain text content
+        console.log('🔄 Falling back to plain text content');
+        return await this.createFallbackPost(decompressedJson, transactionHash, username, publicKey, transaction);
+      }
+
+      // Step 6: Extract post data from glyph structure
+      let postContent = '';
+      let previousPostHash = null;
+
+      if (glyphStructure.glyphs && Array.isArray(glyphStructure.glyphs)) {
+        // ✅ NEW: Extract content and previousPostHash from glyph structure
+        const firstGlyph = glyphStructure.glyphs[0];
+        if (firstGlyph) {
+          postContent = firstGlyph.content || glyphStructure.content || '';
+          previousPostHash = firstGlyph.previousPostHash || null;
+          
+          console.log(`🔗 Chain link found: previousPostHash = ${previousPostHash || 'null (first post)'}`);
+        }
+      } else if (glyphStructure.content) {
+        // Direct content field
+        postContent = glyphStructure.content;
+        console.log('📝 Using direct content field');
+      } else {
+        // Last resort: treat whole thing as content
+        postContent = decompressedJson;
+        console.log('📝 Using entire JSON as content');
+      }
+
+      if (!postContent || postContent.trim().length === 0) {
+        throw new Error('No content found in glyph structure');
       }
 
       // Get timestamp from block time
-      const timestamp = transaction.blockTime ? 
+      const timestamp = transaction.blockTime ?
         transaction.blockTime * 1000 : // Convert to milliseconds
         Date.now(); // Fallback to current time
       
-      // Create post object
+      // ✅ FIXED: Create post object with proper previousPostHash
       const post = {
         id: `post_${username}_${timestamp}`,
         transactionHash: transactionHash,
         author: username,
         authorPublicKey: publicKey,
-        content: glyphContent,
+        content: postContent.trim(),
         title: `Post by ${username}`,
         timestamp: timestamp,
-        previousPostHash: null, // Will be determined by chain walking logic
+        previousPostHash: previousPostHash, // ✅ Now properly extracted from blockchain data!
         blockTime: transaction.blockTime,
         slot: transaction.slot,
         glyphData: {
           compressedSize: compressedData.length,
-          originalSize: glyphContent.length,
-          compressionRatio: compressedData.length / glyphContent.length
+          originalSize: decompressedJson.length,
+          compressionRatio: compressedData.length / decompressedJson.length,
+          hasMetadata: !!glyphStructure.glyphs
         }
       };
       
@@ -155,7 +210,9 @@ export class PostTransactionReader {
         hash: transactionHash.substring(0, 8) + '...',
         contentLength: post.content.length,
         content: post.content.substring(0, 30) + '...',
-        timestamp: new Date(timestamp).toISOString()
+        timestamp: new Date(timestamp).toISOString(),
+        previousPostHash: previousPostHash ? previousPostHash.substring(0, 8) + '...' : 'null',
+        chainContinues: !!previousPostHash
       });
       
       return post;
@@ -164,6 +221,43 @@ export class PostTransactionReader {
       console.error(`❌ Error reading post transaction ${transactionHash.substring(0, 8)}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Create fallback post for backward compatibility with plain text content
+   * @param {string} content - Plain text content  
+   * @param {string} transactionHash - Transaction hash
+   * @param {string} username - Username
+   * @param {string} publicKey - Public key
+   * @param {Object} transaction - Full transaction object
+   * @returns {Promise<Object>} Post object
+   */
+  async createFallbackPost(content, transactionHash, username, publicKey, transaction) {
+    const timestamp = transaction.blockTime ?
+      transaction.blockTime * 1000 :
+      Date.now();
+    
+    console.log('🔄 Creating fallback post (no chain linking available)');
+    
+    return {
+      id: `post_${username}_${timestamp}`,
+      transactionHash: transactionHash,
+      author: username,
+      authorPublicKey: publicKey,
+      content: content.trim(),
+      title: `Post by ${username}`,
+      timestamp: timestamp,
+      previousPostHash: null, // ⚠️ No chain linking for fallback posts
+      blockTime: transaction.blockTime,
+      slot: transaction.slot,
+      glyphData: {
+        compressedSize: content.length,
+        originalSize: content.length,
+        compressionRatio: 1.0,
+        hasMetadata: false,
+        isFallback: true
+      }
+    };
   }
 
   /**
@@ -274,4 +368,4 @@ export class PostTransactionReader {
 // Export singleton instance
 export const postTransactionReader = new PostTransactionReader();
 
-// Character count: 7392
+// Character count: 11,547

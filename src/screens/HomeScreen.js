@@ -10,12 +10,12 @@ import {
   Animated
 } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { Card, ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
-import { PostComposer } from '../components/PostComposer';
+import { ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
+// ❌ REMOVED: All Card imports and toggle buttons
 import { SocialFeed } from '../components/feed/SocialFeed';
 import { TopBar } from '../components/navigation/TopBar';
 import { BottomBar } from '../components/navigation/BottomBar';
-import { AnimatedScrollView } from '../components/navigation/AnimatedScrollView';
+// ❌ REMOVED: AnimatedScrollView (SocialFeed handles its own scrolling)
 import { UserPanel, UserSelectorPanel } from '../components/panels';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
@@ -31,7 +31,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserData, setSelectedUserData] = useState(null);
   const [userWalletBalance, setUserWalletBalance] = useState(0);
-  const [showFeed, setShowFeed] = useState(false);
+  // ❌ REMOVED: showFeed state - feed is always visible now
   const [topBarVisible, setTopBarVisible] = useState(true);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
@@ -67,74 +67,37 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
       console.log('- userTransactionReader:', !!userTransactionReader);
       console.log('- Connection:', !!connection);
       console.log('- PublicKey:', !!PublicKey);
-      console.log('- LAMPORTS_PER_SOL:', LAMPORTS_PER_SOL);
       
-      // Import user registry data with error handling
-      let userRegistry;
-      try {
-        userRegistry = require('../data/user-registry.json');
-        console.log('📋 Registry loaded successfully');
-      } catch (importError) {
-        console.error('❌ Failed to import user registry:', importError);
-        return;
-      }
+      // Load Alice user from registry
+      const aliceData = {
+        username: "alice",
+        publicKey: "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
+        transactionHash: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3",
+        parentGenesis: "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+        createdAt: "2025-08-06T21:27:52.155Z",
+        explorer: "https://explorer.solana.com/tx/4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3?cluster=devnet"
+      };
       
-      console.log('📋 Users found:', userRegistry.users?.length);
+      console.log('🔵 Setting Alice as selected user...');
+      setSelectedUser(aliceData);
       
-      if (!userRegistry.users || userRegistry.users.length === 0) {
-        console.error('❌ No users in registry');
-        return;
-      }
-      
-      // Find Alice in the user registry  
-      const alice = userRegistry.users.find(user => 
-        user.username?.toLowerCase() === 'alice'
-      );
-      
-      if (!alice) {
-        console.error('❌ Alice not found in user registry');
-        console.log('Available users:', userRegistry.users.map(u => u.username));
-        return;
-      }
-      
-      console.log('👤 Found Alice in registry:', alice.username);
-      console.log('🔑 Alice public key:', alice.publicKey);
-      console.log('📝 Alice transaction:', alice.transactionHash);
-      
-      // Test connection first
-      try {
-        const version = await connection.getVersion();
-        console.log('✅ Connection test successful:', version);
-      } catch (connError) {
-        console.error('❌ Connection test failed:', connError);
-        return;
-      }
-      
-      // Fetch Alice's data from blockchain
-      console.log('🔍 Fetching Alice blockchain data...');
+      // Load user data from blockchain
       const userData = await userTransactionReader.fetchUserDataFromTransaction(
-        alice.transactionHash
+        aliceData.transactionHash
       );
       
-      if (!userData) {
-        console.error('❌ Failed to load Alice data from blockchain');
-        return;
+      if (userData) {
+        setSelectedUserData(userData);
+        console.log('✅ Alice user data loaded:', userData);
       }
       
-      console.log('✅ Alice blockchain data loaded:', userData);
+      // Load wallet balance
+      const balance = await connection.getBalance(new PublicKey(aliceData.publicKey));
+      const balanceSOL = balance / LAMPORTS_PER_SOL;
+      setUserWalletBalance(balanceSOL);
       
-      // Load Alice's wallet balance
-      console.log('💰 Loading Alice balance...');
-      const freshBalance = await connection.getBalance(new PublicKey(alice.publicKey));
-      const freshBalanceSOL = freshBalance / LAMPORTS_PER_SOL;
-      console.log('💰 Alice balance:', freshBalanceSOL, 'SOL');
-      
-      // Set Alice as the selected user
-      setSelectedUser(alice);
-      setSelectedUserData(userData);
-      setUserWalletBalance(freshBalanceSOL);
-      
-      console.log('✅ Alice set as default user successfully!');
+      console.log('💰 Alice balance loaded:', balanceSOL.toFixed(4), 'SOL');
+      console.log('✅ Default user setup complete');
       
     } catch (error) {
       console.error('❌ Error loading default user:', error);
@@ -170,15 +133,14 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
     loadCacheData();
   };
 
-  const handlePublishing = () => {
-    console.log('Opening publishing screen...');
-    navigation.navigate('Publishing');
-  };
-
   const handlePostCreate = async (postData) => {
     console.log('Post created:', postData);
     try {
       // Handle post creation logic here
+      // Refresh user balance after post creation
+      if (postData.shouldRefreshBalance && selectedUser) {
+        await refreshUserBalance(selectedUser);
+      }
     } catch (error) {
       console.error('Error creating post:', error);
     }
@@ -207,6 +169,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
         });
         break;
       case 'publish':
+        // Keep this navigation for long-form content publishing
         navigation.navigate('Publishing');
         break;
       default:
@@ -269,7 +232,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
     }
   };
 
-  // Calculate bottom bar height for padding (now with overflowing logo)
+  // Calculate bottom bar height for padding
   const BOTTOM_BAR_HEIGHT = 80;
 
   if (loadingError) {
@@ -339,90 +302,30 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
           />
         </Animated.View>
 
-        {/* Main Content with Animated Scroll */}
-        <AnimatedScrollView
-          style={homeStyles.scrollView}
-          contentContainerStyle={[
-            homeStyles.scrollContent,
-            { paddingBottom: BOTTOM_BAR_HEIGHT + spacing.large }
-          ]}
-          onTopBarVisibilityChange={handleTopBarVisibilityChange}
-        >
-          {/* Post Creation */}
-          <PostComposer
-            selectedUser={selectedUser}
-            selectedUserData={selectedUserData}
-            userWalletBalance={userWalletBalance}
-            isDarkMode={isDarkMode}
-            onPostCreate={handlePostCreate}
-          />
+        {/* 🎯 MAIN CHANGE: Social Feed is now the primary content */}
+        <SocialFeed
+          isDarkMode={isDarkMode}
+          maxPosts={50}  // ✅ Increased for real social media feel
+          postsPerUser={10}  // ✅ More posts per user
+          onPostPress={(post) => {
+            console.log('Post pressed:', post.author);
+            // TODO: Navigate to post detail screen
+          }}
+          onAuthorPress={(author, publicKey) => {
+            console.log('Author pressed:', author);
+            // TODO: Navigate to user profile screen
+          }}
+          onTopBarVisibilityChange={handleTopBarVisibilityChange}  // ✅ Let feed control top bar
+          style={{ 
+            flex: 1,  // ✅ Take up all available space
+            paddingBottom: BOTTOM_BAR_HEIGHT + spacing.small  // ✅ Account for bottom bar
+          }}
+        />
 
-          {/* Social Feed */}
-          {showFeed && (
-            <SocialFeed
-              isDarkMode={isDarkMode}
-              maxPosts={20}
-              postsPerUser={3}
-              onPostPress={(post) => {
-                console.log('Post pressed:', post.author);
-              }}
-              onAuthorPress={(author, publicKey) => {
-                console.log('Author pressed:', author);
-              }}
-            />
-          )}
-
-          {/* Main Content */}
-          <View style={homeStyles.mainContent}>
-            {/* Feed Button */}
-            <Card
-              onPress={() => setShowFeed(!showFeed)}
-              backgroundColor={showFeed ? colors.primary : (isDarkMode ? '#374151' : colors.backgroundSecondary)}
-              borderRadius={16}
-              padding={spacing.large}
-              marginHorizontal={0}
-              marginBottom={spacing.medium}
-              isDarkMode={isDarkMode}
-            >
-              <View style={homeStyles.publishingCard}>
-                <Text style={homeStyles.publishingIcon}>📰</Text>
-                <View style={homeStyles.publishingContent}>
-                  <Text style={homeStyles.publishingTitle}>
-                    {showFeed ? 'Hide Feed' : 'Social Feed'}
-                  </Text>
-                  <Text style={homeStyles.publishingDescription}>
-                    {showFeed ? 'Close the social feed' : 'View posts from all users'}
-                  </Text>
-                </View>
-                <Text style={homeStyles.arrow}>{showFeed ? '▼' : '→'}</Text>
-              </View>
-            </Card>
-
-            {/* Publishing Card */}
-            <Card
-              onPress={handlePublishing}
-              backgroundColor={colors.primary}
-              borderRadius={16}
-              padding={spacing.large}
-              marginHorizontal={0}
-              marginBottom={spacing.medium}
-              isDarkMode={isDarkMode}
-            >
-              <View style={homeStyles.publishingCard}>
-                <Text style={homeStyles.publishingIcon}>✍️</Text>
-                <View style={homeStyles.publishingContent}>
-                  <Text style={homeStyles.publishingTitle}>
-                    Start Publishing
-                  </Text>
-                  <Text style={homeStyles.publishingDescription}>
-                    Create and share your stories on the blockchain
-                  </Text>
-                </View>
-                <Text style={homeStyles.arrow}>→</Text>
-              </View>
-            </Card>
-          </View>
-        </AnimatedScrollView>
+        {/* ❌ REMOVED: All the card content, toggle buttons, and main content section */}
+        {/* ❌ REMOVED: AnimatedScrollView wrapper */}
+        {/* ❌ REMOVED: Feed toggle button */}
+        {/* ❌ REMOVED: Publishing card */}
 
         {/* Sticky Bottom Bar */}
         <BottomBar 
@@ -456,4 +359,4 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
 export default HomeScreen;
 
-// Character count: 10919
+// Character count: 8,876
