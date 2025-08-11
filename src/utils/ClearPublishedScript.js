@@ -117,9 +117,9 @@ export class ClearPublishedScript {
   }
   
   /**
-   * Clear only in-progress content (for testing interruptions)
-   */
-  static async clearInProgress() {
+ * Clear only in-progress content (for testing interruptions)
+ */
+static async clearInProgress() {
     try {
       // Use new storage manager
       const inProgress = await StorageService.getInProgressContent();
@@ -129,7 +129,7 @@ export class ClearPublishedScript {
         await StorageService.removeInProgressContent(contentId);
       }
       
-      console.log('✅ In-progress content cleared');
+      console.log('✅ All in-progress/draft content cleared');
       return true;
     } catch (error) {
       console.error('❌ Error clearing in-progress content:', error);

@@ -317,6 +317,31 @@ export const PublishingScreen = ({ navigation }) => {
     );
   };
 
+  // Clear draft/in-progress data (for testing)
+  const handleClearDrafts = async () => {
+    Alert.alert(
+      'Clear Draft Data',
+      'This will remove all draft and in-progress content. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear Drafts', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              const { ClearPublishedScript } = await import('../utils/ClearPublishedScript');
+              await ClearPublishedScript.clearInProgress();
+              await loadExistingContent(); // Use hook's method
+              Alert.alert('Success', 'All draft data cleared!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear drafts: ' + error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Handle back navigation
   const handleGoBack = () => {
     if (publishing) {
@@ -436,6 +461,15 @@ export const PublishingScreen = ({ navigation }) => {
           <Button
             title="🗑️ Clear Test Data"
             onPress={handleClearPublished}
+            variant="danger"
+            size="medium"
+            style={publishingStyles.clearButton}
+          />
+
+          {/* Clear Draft Data Button */}
+          <Button
+            title="🗑️ Clear Draft Data"
+            onPress={handleClearDrafts}
             variant="danger"
             size="medium"
             style={publishingStyles.clearButton}
