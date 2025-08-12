@@ -73,14 +73,14 @@ export const BottomBar = ({
     // Radial Menu Styles
     radialMenuOverlay: {
       position: 'absolute',
-      top: -20, // Same as main button position
+      top: 0, // Same as main button position
       left: 32, // Center on the main button (64px button / 2)
       width: 200,
       height: 200,
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1001,
-      // backgroundColor: 'rgba(255, 0, 0, 0.1)', // Debug - remove this
+      backgroundColor: 'rgba(255, 0, 0, 0.1)', // Debug - remove this
     },
     radialMenuContainer: {
       position: 'relative',
@@ -108,7 +108,7 @@ export const BottomBar = ({
     },
     // Position buttons around the main button's orbit
     topButton: {
-      top: 20, // Position above the main button
+      top: 10, // Position above the main button
       left: 72, // Centered horizontally
     },
     rightButton: {

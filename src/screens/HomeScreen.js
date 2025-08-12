@@ -11,11 +11,9 @@ import {
 } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
-// ❌ REMOVED: All Card imports and toggle buttons
 import { SocialFeed } from '../components/feed/SocialFeed';
 import { TopBar } from '../components/navigation/TopBar';
 import { BottomBar } from '../components/navigation/BottomBar';
-// ❌ REMOVED: AnimatedScrollView (SocialFeed handles its own scrolling)
 import { UserPanel, UserSelectorPanel } from '../components/panels';
 import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
@@ -31,7 +29,6 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserData, setSelectedUserData] = useState(null);
   const [userWalletBalance, setUserWalletBalance] = useState(0);
-  // ❌ REMOVED: showFeed state - feed is always visible now
   const [topBarVisible, setTopBarVisible] = useState(true);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
@@ -302,11 +299,11 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
           />
         </Animated.View>
 
-        {/* 🎯 MAIN CHANGE: Social Feed is now the primary content */}
+        {/* Social Feed */}
         <SocialFeed
           isDarkMode={isDarkMode}
-          maxPosts={50}  // ✅ Increased for real social media feel
-          postsPerUser={10}  // ✅ More posts per user
+          maxPosts={50}  
+          postsPerUser={10}  
           onPostPress={(post) => {
             console.log('Post pressed:', post.author);
             // TODO: Navigate to post detail screen
@@ -315,17 +312,12 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
             console.log('Author pressed:', author);
             // TODO: Navigate to user profile screen
           }}
-          onTopBarVisibilityChange={handleTopBarVisibilityChange}  // ✅ Let feed control top bar
+          onTopBarVisibilityChange={handleTopBarVisibilityChange}  
           style={{ 
             flex: 1,  // ✅ Take up all available space
-            paddingBottom: BOTTOM_BAR_HEIGHT + spacing.small  // ✅ Account for bottom bar
+            paddingBottom: BOTTOM_BAR_HEIGHT + spacing.small  
           }}
         />
-
-        {/* ❌ REMOVED: All the card content, toggle buttons, and main content section */}
-        {/* ❌ REMOVED: AnimatedScrollView wrapper */}
-        {/* ❌ REMOVED: Feed toggle button */}
-        {/* ❌ REMOVED: Publishing card */}
 
         {/* Sticky Bottom Bar */}
         <BottomBar 

@@ -18,7 +18,7 @@ import {
 import { Keypair } from '@solana/web3.js';
 import { spacing, colors, typography, borderRadius } from '../styles/tokens';
 import { useWallet } from '../hooks/useWallet';
-import { PublishingService } from '../services/publishing/PublishingService';
+import { PostPublishingService } from '../services/publishing/PostPublishingService';
 import { PostHeaderService } from '../services/feed/PostHeaderService';
 import userKeys from '../data/user-keys.json';
 
@@ -39,7 +39,7 @@ import userKeys from '../data/user-keys.json';
  * - Cancel/Post buttons in header like X/Twitter
  * 
  * Architecture Integration:
- * - Uses PublishingService for blockchain publishing (same as PostComposer)
+ * - Uses PostPublishingService for blockchain publishing (same as PostComposer)
  * - Maintains user post chains (genesis -> post1 -> post2...)
  * - Stores posts permanently on Solana blockchain
  * - Updates user's lastPostHash for chain integrity
@@ -93,9 +93,9 @@ export const ComposerModal = ({ navigation, route }) => {
           console.log('✅ Setting up publishing service for:', selectedUser.username);
           
           // Create and configure publishing service (same as PostComposer)
-          console.log('🔵 Creating new PublishingService...');
-          const service = new PublishingService();
-          console.log('🔵 PublishingService created:', !!service);
+          console.log('🔵 Creating new PostPublishingService...');
+          const service = new PostPublishingService();
+          console.log('🔵 PostPublishingService created:', !!service);
           
           // Create user's individual wallet (identical to PostComposer)
           console.log('🔵 Creating user wallet for:', selectedUser.username);
@@ -187,18 +187,13 @@ export const ComposerModal = ({ navigation, route }) => {
       setIsPosting(true);
       setPublishProgress(null);
       
-      // Create complete content object with all required fields (same as PostComposer)
-      const contentData = {
+      // Create post data object for PostPublishingService
+      const postData = {
         content: postContent.trim(),
-        title: `Post by ${selectedUser.username}`,
-        filename: `${selectedUser.username}_post_${Date.now()}.txt`,
-        size: postContent.trim().length,
-        type: 'text/plain', // CRITICAL: Same item.type as PostComposer for filter compatibility
-        authorName: selectedUser.username,
-        socialPost: true
+        authorName: selectedUser.username
       };
       
-      console.log('🔵 Content data created:', contentData);
+      console.log('🔵 Content data created:', postData);
       console.log('🔵 Showing confirmation dialog...');
       
       // Show confirmation dialog with cost (same as PostComposer)
@@ -221,19 +216,12 @@ export const ComposerModal = ({ navigation, route }) => {
                 
                 // Publish using existing service (identical to PostComposer)
                 console.log('🔵 Publishing content using existing service...');
-                const result = await publishingService.publishContent(contentData);
+                const result = await publishingService.publishPost(postData);
                 console.log('✅ Post published successfully using existing service:', result);
-
-                // Update user head (same as PostComposer)
-                await PostHeaderService.updateUserHead(
-                    selectedUser.publicKey,
-                    selectedUser.username,
-                    result.transactionIds[0]
-                );
                 
                 Alert.alert(
                   '🎉 Post Published!',
-                  `Your post has been permanently stored on the blockchain!\n\nScroll: ${result.contentId}\nCost: ${result.totalCost?.toFixed(5) || estimatedCost.toFixed(5)} SOL`,
+                  `Your post has been permanently stored on the blockchain!\n\nTransaction: ${result.transactionId}\nCost: ${result.totalCost?.toFixed(5) || estimatedCost.toFixed(5)} SOL`,
                   [{ 
                     text: 'OK',
                     onPress: () => {
@@ -396,7 +384,7 @@ export const ComposerModal = ({ navigation, route }) => {
             color: colors.textSecondary,
             fontSize: typography.fontSize.small
           }}>
-            {userWalletBalance.toFixed(3)} SOL
+            {userWalletBalance.toFixed(5)} SOL
           </Text>
         </View>
 

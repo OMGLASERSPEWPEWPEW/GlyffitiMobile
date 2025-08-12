@@ -4,6 +4,7 @@
 import { MobileWalletService } from '../wallet/MobileWalletService';
 import { BlockchainService } from '../blockchain/BlockchainService';
 import { PostHeaderService } from '../feed/PostHeaderService';
+import { CompressionService } from '../compression/CompressionService';
 
 /**
  * PostPublishingService - Dedicated service for social media posts only
@@ -133,20 +134,26 @@ export class PostPublishingService {
       }
 
       // Create simple single-glyph content for social posts
-        const simpleContent = {
+      // ✅ Compress and encode content like regular publishing pipeline
+      const compressedContent = CompressionService.compress(content);
+      const base64Content = CompressionService.uint8ArrayToBase64(compressedContent);
+
+      const simpleContent = {
         contentId: `social_post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         title: `Post by ${postData.authorName}`,
         originalContent: content,
         glyphs: [{
             index: 0,
-            content: content,
-            hash: Date.now().toString(), // Simple hash
-            previousPostHash: previousPostHash
+            content: base64Content,  // ✅ Base64-encoded compressed data
+            hash: Date.now().toString(),
+            previousPostHash: previousPostHash,
+            originalText: content  // Keep original for reference
         }],
         authorPublicKey,
         authorName: postData.authorName,
-        socialPost: true // Mark as social post
-        };
+        socialPost: true,
+        type: 'social_post'
+      };
 
         // Use existing BlockchainService.publishContent
         const result = await this.blockchainService.publishContent(
@@ -165,7 +172,7 @@ export class PostPublishingService {
       }
 
       // Update user's head pointer to this new post
-      const transactionHash = result.transactionId || result.signature;
+      const transactionHash = result.transactionIds?.[0] || result.transactionId || result.signature;
       await PostHeaderService.updateUserHead(
         authorPublicKey,
         postData.authorName,

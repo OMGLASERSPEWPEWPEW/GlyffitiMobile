@@ -97,9 +97,27 @@ export class SolanaPublisher {
             // Create Solana transaction
             const transaction = new Transaction();
             
-            // Convert compressed binary data to base64 for the Memo program
-            const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
-            const memoData = Buffer.from(base64CompressedData, 'utf-8');
+            // Check if this is a social post that needs full glyph structure preserved
+            let memoData;
+            if (content.socialPost && content.glyphs[index] && content.glyphs[index].previousPostHash !== undefined) {
+              // For social posts, store the FULL glyph structure to preserve chain linking
+              const originalContent = content.originalContent || glyphChunk.originalText || content.content;
+              const fullGlyphData = {
+                glyphs: [{
+                  content: originalContent,  // ✅ Use original text content
+                  previousPostHash: content.glyphs[index].previousPostHash,
+                  index: content.glyphs[index].index || index
+                }]
+              };
+              const jsonString = JSON.stringify(fullGlyphData);
+              const compressedData = CompressionService.compress(jsonString);
+              const base64CompressedData = CompressionService.uint8ArrayToBase64(compressedData);
+              memoData = Buffer.from(base64CompressedData, 'utf-8');
+            } else {
+              // For regular published content, use existing logic
+              const base64CompressedData = CompressionService.uint8ArrayToBase64(glyphChunk.content);
+              memoData = Buffer.from(base64CompressedData, 'utf-8');
+            }
             
             // Add memo instruction
             const instruction = new TransactionInstruction({
