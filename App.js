@@ -60,6 +60,11 @@ export default function App() {
             component={PublishingScreen}
             options={{
               title: 'Publishing',
+              cardStyleInterpolator: () => ({
+                cardStyle: {
+                  opacity: 1,
+                },
+              }),
             }}
           />
           <Stack.Screen 
