@@ -19,7 +19,8 @@ export {
   Card,
   StatusCard,
   ContentCard,
-  ScreenContainer
+  ScreenContainer,
+  ContentArea
 } from './layout';
 
 // UI components (form controls, buttons)

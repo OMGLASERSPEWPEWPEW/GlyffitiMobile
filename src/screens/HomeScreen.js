@@ -11,7 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { ErrorDisplay, RetryButton, ErrorBoundary, ScreenContainer } from '../components/shared';
+import { ErrorDisplay, RetryButton, ErrorBoundary, ScreenContainer, ContentArea } from '../components/shared';
 import { SocialFeed } from '../components/feed/SocialFeed';
 import { TopBar } from '../components/navigation/TopBar';
 import { BottomBar } from '../components/navigation/BottomBar';
@@ -342,25 +342,31 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
         </Animated.View>
 
         {/* Social Feed */}
-        <SocialFeed
-          key={feedKey}
+        <ContentArea 
+          variant="feed" 
           isDarkMode={isDarkMode}
-          maxPosts={50}  
-          postsPerUser={10}  
-          onPostPress={(post) => {
-            console.log('Post pressed:', post.author);
-            // TODO: Navigate to post detail screen
-          }}
-          onAuthorPress={(author, publicKey) => {
-            console.log('Author pressed:', author);
-            // TODO: Navigate to user profile screen
-          }}
-          onTopBarVisibilityChange={handleTopBarVisibilityChange}  
-          style={{ 
-            flex: 1,  // ✅ Take up all available space
-            paddingBottom: BOTTOM_BAR_HEIGHT + spacing.small  
-          }}
-        />
+          withBottomBarPadding={true}
+        >
+          <SocialFeed
+            key={feedKey}
+            isDarkMode={isDarkMode}
+            maxPosts={50}  
+            postsPerUser={10}  
+            onPostPress={(post) => {
+              console.log('Post pressed:', post.author);
+              // TODO: Navigate to post detail screen
+            }}
+            onAuthorPress={(author, publicKey) => {
+              console.log('Author pressed:', author);
+              // TODO: Navigate to user profile screen
+            }}
+            onTopBarVisibilityChange={handleTopBarVisibilityChange}  
+            style={{ 
+              flex: 1,  // ✅ Take up all available space
+              paddingBottom: BOTTOM_BAR_HEIGHT + spacing.small  
+            }}
+          />
+        </ContentArea>
 
         {/* Sticky Bottom Bar */}
         <BottomBar 

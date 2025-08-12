@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer } from '../components/shared';
+import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer, ContentArea } from '../components/shared';
 import { TopBar } from '../components/navigation';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
@@ -398,11 +398,7 @@ export const PublishingScreen = ({ navigation }) => {
           isDarkMode={false}
         />
 
-        <ScrollView 
-          style={publishingStyles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={publishingStyles.scrollContent}
-        >
+        <ContentArea variant="scroll" isDarkMode={false}>
           {/* Error display for initialization errors */}
           {initError && (
             <ErrorDisplay
@@ -492,7 +488,7 @@ export const PublishingScreen = ({ navigation }) => {
             handleResumePublishing={handleResumePublishing}
             handleViewStory={handleViewStory}
           />
-        </ScrollView>
+        </ContentArea>
 
         {/* Wallet Loading Overlay */}
         <LoadingOverlay

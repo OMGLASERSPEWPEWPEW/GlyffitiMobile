@@ -9,4 +9,7 @@ export { default as ContentCard } from './ContentCard';
 // Screen container system
 export { default as ScreenContainer } from './ScreenContainer';
 
+// Content area system
+export { default as ContentArea } from './ContentArea';
+
 // Character count: 211
