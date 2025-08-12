@@ -304,6 +304,10 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
           <BottomBar 
             onLogoPress={handleLogoPress}
             onLongPressMenu={handleLongPressMenu}
+            onHomePress={() => {
+              // Already on home - could scroll to top or do nothing
+              console.log('Already on home screen');
+            }}
             isDarkMode={isDarkMode}
           />
         </ScreenContainer>

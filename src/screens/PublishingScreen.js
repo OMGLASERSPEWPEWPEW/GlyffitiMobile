@@ -10,7 +10,7 @@ import {
   Alert
 } from 'react-native';
 import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer, ContentArea } from '../components/shared';
-import { TopBar } from '../components/navigation';
+import { TopBar, BottomBar } from '../components/navigation';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
@@ -393,12 +393,10 @@ export const PublishingScreen = ({ navigation }) => {
         {/* Header */}
         <TopBar 
           title="Publishing"
-          showBackButton={true}
-          onBackPress={handleGoBack}
           isDarkMode={false}
         />
 
-        <ContentArea variant="scroll" isDarkMode={false}>
+        <ContentArea variant="scroll" isDarkMode={false} withBottomBarPadding={true}>
           {/* Error display for initialization errors */}
           {initError && (
             <ErrorDisplay
@@ -509,6 +507,42 @@ export const PublishingScreen = ({ navigation }) => {
           showCancel={false}
           isDarkMode={false}
           modal={true}
+        />
+
+        {/* Bottom Bar Navigation */}
+        <BottomBar 
+          onLogoPress={() => {
+            // Navigate to compose/HomeScreen or open compose modal
+            navigation.navigate('ComposeModal', {
+              selectedUser: null, // Can be null for PublishingScreen
+              selectedUserData: null,
+              userWalletBalance: 0,
+              onPostCreate: () => {} // Empty callback
+            });
+          }}
+          onLongPressMenu={(action) => {
+            // Handle long press menu actions
+            switch (action) {
+              case 'post':
+                navigation.navigate('ComposeModal');
+                break;
+              case 'publish':
+                // Already on publishing screen - could show a message
+                console.log('Already on publishing screen');
+                break;
+              case 'clear':
+                // Maybe not relevant for publishing screen
+                console.log('Clear action not available on publishing screen');
+                break;
+              default:
+                console.log('Unknown action:', action);
+            }
+          }}
+          onHomePress={() => {
+            // Navigate back to home screen
+            navigation.goBack();
+          }}
+          isDarkMode={false}
         />           
       </ScreenContainer>
     </ErrorBoundary>

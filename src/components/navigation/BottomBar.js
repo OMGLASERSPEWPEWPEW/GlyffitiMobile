@@ -12,6 +12,7 @@ const { width: screenWidth } = Dimensions.get('window');
 export const BottomBar = ({ 
   onLogoPress,
   onLongPressMenu,
+  onHomePress,
   showFooterText = true,
   isDarkMode = false 
 }) => {
@@ -283,6 +284,37 @@ export const BottomBar = ({
 
   return (
     <View style={bottomBarStyles.container}>
+      {/* Left Navigation - Home Button */}
+      <View style={{
+        position: 'absolute',
+        left: spacing.large, // 24px from left edge
+        top: spacing.small,  // 8px from top
+        zIndex: 1001,
+      }}>
+        <TouchableOpacity
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+          onPress={onHomePress}
+          activeOpacity={0.7}
+        >
+          <Text style={{
+            fontSize: 20,
+            color: isDarkMode ? '#e5e7eb' : '#374151'
+          }}>🏠</Text>
+        </TouchableOpacity>
+      </View>
+      
       {/* Background overlay when radial menu is open */}
       {showRadialMenu && (
         <Animated.View 
