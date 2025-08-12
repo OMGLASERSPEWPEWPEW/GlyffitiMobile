@@ -6,4 +6,7 @@ export { default as Card } from './Card';
 export { default as StatusCard } from './StatusCard';
 export { default as ContentCard } from './ContentCard';
 
+// Screen container system
+export { default as ScreenContainer } from './ScreenContainer';
+
 // Character count: 211

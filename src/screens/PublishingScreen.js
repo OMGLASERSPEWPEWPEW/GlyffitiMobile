@@ -9,8 +9,8 @@ import {
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton } from '../components/shared';
-import { ArrowLeft } from 'lucide-react-native';
+import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer } from '../components/shared';
+import { TopBar } from '../components/navigation';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
@@ -389,15 +389,14 @@ export const PublishingScreen = ({ navigation }) => {
         initializeData();
       }}
     >
-      <SafeAreaView style={publishingStyles.container}>
-        {/* Header - EXACTLY THE SAME */}
-        <View style={publishingStyles.header}>
-          <TouchableOpacity onPress={handleGoBack} style={publishingStyles.backButton}>
-            <ArrowLeft size={24} color="#374151" />
-          </TouchableOpacity>
-          <Text style={publishingStyles.headerTitle}>Publishing</Text>
-          <View style={publishingStyles.headerSpacer} />
-        </View>
+      <ScreenContainer isDarkMode={false} variant="screen">
+        {/* Header */}
+        <TopBar 
+          title="Publishing"
+          showBackButton={true}
+          onBackPress={handleGoBack}
+          isDarkMode={false}
+        />
 
         <ScrollView 
           style={publishingStyles.scrollView}
@@ -515,7 +514,7 @@ export const PublishingScreen = ({ navigation }) => {
           isDarkMode={false}
           modal={true}
         />           
-      </SafeAreaView>
+      </ScreenContainer>
     </ErrorBoundary>
   );
 };

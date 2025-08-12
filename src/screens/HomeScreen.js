@@ -11,7 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
+import { ErrorDisplay, RetryButton, ErrorBoundary, ScreenContainer } from '../components/shared';
 import { SocialFeed } from '../components/feed/SocialFeed';
 import { TopBar } from '../components/navigation/TopBar';
 import { BottomBar } from '../components/navigation/BottomBar';
@@ -283,10 +283,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   if (loadingError) {
     return (
       <ErrorBoundary>
-        <SafeAreaView style={[
-          homeStyles.container,
-          { backgroundColor: isDarkMode ? '#111827' : colors.background }
-        ]}>
+        <ScreenContainer isDarkMode={isDarkMode} variant="screenSafe">
           <TopBar 
             title="Glyffiti"
             subtitle="Blockchain Social Network"
@@ -309,7 +306,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
             onLongPressMenu={handleLongPressMenu}
             isDarkMode={isDarkMode}
           />
-        </SafeAreaView>
+        </ScreenContainer>
       </ErrorBoundary>
     );
   }
@@ -326,10 +323,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
       }}
       onFallbackPress={() => navigation?.goBack?.()}
     >
-      <SafeAreaView style={[
-        homeStyles.container,
-        { backgroundColor: isDarkMode ? '#111827' : colors.background }
-      ]}>
+      <ScreenContainer isDarkMode={isDarkMode} variant="screenSafe">
         {/* Animated Top Bar */}
         <Animated.View style={{
           transform: [{ translateY: topBarAnimation.interpolate({
@@ -393,7 +387,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
           onClose={handleCloseUserSelectorPanel}
           isDarkMode={isDarkMode}
         />
-      </SafeAreaView>
+      </ScreenContainer>
     </ErrorBoundary>
   );
 };
