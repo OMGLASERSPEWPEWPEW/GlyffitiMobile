@@ -80,7 +80,6 @@ export const BottomBar = ({
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1001,
-      backgroundColor: 'rgba(255, 0, 0, 0.1)', // Debug - remove this
     },
     radialMenuContainer: {
       position: 'relative',
@@ -114,6 +113,10 @@ export const BottomBar = ({
     rightButton: {
       top: 40, // Slightly lower for 2 o'clock position  
       left: 120, // To the right for 2 o'clock position
+    },
+    leftButton: {
+      top: 40, // Slightly lower for 10 o'clock position  
+      left: 24, // To the left for 10 o'clock position
     },
     radialButtonText: {
       fontSize: 12,
@@ -243,6 +246,40 @@ export const BottomBar = ({
     </Svg>
   );
 
+  // Clear icon (trash/reset icon)
+  const ClearIcon = ({ size = 24 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path 
+        d="M3 6H5H21"
+        stroke={isDarkMode ? '#e5e7eb' : '#374151'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path 
+        d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
+        stroke={isDarkMode ? '#e5e7eb' : '#374151'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path 
+        d="M10 11V17"
+        stroke={isDarkMode ? '#e5e7eb' : '#374151'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path 
+        d="M14 11V17"
+        stroke={isDarkMode ? '#e5e7eb' : '#374151'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+
   return (
     <View style={bottomBarStyles.container}>
       {/* Background overlay when radial menu is open */}
@@ -292,6 +329,16 @@ export const BottomBar = ({
               <PublishIcon size={20} />
               <Text style={bottomBarStyles.radialButtonText}>Pub</Text>
             </TouchableOpacity>
+
+            {/* Left Button - Reset Social Feed Head Pointers */}
+            <TouchableOpacity
+              style={[bottomBarStyles.radialButton, bottomBarStyles.leftButton]}
+              onPress={() => handleRadialAction('clear')}
+              activeOpacity={0.7}
+            >
+              <ClearIcon size={20} />
+              <Text style={bottomBarStyles.radialButtonText}>Reset</Text>
+            </TouchableOpacity>
           </View>
         </Animated.View>
       )}
@@ -322,4 +369,4 @@ export const BottomBar = ({
   );
 };
 
-// Character count: 7814
+// Character count: 8,539

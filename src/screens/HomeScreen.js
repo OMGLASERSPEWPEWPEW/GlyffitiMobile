@@ -7,7 +7,8 @@ import {
   Text,
   SafeAreaView,
   Dimensions,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { ErrorDisplay, RetryButton, ErrorBoundary } from '../components/shared';
@@ -32,6 +33,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [topBarVisible, setTopBarVisible] = useState(true);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
+  const [feedKey, setFeedKey] = useState(0);
 
   // Animated value for top bar
   const topBarAnimation = useRef(new Animated.Value(1)).current;
@@ -143,6 +145,48 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
     }
   };
 
+  const handleClearSocialPosts = async () => {
+  Alert.alert(
+    'Reset Social Feed',
+    'This will reset all user feed head pointers back to genesis, clearing social feeds while preserving user accounts. This action cannot be undone.\n\nAre you sure you want to continue?',
+    [
+      {
+        text: 'Cancel',
+        style: 'cancel'
+      },
+      {
+        text: 'Reset Feed',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            console.log('🔄 Starting to reset all social feed head pointers...');
+            
+            const success = await PostHeaderService.resetAllUserHeads();
+            
+            if (success) {
+              // Force the SocialFeed to refresh by clearing its cache
+              setFeedKey(prev => prev + 1);
+              
+              Alert.alert(
+                'Success',
+                'All social feed head pointers have been reset to genesis. User accounts are preserved but feeds will start fresh.',
+                [{ text: 'OK' }]
+              );
+              console.log('✅ Social feed head pointers reset successfully');
+            } else {
+              Alert.alert('Error', 'Failed to reset social feed head pointers. Please try again.');
+            }
+          } catch (error) {
+            console.error('❌ Error resetting social feed head pointers:', error);
+            Alert.alert('Error', 'An unexpected error occurred while resetting social feed head pointers.');
+          }
+        }
+      }
+    ],
+    { cancelable: true }
+  );
+};
+
   const handleLogoPress = () => {
     console.log('Glyffiti logo pressed - opening compose modal');
     navigation.navigate('ComposeModal', {
@@ -168,6 +212,10 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
       case 'publish':
         // Keep this navigation for long-form content publishing
         navigation.navigate('Publishing');
+        break;
+      case 'clear':
+      // Reset social feed head pointers back to genesis (preserves users)
+        handleClearSocialPosts();
         break;
       default:
         console.log('Unknown action:', action);
@@ -301,6 +349,7 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
         {/* Social Feed */}
         <SocialFeed
+          key={feedKey}
           isDarkMode={isDarkMode}
           maxPosts={50}  
           postsPerUser={10}  

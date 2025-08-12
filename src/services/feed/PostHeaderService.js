@@ -1,4 +1,4 @@
-// src/services/feed/PostHeaderService.js
+// src/services/feed/PostHeaderService.js  
 // Path: src/services/feed/PostHeaderService.js
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -238,7 +238,49 @@ export class PostHeaderService {
   }
   
   /**
-   * Clear all user heads
+   * Reset all user head pointers to null (back to genesis) while preserving users
+   * This keeps all user accounts but resets their feed head pointers for fresh feeds
+   * @returns {Promise<boolean>} Success status
+   */
+  static async resetAllUserHeads() {
+    try {
+      const heads = await this.loadUserHeads();
+      const currentTime = new Date().toISOString();
+      
+      // Count users before reset
+      const userCount = Object.keys(heads.users).length;
+      
+      // Reset each user's head pointer while preserving their account
+      Object.keys(heads.users).forEach(publicKey => {
+        const user = heads.users[publicKey];
+        heads.users[publicKey] = {
+          username: user.username,         // ✅ Preserve username
+          latestPostHash: null,           // ✅ Reset to genesis/null
+          lastUpdated: currentTime,       // ✅ Update timestamp
+          postCount: 0                    // ✅ Reset post count
+        };
+      });
+      
+      const success = await this.saveUserHeads(heads);
+      
+      if (success) {
+        console.log('🔄 All user head pointers reset to genesis:', {
+          usersPreserved: userCount,
+          resetTime: currentTime
+        });
+      }
+      
+      return success;
+      
+    } catch (error) {
+      console.error('❌ Error resetting user heads:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Clear all user heads (DESTRUCTIVE - removes all users)
+   * @deprecated Use resetAllUserHeads() instead to preserve users
    * @returns {Promise<boolean>} Success status
    */
   static async clearAllUsers() {
@@ -339,6 +381,19 @@ export class PostHeaderService {
       const foundActiveUser = activeUsers.find(user => user.publicKey === testPublicKey);
       if (!foundActiveUser) throw new Error('Test user not found in active users');
       
+      // Test resetting user heads (preserves users)
+      const resetSuccess = await this.resetAllUserHeads();
+      if (!resetSuccess) throw new Error('Failed to reset user heads');
+      
+      // Verify user still exists but head is reset
+      const resetHead = await this.getUserHead(testPublicKey);
+      if (resetHead !== null) throw new Error('User head was not reset to null');
+      
+      const allHeadsAfterReset = await this.getAllUserHeads();
+      const userAfterReset = allHeadsAfterReset.find(user => user.publicKey === testPublicKey);
+      if (!userAfterReset) throw new Error('User was lost during head reset');
+      if (userAfterReset.username !== testUsername) throw new Error('Username was lost during head reset');
+      
       // Test removing the user
       const removeSuccess = await this.removeUser(testPublicKey);
       if (!removeSuccess) throw new Error('Failed to remove test user');
@@ -353,4 +408,4 @@ export class PostHeaderService {
   }
 }
 
-// Character count: 10,347
+// Character count: 11,567
