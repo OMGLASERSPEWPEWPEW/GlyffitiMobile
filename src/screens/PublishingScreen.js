@@ -62,6 +62,8 @@ export const PublishingScreen = ({ navigation }) => {
     initializeData();
   }, []);
 
+
+
   // Initialize all data including published content
   const initializeData = async () => {
     try {
@@ -437,36 +439,6 @@ export const PublishingScreen = ({ navigation }) => {
             handleMigration={handleMigration}
           />
           
-          {/* Publishing Button - EXACTLY THE SAME STYLING */}
-          <Button
-            title={publishing ? '📤 Publishing...' : 
-                  walletStatus !== 'unlocked' ? '🔒 Unlock Wallet to Publish' :
-                  '📁 Pick File & Publish'}
-            onPress={handlePublishFile}
-            disabled={publishing || walletStatus !== 'unlocked' || isLoading}
-            loading={publishing}
-            variant="primary"
-            size="large"
-            style={publishingStyles.publishButton}
-          />
-          
-          {/* Clear Test Data Button - EXACTLY THE SAME */}
-          <Button
-            title="🗑️ Clear Test Data"
-            onPress={handleClearPublished}
-            variant="danger"
-            size="medium"
-            style={publishingStyles.clearButton}
-          />
-
-          {/* Clear Draft Data Button */}
-          <Button
-            title="🗑️ Clear Draft Data"
-            onPress={handleClearDrafts}
-            variant="danger"
-            size="medium"
-            style={publishingStyles.clearButton}
-          />
           
           {/* Progress Bar - EXACTLY THE SAME */}
           <ProgressBar publishing={publishing} progress={progress} />
@@ -521,18 +493,16 @@ export const PublishingScreen = ({ navigation }) => {
             });
           }}
           onLongPressMenu={(action) => {
-            // Handle long press menu actions
+            // Handle publishing-specific actions
             switch (action) {
-              case 'post':
-                navigation.navigate('ComposeModal');
+              case 'pickfile-publish':
+                handlePublishFile();
                 break;
-              case 'publish':
-                // Already on publishing screen - could show a message
-                console.log('Already on publishing screen');
+              case 'clear-test':
+                handleClearPublished();
                 break;
-              case 'clear':
-                // Maybe not relevant for publishing screen
-                console.log('Clear action not available on publishing screen');
+              case 'clear-drafts':
+                handleClearDrafts();
                 break;
               default:
                 console.log('Unknown action:', action);
@@ -541,6 +511,23 @@ export const PublishingScreen = ({ navigation }) => {
           onHomePress={() => {
             // Navigate back to home screen
             navigation.goBack();
+          }}
+          customRadialButtons={{
+            top: {
+              action: 'pickfile-publish',
+              label: 'Pick & Pub',
+              icon: 'file'
+            },
+            right: {
+              action: 'clear-drafts', 
+              label: 'Clear Drafts',
+              icon: 'clear'
+            },
+            left: {
+              action: 'clear-test',
+              label: 'Clear Test',
+              icon: 'clear'
+            }
           }}
           isDarkMode={false}
         />           

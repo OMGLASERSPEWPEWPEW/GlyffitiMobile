@@ -14,7 +14,8 @@ export const BottomBar = ({
   onLongPressMenu,
   onHomePress,
   showFooterText = true,
-  isDarkMode = false 
+  isDarkMode = false,
+  customRadialButtons = null 
 }) => {
   const insets = useSafeAreaInsets();
   const [showRadialMenu, setShowRadialMenu] = useState(false);
@@ -282,6 +283,39 @@ export const BottomBar = ({
     </Svg>
   );
 
+  // File picker icon (folder with arrow)
+  const FileIcon = ({ size = 24 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path 
+        d="M10 4H4C2.89 4 2 4.89 2 6V18C2 19.11 2.89 20 4 20H20C21.11 20 22 19.11 22 18V8C22 6.89 21.11 6 20 6H12L10 4Z"
+        fill={isDarkMode ? '#e5e7eb' : '#374151'}
+      />
+      <Path 
+        d="M12 11L16 15L12 19M8 15H16"
+        stroke={isDarkMode ? '#1f2937' : '#ffffff'}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+
+  // Helper function to get icon component from string
+  const getIconComponent = (iconName, size = 24) => {
+    switch (iconName) {
+      case 'file':
+        return <FileIcon size={size} />;
+      case 'clear':
+        return <ClearIcon size={size} />;
+      case 'post':
+        return <PostIcon size={size} />;
+      case 'publish':
+        return <PublishIcon size={size} />;
+      default:
+        return <PostIcon size={size} />; // Default fallback
+    }
+  };
+
   return (
     <View style={bottomBarStyles.container}>
       {/* Left Navigation - Home Button */}
@@ -331,7 +365,7 @@ export const BottomBar = ({
         </Animated.View>
       )}
 
-      {/* Radial Menu */}
+     {/* Radial Menu */}
       {showRadialMenu && (
         <Animated.View 
           style={[
@@ -343,34 +377,55 @@ export const BottomBar = ({
           ]}
         >
           <View style={bottomBarStyles.radialMenuContainer}>
-            {/* Top Button - Post */}
+            {/* Top Button */}
             <TouchableOpacity
               style={[bottomBarStyles.radialButton, bottomBarStyles.topButton]}
-              onPress={() => handleRadialAction('post')}
+              onPress={() => handleRadialAction(customRadialButtons?.top?.action || 'post')}
               activeOpacity={0.7}
             >
-              <PostIcon size={24} />
-              <Text style={bottomBarStyles.radialButtonText}>Post</Text>
+              {customRadialButtons?.top?.icon 
+                ? (typeof customRadialButtons.top.icon === 'string' 
+                    ? getIconComponent(customRadialButtons.top.icon, 24)
+                    : customRadialButtons.top.icon)
+                : <PostIcon size={24} />
+              }
+              <Text style={bottomBarStyles.radialButtonText}>
+                {customRadialButtons?.top?.label || 'Post'}
+              </Text>
             </TouchableOpacity>
 
-            {/* Right Button - Publish */}
+            {/* Right Button */}
             <TouchableOpacity
               style={[bottomBarStyles.radialButton, bottomBarStyles.rightButton]}
-              onPress={() => handleRadialAction('publish')}
+              onPress={() => handleRadialAction(customRadialButtons?.right?.action || 'publish')}
               activeOpacity={0.7}
             >
-              <PublishIcon size={20} />
-              <Text style={bottomBarStyles.radialButtonText}>Pub</Text>
+              {customRadialButtons?.right?.icon 
+                ? (typeof customRadialButtons.right.icon === 'string' 
+                    ? getIconComponent(customRadialButtons.right.icon, 20)
+                    : customRadialButtons.right.icon)
+                : <PublishIcon size={20} />
+              }
+              <Text style={bottomBarStyles.radialButtonText}>
+                {customRadialButtons?.right?.label || 'Pub'}
+              </Text>
             </TouchableOpacity>
 
-            {/* Left Button - Reset Social Feed Head Pointers */}
+            {/* Left Button */}
             <TouchableOpacity
               style={[bottomBarStyles.radialButton, bottomBarStyles.leftButton]}
-              onPress={() => handleRadialAction('clear')}
+              onPress={() => handleRadialAction(customRadialButtons?.left?.action || 'clear')}
               activeOpacity={0.7}
             >
-              <ClearIcon size={20} />
-              <Text style={bottomBarStyles.radialButtonText}>Reset</Text>
+              {customRadialButtons?.left?.icon 
+                ? (typeof customRadialButtons.left.icon === 'string' 
+                    ? getIconComponent(customRadialButtons.left.icon, 20)
+                    : customRadialButtons.left.icon)
+                : <ClearIcon size={20} />
+              }
+              <Text style={bottomBarStyles.radialButtonText}>
+                {customRadialButtons?.left?.label || 'Reset'}
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
