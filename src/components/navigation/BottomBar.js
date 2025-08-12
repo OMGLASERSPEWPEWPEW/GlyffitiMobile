@@ -73,10 +73,11 @@ export const BottomBar = ({
     // Radial Menu Styles
     radialMenuOverlay: {
       position: 'absolute',
-      top: 0, // Same as main button position
-      left: 32, // Center on the main button (64px button / 2)
+      top: -80, // Same as main button position
+      left: 88, // Center on the main button (64px button / 2)
       width: 200,
       height: 200,
+      // backgroundColor: 'rgba(255, 0, 0, 0.3)',  *debugging only*
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1001,
@@ -107,16 +108,16 @@ export const BottomBar = ({
     },
     // Position buttons around the main button's orbit
     topButton: {
-      top: 10, // Position above the main button
+      top: 0, // Position above the main button
       left: 72, // Centered horizontally
     },
     rightButton: {
       top: 40, // Slightly lower for 2 o'clock position  
-      left: 120, // To the right for 2 o'clock position
+      left: 130, // To the right for 2 o'clock position
     },
     leftButton: {
       top: 40, // Slightly lower for 10 o'clock position  
-      left: 24, // To the left for 10 o'clock position
+      left: 14, // To the left for 10 o'clock position
     },
     radialButtonText: {
       fontSize: 12,
