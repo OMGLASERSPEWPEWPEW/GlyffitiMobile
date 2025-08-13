@@ -15,88 +15,34 @@ import { StoryViewScreen } from './src/screens/StoryViewScreen';
 import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
 import { ComposerModal } from './src/screens/ComposerModal';
 import { ErrorBoundary } from './src/components/shared';
+import { UserProvider } from './src/context/UserContext';
+import { User } from 'lucide-react-native';
 
 const Stack = createStackNavigator();
 
 export default function App() {
   return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-      console.error('App-level error:', error);
-      }}
-      >
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator 
-          initialRouteName="Home"
-          screenOptions={{
-            headerShown: false,
-            gestureEnabled: true,
-            cardStyleInterpolator: ({ current, next, layouts }) => {
-              return {
-                cardStyle: {
-                  transform: [
-                    {
-                      translateX: current.progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [layouts.screen.width, 0],
-                      }),
-                    },
-                  ],
-                },
-              };
-            },
-          }}
+    <UserProvider>
+      <ErrorBoundary
+        onError={(error, errorInfo) => {
+        console.error('App-level error:', error);
+        }}
         >
-          <Stack.Screen 
-            name="Home" 
-            component={HomeScreen} 
-            options={{
-              title: 'Glyffiti',
-            }}
-          />
-          <Stack.Screen 
-            name="Publishing" 
-            component={PublishingScreen}
-            options={{
-              title: 'Publishing',
-              cardStyleInterpolator: () => ({
-                cardStyle: {
-                  opacity: 1,
-                },
-              }),
-            }}
-          />
-          <Stack.Screen 
-            name="StoryView" 
-            component={StoryViewScreen}
-            options={{
-              title: 'Story Viewer',
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <Stack.Navigator 
+            initialRouteName="Home"
+            screenOptions={{
+              headerShown: false,
               gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen 
-            name="StoryDiscovery" 
-            component={StoryDiscoveryScreen}
-            options={{
-              title: 'Discover Stories',
-            }}
-          />
-          <Stack.Screen 
-            name="ComposeModal" 
-            component={ComposerModal}
-            options={{
-              title: 'New Post',
-              presentation: 'modal',
-              gestureEnabled: true,
-              cardStyleInterpolator: ({ current, layouts }) => {
+              cardStyleInterpolator: ({ current, next, layouts }) => {
                 return {
                   cardStyle: {
                     transform: [
                       {
-                        translateY: current.progress.interpolate({
+                        translateX: current.progress.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [layouts.screen.height, 0],
+                          outputRange: [layouts.screen.width, 0],
                         }),
                       },
                     ],
@@ -104,12 +50,70 @@ export default function App() {
                 };
               },
             }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-      <StatusBar style="auto" />
-    </SafeAreaProvider>
-    </ErrorBoundary>
+          >
+            <Stack.Screen 
+              name="Home" 
+              component={HomeScreen} 
+              options={{
+                title: 'Glyffiti',
+              }}
+            />
+            <Stack.Screen 
+              name="Publishing" 
+              component={PublishingScreen}
+              options={{
+                title: 'Publishing',
+                cardStyleInterpolator: () => ({
+                  cardStyle: {
+                    opacity: 1,
+                  },
+                }),
+              }}
+            />
+            <Stack.Screen 
+              name="StoryView" 
+              component={StoryViewScreen}
+              options={{
+                title: 'Story Viewer',
+                gestureEnabled: true,
+              }}
+            />
+            <Stack.Screen 
+              name="StoryDiscovery" 
+              component={StoryDiscoveryScreen}
+              options={{
+                title: 'Discover Stories',
+              }}
+            />
+            <Stack.Screen 
+              name="ComposeModal" 
+              component={ComposerModal}
+              options={{
+                title: 'New Post',
+                presentation: 'modal',
+                gestureEnabled: true,
+                cardStyleInterpolator: ({ current, layouts }) => {
+                  return {
+                    cardStyle: {
+                      transform: [
+                        {
+                          translateY: current.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [layouts.screen.height, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  };
+                },
+              }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
+      </ErrorBoundary>
+    </UserProvider>
   );
 }
 

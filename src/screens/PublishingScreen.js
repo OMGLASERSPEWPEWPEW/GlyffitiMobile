@@ -16,6 +16,7 @@ import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
+import { useUser } from '../hooks/useUser';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 
 export const PublishingScreen = ({ navigation, route }) => {
@@ -50,6 +51,21 @@ export const PublishingScreen = ({ navigation, route }) => {
     publishToBlockchain
   } = usePublishing(walletService);
 
+  // User management via shared context  
+  const {
+    selectedUser,
+    selectedUserData,
+    userWalletBalance,
+    showUserPanel,
+    showUserSelectorPanel,
+    handleUserTap,
+    handleUserLongPress,
+    handleUserSelect,
+    handleCloseUserPanel,
+    handleCloseUserSelectorPanel,
+    refreshUserBalance
+  } = useUser();
+
   // Keep only the essential local state
   const [isLoading, setIsLoading] = useState(true);
   const [walletLoading, setWalletLoading] = useState(false);
@@ -57,35 +73,12 @@ export const PublishingScreen = ({ navigation, route }) => {
   const [airdropLoading, setAirdropLoading] = useState(false);
   const [initError, setInitError] = useState(null);
   const [publishError, setPublishError] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedUserData, setSelectedUserData] = useState(null);
-  const [userWalletBalance, setUserWalletBalance] = useState(0);
-  const [showUserPanel, setShowUserPanel] = useState(false);
-  const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
+  
 
   // Initialize data on component mount
   useEffect(() => {
-    initializeUserData();
     initializeData();
   }, []);
-
-  // Initialize user data from navigation params
-  const initializeUserData = () => {
-    const { selectedUser: navUser, selectedUserData: navUserData, userWalletBalance: navBalance } = route.params || {};
-    
-    console.log('🔄 Initializing user data in PublishingScreen...');
-    console.log('- Received selectedUser:', navUser?.username);
-    console.log('- Received userWalletBalance:', navBalance);
-    
-    if (navUser) {
-      setSelectedUser(navUser);
-      setSelectedUserData(navUserData);
-      setUserWalletBalance(navBalance || 0);
-      console.log('✅ User data initialized in PublishingScreen');
-    } else {
-      console.log('⚠️ No user data received from navigation');
-    }
-  };
 
   // Initialize all data including published content
   const initializeData = async () => {
@@ -400,29 +393,6 @@ export const PublishingScreen = ({ navigation, route }) => {
     );
   }
 
-  // User panel handlers
-  const handleUserTap = () => {
-    console.log('User avatar tapped - showing user panel');
-    setShowUserPanel(true);
-  };
-
-  const handleCloseUserPanel = () => {
-    setShowUserPanel(false);
-  };
-
-  const handleCloseUserSelectorPanel = () => {
-    setShowUserSelectorPanel(false);
-  };
-
-  const handleUserSelect = (user) => {
-    console.log('User selected in publishing screen:', user.username);
-    setSelectedUser(user);
-    setSelectedUserData(null); // Will need to load user data
-    setUserWalletBalance(0); // Will need to refresh balance
-    setShowUserSelectorPanel(false);
-  };
-
-
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
@@ -443,6 +413,9 @@ export const PublishingScreen = ({ navigation, route }) => {
           title="Publishing"
           selectedUser={selectedUser}
           onUserTap={handleUserTap}
+          onUserLongPress={handleUserLongPress}
+          showBackButton={true}
+          onBackPress={handleGoBack}
           isDarkMode={false}
         />
 

@@ -20,6 +20,7 @@ import { homeStyles } from '../styles/homeStyles';
 import { colors, spacing } from '../styles/tokens';
 import { PostHeaderService } from '../services/feed/PostHeaderService';
 import { userTransactionReader } from '../services/blockchain/UserTransactionReader';
+import { useUser } from '../hooks/useUser';
 
 const { width } = Dimensions.get('window');
 
@@ -27,83 +28,26 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
   const [cachedStories, setCachedStories] = useState([]);
   const [cacheStats, setCacheStats] = useState(null);
   const [loadingError, setLoadingError] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedUserData, setSelectedUserData] = useState(null);
-  const [userWalletBalance, setUserWalletBalance] = useState(0);
   const [topBarVisible, setTopBarVisible] = useState(true);
-  const [showUserPanel, setShowUserPanel] = useState(false);
-  const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
   const [feedKey, setFeedKey] = useState(0);
 
-  // Animated value for top bar
+
+  // User management via shared context
+  const {
+    selectedUser,
+    selectedUserData,
+    userWalletBalance,
+    showUserPanel,
+    showUserSelectorPanel,
+    handleUserTap,
+    handleUserLongPress,
+    handleUserSelect,
+    handleCloseUserPanel,
+    handleCloseUserSelectorPanel,
+    refreshUserBalance
+  } = useUser();
+  
   const topBarAnimation = useRef(new Animated.Value(1)).current;
-
-  // Solana connection for balance updates
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-
-  useEffect(() => {
-    // loadCacheData();
-    console.log('🚀 HomeScreen mounted, loading default user...');
-    
-    // Add a small delay to ensure all imports are fully loaded
-    const timer = setTimeout(() => {
-      loadDefaultUser();
-    }, 200);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Load Alice as the default user on app start
-  const loadDefaultUser = async () => {
-    try {
-      console.log('🔄 Loading default user (Alice)...');
-      
-      // Wait a bit to ensure all imports are ready
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Test imports first
-      console.log('🧪 Testing imports...');
-      console.log('- userTransactionReader:', !!userTransactionReader);
-      console.log('- Connection:', !!connection);
-      console.log('- PublicKey:', !!PublicKey);
-      
-      // Load Alice user from registry
-      const aliceData = {
-        username: "alice",
-        publicKey: "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
-        transactionHash: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3",
-        parentGenesis: "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
-        createdAt: "2025-08-06T21:27:52.155Z",
-        explorer: "https://explorer.solana.com/tx/4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3?cluster=devnet"
-      };
-      
-      console.log('🔵 Setting Alice as selected user...');
-      setSelectedUser(aliceData);
-      
-      // Load user data from blockchain
-      const userData = await userTransactionReader.fetchUserDataFromTransaction(
-        aliceData.transactionHash
-      );
-      
-      if (userData) {
-        setSelectedUserData(userData);
-        console.log('✅ Alice user data loaded:', userData);
-      }
-      
-      // Load wallet balance
-      const balance = await connection.getBalance(new PublicKey(aliceData.publicKey));
-      const balanceSOL = balance / LAMPORTS_PER_SOL;
-      setUserWalletBalance(balanceSOL);
-      
-      console.log('💰 Alice balance loaded:', balanceSOL.toFixed(4), 'SOL');
-      console.log('✅ Default user setup complete');
-      
-    } catch (error) {
-      console.error('❌ Error loading default user:', error);
-      console.log('Error details:', error.message);
-      console.log('Error stack:', error.stack);
-    }
-  };
 
   // Animate top bar visibility
   useEffect(() => {
@@ -228,57 +172,6 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
 
   const handleTopBarVisibilityChange = (visible) => {
     setTopBarVisible(visible);
-  };
-
-  const handleUserTap = () => {
-    console.log('User avatar tapped - showing user panel');
-    setShowUserPanel(true);
-  };
-
-  const handleUserLongPress = () => {
-    console.log('User avatar long pressed - showing user selector');
-    setShowUserSelectorPanel(true);
-  };
-
-  const handleUserSelect = (user, userData, balance) => {
-    console.log('User selected:', user.username);
-    setSelectedUser(user);
-    setSelectedUserData(userData);
-    setUserWalletBalance(balance);
-  };
-
-  const handleCloseUserPanel = () => {
-    setShowUserPanel(false);
-  };
-
-  const handleCloseUserSelectorPanel = () => {
-    setShowUserSelectorPanel(false);
-  };
-
-  // Function to refresh a user's balance
-  const refreshUserBalance = async (user) => {
-    if (!user || !user.publicKey) {
-      console.warn('⚠️ Cannot refresh balance - no user or publicKey');
-      return;
-    }
-
-    try {
-      console.log('💰 Refreshing balance for:', user.username);
-      const balance = await connection.getBalance(new PublicKey(user.publicKey));
-      const balanceSOL = balance / LAMPORTS_PER_SOL;
-      
-      console.log('💰 Updated balance:', balanceSOL.toFixed(4), 'SOL');
-      
-      // Update the state if this is the currently selected user
-      if (selectedUser && selectedUser.publicKey === user.publicKey) {
-        setUserWalletBalance(balanceSOL);
-      }
-      
-      return balanceSOL;
-    } catch (error) {
-      console.error('❌ Error refreshing balance:', error);
-      throw error;
-    }
   };
 
   // Calculate bottom bar height for padding
