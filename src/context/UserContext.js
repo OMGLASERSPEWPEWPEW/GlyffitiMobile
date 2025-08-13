@@ -1,10 +1,11 @@
 // src/context/UserContext.js
 // Path: src/context/UserContext.js
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef } from 'react';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { userTransactionReader } from '../services/blockchain/UserTransactionReader';
 
-const UserContext = createContext();
+// Export the context so useUser hook can import it
+export const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
   // Authentication state (existing)
@@ -45,52 +46,72 @@ export const UserProvider = ({ children }) => {
       const aliceData = {
         username: "alice",
         publicKey: "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
-        transactionHash: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3",
-        parentGenesis: "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
-        createdAt: "2025-08-06T21:27:52.155Z",
-        explorer: "https://explorer.solana.com/tx/4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3?cluster=devnet"
+        transactionId: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3"
       };
       
       setSelectedUser(aliceData);
+      setUser(aliceData); // Also set as authenticated user
       
-      // Load user data from blockchain
-      const userData = await userTransactionReader.fetchUserDataFromTransaction(
-        aliceData.transactionHash
+      // Load her full data from the blockchain
+      const userData = await userTransactionReader.readUserGenesisFromTransaction(
+        aliceData.transactionId
       );
       
-      if (userData) {
-        setSelectedUserData(userData);
+      if (userData && userData.alias) {
         console.log('✅ Alice user data loaded');
+        setSelectedUserData(userData);
+        
+        // Get wallet balance
+        try {
+          const balance = await connection.getBalance(new PublicKey(aliceData.publicKey));
+          const balanceSOL = balance / LAMPORTS_PER_SOL;
+          setUserWalletBalance(balanceSOL);
+        } catch (balanceError) {
+          console.warn('⚠️ Could not get wallet balance:', balanceError);
+          setUserWalletBalance(0);
+        }
       }
       
-      // Load wallet balance
-      const balance = await connection.getBalance(new PublicKey(aliceData.publicKey));
-      const balanceSOL = balance / LAMPORTS_PER_SOL;
-      setUserWalletBalance(balanceSOL);
-      
       console.log('✅ Default user setup complete');
-      
     } catch (error) {
       console.error('❌ Error loading default user:', error);
     }
   };
 
-  // User interaction handlers
+  // User action handlers (migrated from HomeScreen)
   const handleUserTap = () => {
-    console.log('User avatar tapped - showing user panel');
+    console.log('👤 User tapped - showing user panel');
     setShowUserPanel(true);
   };
 
   const handleUserLongPress = () => {
-    console.log('User avatar long pressed - showing user selector');
+    console.log('👤 User long-pressed - showing user selector');
     setShowUserSelectorPanel(true);
   };
 
-  const handleUserSelect = (user, userData, balance) => {
-    console.log('User selected:', user.username);
+  const handleUserSelect = async (user) => {
+    console.log('👤 User selected:', user.username);
     setSelectedUser(user);
-    setSelectedUserData(userData);
-    setUserWalletBalance(balance);
+    setShowUserSelectorPanel(false);
+    
+    // Load user data if we have a transaction ID
+    if (user.transactionId) {
+      try {
+        const userData = await userTransactionReader.readUserGenesisFromTransaction(
+          user.transactionId
+        );
+        setSelectedUserData(userData);
+        
+        // Get wallet balance
+        const balance = await connection.getBalance(new PublicKey(user.publicKey));
+        const balanceSOL = balance / LAMPORTS_PER_SOL;
+        setUserWalletBalance(balanceSOL);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setSelectedUserData(null);
+        setUserWalletBalance(0);
+      }
+    }
   };
 
   const handleCloseUserPanel = () => {
@@ -156,12 +177,4 @@ export const UserProvider = ({ children }) => {
   );
 };
 
-export const useUser = () => {
-  const context = useContext(UserContext);
-  if (!context) {
-    throw new Error('useUser must be used within UserProvider');
-  }
-  return context;
-};
-
-// Character count: 4,729
+// Character count: 4,482

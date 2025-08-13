@@ -22,6 +22,7 @@ import { PostHeaderService } from '../services/feed/PostHeaderService';
 import { userTransactionReader } from '../services/blockchain/UserTransactionReader';
 import { useUser } from '../hooks/useUser';
 
+
 const { width } = Dimensions.get('window');
 
 export const HomeScreen = ({ navigation, isDarkMode = false }) => {

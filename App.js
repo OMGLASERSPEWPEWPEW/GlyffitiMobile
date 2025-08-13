@@ -16,7 +16,6 @@ import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
 import { ComposerModal } from './src/screens/ComposerModal';
 import { ErrorBoundary } from './src/components/shared';
 import { UserProvider } from './src/context/UserContext';
-import { User } from 'lucide-react-native';
 
 const Stack = createStackNavigator();
 
