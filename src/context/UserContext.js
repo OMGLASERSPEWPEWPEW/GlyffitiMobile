@@ -46,15 +46,15 @@ export const UserProvider = ({ children }) => {
       const aliceData = {
         username: "alice",
         publicKey: "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
-        transactionId: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3"
+        transactionHash: "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3"
       };
       
       setSelectedUser(aliceData);
       setUser(aliceData); // Also set as authenticated user
       
       // Load her full data from the blockchain
-      const userData = await userTransactionReader.readUserGenesisFromTransaction(
-        aliceData.transactionId
+      const userData = await userTransactionReader.fetchUserDataFromTransaction(
+        aliceData.transactionHash
       );
       
       if (userData && userData.alias) {
@@ -95,10 +95,10 @@ export const UserProvider = ({ children }) => {
     setShowUserSelectorPanel(false);
     
     // Load user data if we have a transaction ID
-    if (user.transactionId) {
+    if (user.transactionHash) {
       try {
-        const userData = await userTransactionReader.readUserGenesisFromTransaction(
-          user.transactionId
+        const userData = await userTransactionReader.fetchUserDataFromTransaction(
+          user.transactionHash
         );
         setSelectedUserData(userData);
         

@@ -413,9 +413,6 @@ export const PublishingScreen = ({ navigation, route }) => {
           title="Publishing"
           selectedUser={selectedUser}
           onUserTap={handleUserTap}
-          onUserLongPress={handleUserLongPress}
-          showBackButton={true}
-          onBackPress={handleGoBack}
           isDarkMode={false}
         />
 
