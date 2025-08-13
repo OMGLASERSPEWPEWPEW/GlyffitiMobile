@@ -441,20 +441,24 @@ export const PublishingScreen = ({ navigation, route }) => {
             />
           )}
 
-          {/* Wallet Section - EXACTLY THE SAME */}
+          {/* Wallet Section */}
           <WalletSection 
-            walletStatus={walletStatus}
-            walletAddress={walletAddress}
-            walletBalance={walletBalance}
-            isRequestingAirdrop={isRequestingAirdrop || airdropLoading}
-            showWalletUnlock={showWalletUnlock}
-            password={password}
-            isLoading={isLoadingWallet || walletLoading}
-            setPassword={setPassword}
-            setShowWalletUnlock={setShowWalletUnlock}
-            handleRequestAirdrop={handleRequestAirdropWithLoading}
-            handleWalletAction={handleWalletActionWithLoading}
-            handleMigration={handleMigration}
+            walletStatus="unlocked"  // User wallets are always "unlocked" conceptually
+            walletAddress={selectedUser?.publicKey || 'No user selected'}
+            walletBalance={userWalletBalance}
+            isRequestingAirdrop={false}
+            showWalletUnlock={false}
+            password=""
+            isLoading={false}
+            setPassword={() => {}}
+            setShowWalletUnlock={() => {}}
+            handleRequestAirdrop={() => {}}
+            handleWalletAction={() => {}}
+            handleMigration={() => {}}
+            customTitle={selectedUser ? `💳 ${selectedUser.username}'s Wallet` : '💳 User Wallet'}
+            bypassLock={true}  // Bypass the lock UI since user wallets don't lock/unlock
+            hideActionButton={true}  // Remove the airdrop button to match user panel styling
+            isDarkMode={false}
           />
           
           
