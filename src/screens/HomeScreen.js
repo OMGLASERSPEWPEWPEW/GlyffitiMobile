@@ -211,7 +211,11 @@ export const HomeScreen = ({ navigation, isDarkMode = false }) => {
         break;
       case 'publish':
         // Keep this navigation for long-form content publishing
-        navigation.navigate('Publishing');
+        navigation.navigate('Publishing', {
+          selectedUser,
+          selectedUserData,
+          userWalletBalance
+        });
         break;
       case 'clear':
       // Reset social feed head pointers back to genesis (preserves users)

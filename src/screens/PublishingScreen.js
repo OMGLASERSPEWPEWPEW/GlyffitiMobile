@@ -11,13 +11,14 @@ import {
 } from 'react-native';
 import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer, ContentArea } from '../components/shared';
 import { TopBar, BottomBar } from '../components/navigation';
+import { UserPanel, UserSelectorPanel } from '../components/panels';
 import { publishingStyles } from '../styles/publishingStyles';
 import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 
-export const PublishingScreen = ({ navigation }) => {
+export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
   const {
     walletService,
@@ -56,13 +57,35 @@ export const PublishingScreen = ({ navigation }) => {
   const [airdropLoading, setAirdropLoading] = useState(false);
   const [initError, setInitError] = useState(null);
   const [publishError, setPublishError] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserData, setSelectedUserData] = useState(null);
+  const [userWalletBalance, setUserWalletBalance] = useState(0);
+  const [showUserPanel, setShowUserPanel] = useState(false);
+  const [showUserSelectorPanel, setShowUserSelectorPanel] = useState(false);
 
   // Initialize data on component mount
   useEffect(() => {
+    initializeUserData();
     initializeData();
   }, []);
 
-
+  // Initialize user data from navigation params
+  const initializeUserData = () => {
+    const { selectedUser: navUser, selectedUserData: navUserData, userWalletBalance: navBalance } = route.params || {};
+    
+    console.log('🔄 Initializing user data in PublishingScreen...');
+    console.log('- Received selectedUser:', navUser?.username);
+    console.log('- Received userWalletBalance:', navBalance);
+    
+    if (navUser) {
+      setSelectedUser(navUser);
+      setSelectedUserData(navUserData);
+      setUserWalletBalance(navBalance || 0);
+      console.log('✅ User data initialized in PublishingScreen');
+    } else {
+      console.log('⚠️ No user data received from navigation');
+    }
+  };
 
   // Initialize all data including published content
   const initializeData = async () => {
@@ -377,6 +400,29 @@ export const PublishingScreen = ({ navigation }) => {
     );
   }
 
+  // User panel handlers
+  const handleUserTap = () => {
+    console.log('User avatar tapped - showing user panel');
+    setShowUserPanel(true);
+  };
+
+  const handleCloseUserPanel = () => {
+    setShowUserPanel(false);
+  };
+
+  const handleCloseUserSelectorPanel = () => {
+    setShowUserSelectorPanel(false);
+  };
+
+  const handleUserSelect = (user) => {
+    console.log('User selected in publishing screen:', user.username);
+    setSelectedUser(user);
+    setSelectedUserData(null); // Will need to load user data
+    setUserWalletBalance(0); // Will need to refresh balance
+    setShowUserSelectorPanel(false);
+  };
+
+
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
@@ -395,6 +441,8 @@ export const PublishingScreen = ({ navigation }) => {
         {/* Header */}
         <TopBar 
           title="Publishing"
+          selectedUser={selectedUser}
+          onUserTap={handleUserTap}
           isDarkMode={false}
         />
 
@@ -530,7 +578,28 @@ export const PublishingScreen = ({ navigation }) => {
             }
           }}
           isDarkMode={false}
-        />           
+        />
+
+        {/* User Panels */}
+        <UserPanel
+          visible={showUserPanel}
+          selectedUser={selectedUser}
+          selectedUserData={selectedUserData}
+          userWalletBalance={userWalletBalance}
+          onClose={handleCloseUserPanel}
+          onUserBalanceUpdate={() => {}} // TODO: Implement balance refresh
+          isDarkMode={false}
+        />
+
+        <UserSelectorPanel
+          visible={showUserSelectorPanel}
+          selectedUser={selectedUser}
+          onUserSelect={handleUserSelect}
+          onClose={handleCloseUserSelectorPanel}
+          isDarkMode={false}
+        />
+
+
       </ScreenContainer>
     </ErrorBoundary>
   );
