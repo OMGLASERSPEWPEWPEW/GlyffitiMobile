@@ -18,6 +18,7 @@ import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../hooks/useUser';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
+import { spacing } from '../styles/tokens';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -442,25 +443,24 @@ export const PublishingScreen = ({ navigation, route }) => {
           )}
 
           {/* Wallet Section */}
-          <WalletSection 
-            walletStatus="unlocked"  // User wallets are always "unlocked" conceptually
-            walletAddress={selectedUser?.publicKey || 'No user selected'}
-            walletBalance={userWalletBalance}
-            isRequestingAirdrop={false}
-            showWalletUnlock={false}
-            password=""
-            isLoading={false}
-            setPassword={() => {}}
-            setShowWalletUnlock={() => {}}
-            handleRequestAirdrop={() => {}}
-            handleWalletAction={() => {}}
-            handleMigration={() => {}}
-            customTitle={selectedUser ? `💳 ${selectedUser.username}'s Wallet` : '💳 User Wallet'}
-            bypassLock={true}  // Bypass the lock UI since user wallets don't lock/unlock
-            hideActionButton={true}  // Remove the airdrop button to match user panel styling
-            isDarkMode={false}
-          />
-          
+            {/* Simple Wallet Balance Display */}
+            {selectedUser && (
+              <View style={{
+                alignItems: 'center',
+                paddingVertical: spacing.medium,
+                borderBottomWidth: 1,
+                borderBottomColor: '#eee',
+                marginBottom: spacing.medium
+              }}>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#333'
+                }}>
+                  Wallet: {userWalletBalance.toFixed(5)} SOL
+                </Text>
+              </View>
+            )}
           
           {/* Progress Bar - EXACTLY THE SAME */}
           <ProgressBar publishing={publishing} progress={progress} />
