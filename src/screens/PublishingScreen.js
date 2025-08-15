@@ -19,6 +19,7 @@ import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../hooks/useUser';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 import { spacing } from '../styles/tokens';
+import { Keypair } from '@solana/web3.js';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -33,8 +34,6 @@ export const PublishingScreen = ({ navigation, route }) => {
     isRequestingAirdrop,
     setPassword,
     setShowWalletUnlock,
-    handleWalletAction,
-    handleRequestAirdrop,
     handleMigration
   } = useWallet();
 
@@ -50,7 +49,7 @@ export const PublishingScreen = ({ navigation, route }) => {
     isLoadingContent,
     loadExistingContent,
     publishToBlockchain
-  } = usePublishing(walletService);
+  } = usePublishing(userWalletService);
 
   // User management via shared context  
   const {
@@ -74,6 +73,7 @@ export const PublishingScreen = ({ navigation, route }) => {
   const [airdropLoading, setAirdropLoading] = useState(false);
   const [initError, setInitError] = useState(null);
   const [publishError, setPublishError] = useState(null);
+  const [userWalletService, setUserWalletService] = useState(null);
   
 
   // Initialize data on component mount
@@ -81,12 +81,61 @@ export const PublishingScreen = ({ navigation, route }) => {
     initializeData();
   }, []);
 
+  useEffect(() => {
+  const setupUserWallet = async () => {
+    if (selectedUser && selectedUser.publicKey) {
+      try {
+        console.log('🔧 Setting up user wallet for publishing:', selectedUser.username);
+        
+        // Import user keys (you'll need this - same as ComposerModal)
+        const userKeys = require('../data/user-keys.json');
+        
+        // Create user wallet object
+        const userWallet = {
+          getWalletKeypair: () => {
+            const privateKeyArray = userKeys[selectedUser.username];
+            if (!privateKeyArray) {
+              throw new Error(`No private key found for user: ${selectedUser.username}`);
+            }
+            const keypair = Keypair.fromSecretKey(new Uint8Array(privateKeyArray));
+            return keypair;
+          },
+          getWalletPublicKey: () => {
+            return selectedUser.publicKey;
+          },
+          getBalance: async () => {
+            return { available: userWalletBalance, currency: 'SOL' };
+          }
+        };
+        
+        setUserWalletService(userWallet);
+        console.log('✅ User wallet service ready for:', selectedUser.username);
+      } catch (error) {
+        console.error('❌ Error setting up user wallet:', error);
+        setUserWalletService(null);
+      }
+    } else {
+      setUserWalletService(null);
+    }
+  };
+  
+  setupUserWallet();
+}, [selectedUser, userWalletBalance]);
+
+// Set user wallet on publishing service when userWalletService changes
+useEffect(() => {
+  if (userWalletService && publishingService) {
+    publishingService.setWallet(userWalletService);
+  }
+}, [userWalletService, publishingService]);
+
   // Initialize all data including published content
   const initializeData = async () => {
     try {
       console.log('🔄 Initializing PublishingScreen data...');
       setIsLoading(true);
       setInitError(null);
+
       await loadExistingContent();
       console.log('✅ PublishingScreen initialization complete');
     } catch (error) {
@@ -100,54 +149,7 @@ export const PublishingScreen = ({ navigation, route }) => {
     }
   };
 
-  // Enhanced wallet action handler with loading overlay
-  const handleWalletActionWithLoading = async () => {
-    try {
-      setWalletLoading(true);
-      
-      if (walletStatus === 'none') {
-        setWalletLoadingMessage('Creating secure wallet...');
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setWalletLoadingMessage('Encrypting with password...');
-        
-        const result = await handleWalletAction();
-        
-        if (result !== false) {
-          setWalletLoadingMessage('Wallet created successfully!');
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } else {
-        setWalletLoadingMessage('Unlocking wallet...');
-        
-        const result = await handleWalletAction();
-        
-        if (result !== false) {
-          setWalletLoadingMessage('Wallet unlocked successfully!');
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      
-    } catch (error) {
-      console.error('Wallet action error:', error);
-      Alert.alert('Error', 'Failed to complete wallet action: ' + error.message);
-    } finally {
-      setWalletLoading(false);
-      setWalletLoadingMessage('');
-    }
-  };
-
-    // Enhanced airdrop handler with loading overlay
-  const handleRequestAirdropWithLoading = async () => {
-    try {
-      setAirdropLoading(true);
-      await handleRequestAirdrop();
-    } catch (error) {
-      console.error('Airdrop error:', error);
-      Alert.alert('Error', 'Failed to request airdrop: ' + error.message);
-    } finally {
-      setAirdropLoading(false);
-    }
-  };
+  
 
   // Cancel wallet loading
   const handleCancelWalletLoading = () => {
@@ -170,9 +172,9 @@ export const PublishingScreen = ({ navigation, route }) => {
 
   // Publishing logic - using the original simple one-tap flow
   const handlePublishFile = async () => {
-    if (!walletService || !publishingService || publishing) {
+    if (!userWalletService || !publishingService || publishing) {
       console.log('🚫 Cannot publish:', { 
-        walletService: !!walletService, 
+        walletService: !!userWalletService, 
         publishingService: !!publishingService, 
         publishing 
       });
@@ -199,7 +201,7 @@ export const PublishingScreen = ({ navigation, route }) => {
       }
       
       // Get wallet keypair
-      const keypair = walletService.getWalletKeypair();
+      const keypair = userWalletService.getWalletKeypair();
       if (!keypair) {
         Alert.alert('Error', 'Failed to access wallet');
         return;
@@ -213,13 +215,25 @@ export const PublishingScreen = ({ navigation, route }) => {
       
       // Use the hook's publishToBlockchain method
       const result = await publishToBlockchain(preparedContent, keypair, onProgress);
-      
+
       if (result && result.status === 'completed') {
+        // Refresh user's balance after successful publishing
+        if (selectedUser) {
+          console.log('💰 Refreshing user balance after successful publishing...');
+          await refreshUserBalance(selectedUser);
+        }
+        
         Alert.alert(
           '✅ Success!', 
           `Successfully published "${preparedContent.title}"!`
         );
       } else if (result && result.status === 'partial') {
+        // Refresh user's balance after partial publishing (they still paid for some transactions)
+        if (selectedUser) {
+          console.log('💰 Refreshing user balance after partial publishing...');
+          await refreshUserBalance(selectedUser);
+        }
+        
         Alert.alert(
           '⚠️ Partial Success', 
           `Published ${result.successfulGlyphs}/${result.totalGlyphs} glyphs.`
@@ -236,7 +250,7 @@ export const PublishingScreen = ({ navigation, route }) => {
 
   // Resume publishing for in-progress content
   const handleResumePublishing = async (contentId) => {
-    if (!walletService || !publishingService || publishing) {
+    if (!userWalletService || !publishingService || publishing) {
       console.log('🚫 Cannot resume publishing');
       return;
     }
