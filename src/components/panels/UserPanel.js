@@ -37,7 +37,8 @@ export const UserPanel = ({
     walletAddress,
     walletBalance,
     isLoadingWallet,
-    transferSOL
+    transferSOL,
+    initializeWallet
   } = useWallet();
 
   const PANEL_WIDTH = screenWidth * 0.85;
@@ -105,6 +106,12 @@ export const UserPanel = ({
       ]).start();
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (visible && walletStatus === 'none') {
+      initializeWallet();
+    }
+  }, [visible, walletStatus, initializeWallet]);
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return 'Unknown';

@@ -13,8 +13,9 @@ const DEV_PASSWORD = 'qwerty';
  * Custom hook for wallet management
  * Centralizes all wallet-related state and operations
  */
-export const useWallet = () => {
+export const useWallet = (options = {}) => {
   // Wallet state
+  const { autoInitialize = false } = options;
   const [walletService, setWalletService] = useState(null);
   const [walletStatus, setWalletStatus] = useState('checking'); // checking, none, locked, unlocked
   const [walletBalance, setWalletBalance] = useState(0);
@@ -32,12 +33,17 @@ export const useWallet = () => {
   const airdropService = useRef(new SolanaAirdropService()).current;
 
   // Initialize wallet status on mount
-  useEffect(() => {
+    useEffect(() => {
+    if (!autoInitialize) {
+      setWalletStatus('none'); // Set to none instead of checking
+      return;
+    }
+    
     if (initRef.current) return;
     initRef.current = true;
     
     checkWalletStatus();
-  }, []);
+  }, [autoInitialize]);
 
   // Check if wallet exists
   const checkWalletStatus = async () => {
@@ -328,6 +334,16 @@ export const useWallet = () => {
     }
   };
 
+  // Manual initialization (for when auto-init is disabled)
+  const initializeWallet = async () => {
+    if (walletStatus !== 'checking' && walletStatus !== 'none') {
+      return; // Already initialized
+    }
+    
+    console.log('🔧 Manually initializing system wallet...');
+    await checkWalletStatus();
+  };
+
   return {
     // State
     walletService,
@@ -361,6 +377,7 @@ export const useWallet = () => {
     refreshBalance,
     checkWalletStatus,
     transferSOL,
+    initializeWallet,
     
     // Getters
     getWalletInfo,
