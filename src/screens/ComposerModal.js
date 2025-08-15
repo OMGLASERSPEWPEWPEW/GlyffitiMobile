@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { Keypair } from '@solana/web3.js';
 import { spacing, colors, typography, borderRadius } from '../styles/tokens';
-import { useWallet } from '../hooks/useWallet';
 import { PostPublishingService } from '../services/publishing/PostPublishingService';
 import { PostHeaderService } from '../services/feed/PostHeaderService';
 import userKeys from '../data/user-keys.json';
@@ -53,9 +52,6 @@ export const ComposerModal = ({ navigation, route }) => {
     userWalletBalance, 
     onPostCreate 
   } = route.params || {};
-  
-  // Wallet integration for accessing user keypairs (same as PostComposer)
-  const { walletService } = useWallet();
   
   // Publishing service instance (identical to PostComposer)
   const [publishingService, setPublishingService] = useState(null);
