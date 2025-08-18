@@ -214,7 +214,12 @@ useEffect(() => {
       };
       
       // Use the hook's publishToBlockchain method
-      const result = await publishToBlockchain(preparedContent, keypair, onProgress);
+      const result = await publishToBlockchain(
+        preparedContent, 
+        keypair, 
+        onProgress,
+        selectedUser?.publicKey
+      );
 
       if (result && result.status === 'completed') {
         // Refresh user's balance after successful publishing

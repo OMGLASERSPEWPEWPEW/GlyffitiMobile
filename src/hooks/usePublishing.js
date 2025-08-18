@@ -4,6 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { PublishingService } from '../services/publishing/PublishingService';
 import { StorageService } from '../services/storage/StorageService';
+import { UserStorageService } from '../services/storage/UserStorageService';
+import { useUser } from './useUser';
+import { User } from 'lucide-react-native';
 
 /**
  * Custom hook for publishing management
@@ -36,46 +39,60 @@ export const usePublishing = (walletService = null) => {
   // Refs to prevent duplicate operations
   const contentLoadedRef = useRef(false);
   const publishingRef = useRef(false);
+  const { selectedUser } = useUser();
   
   // Update publishing service when wallet changes
   useEffect(() => {
     if (walletService && publishingService) {
-      console.log('🔗 Linking wallet to publishing service...');
+      console.log('usePublishing: 🔗 Linking wallet to publishing service...');
       publishingService.setWallet(walletService);
     }
   }, [walletService, publishingService]);
   
   // Load existing content on mount
   useEffect(() => {
-    loadExistingContent();
-  }, []);
+ if (selectedUser?.publicKey) {
+    loadExistingContent(); // Reload when user changes
+    console.log(`usePublishing: Load existing content on mount...${selectedUser}`)
+  }
+}, [selectedUser?.publicKey]);
   
   /**
    * Load all existing content from storage
    */
   const loadExistingContent = useCallback(async () => {
+    if (!selectedUser?.publicKey){
+      console.log(`usePublishing: No userSelected: ${selectedUser} PublicKey: ${selectedUser.publicKey}`)
+      return;
+    } 
+
+
     if (contentLoadedRef.current || isLoadingContent) {
-      console.log('⏭️ Skipping duplicate content load');
+      console.log('usePublishing: ⏭️ Skipping duplicate content load');
       return;
     }
     
     try {
       contentLoadedRef.current = true;
       setIsLoadingContent(true);
-      console.log('📚 Loading existing content...');
+      console.log('usePublishing: 📚 Loading existing content...');
       
       // Load drafts
       const loadedDrafts = await publishingService.getDrafts();
-      console.log(`📝 Loaded ${loadedDrafts.length} drafts`);
+      console.log(`usePublishing: 📝 Loaded ${loadedDrafts.length} drafts`);
       setDrafts(loadedDrafts);
       
       // Load published content
-      const published = await publishingService.getPublishedContentArray();
-      console.log(`✅ Loaded ${published.length} published items`);
-      setPublishedContent(published);
+      const userPublished = await UserStorageService.loadPublishedStories(selectedUser.publicKey);
+      setPublishedContent(userPublished);
+      console.log(`usePublishing: ✅ Loaded ${userPublished.length} published items`);
+
+      // const published = await publishingService.getPublishedContentArray();
+      // console.log(`✅ Loaded ${published.length} published items`);
+      // setPublishedContent(published);
       
       // Separate in-progress items
-      const inProgress = published.filter(item => 
+      const inProgress = userPublished.filter(item => 
         item.status === 'publishing' || 
         (item.progress && item.progress < 100)
       );
@@ -86,11 +103,11 @@ export const usePublishing = (walletService = null) => {
         const stats = await publishingService.getPublishingStats();
         setPublishingStats(stats);
       } catch (error) {
-        console.log('📊 Publishing stats not available');
+        console.log('usePublishing: 📊 Publishing stats not available');
       }
       
     } catch (error) {
-      console.error('❌ Error loading content:', error);
+      console.error('usePublishing: ❌ Error loading content:', error);
       Alert.alert('Error', 'Failed to load existing content');
     } finally {
       setIsLoadingContent(false);
@@ -202,10 +219,10 @@ export const usePublishing = (walletService = null) => {
         progress: 0,
         currentGlyph: 0,
         totalGlyphs: 0,
-        message: 'Preparing content...'
+        message: 'usePublishing: Preparing content...'
       });
       
-      console.log('🚀 Starting publishing process...');
+      console.log('usePublishing: 🚀 Starting publishing process...');
       
       // Prepare content
       const preparedContent = await publishingService.prepareContent(
@@ -230,18 +247,18 @@ export const usePublishing = (walletService = null) => {
         setProgress(progressData);
       };
       
-      // Publish to blockchain
-      const result = await publishingService.publishToBlockchain(
+      // ✅ FIXED: Call publishContent directly with user context
+      const result = await publishingService.publishContent(
         preparedContent,
-        keypair,
-        onProgress
+        onProgress,
+        selectedUser?.publicKey  // Pass user public key for scoped storage
       );
       
-      if (!result || !result.success) {
+      if (!result || result.status !== 'completed') {
         throw new Error(result?.error || 'Publishing failed');
       }
       
-      console.log('✅ Publishing completed!', result);
+      console.log('usePublishing: ✅ Publishing completed!', result);
       
       // Update content lists
       await loadExistingContent();
@@ -253,7 +270,7 @@ export const usePublishing = (walletService = null) => {
       
       Alert.alert(
         '🎉 Success!',
-        `Your content has been published!\n\nScroll ID: ${result.manifest?.scrollId || 'N/A'}`,
+        `Your content has been published!\n\nScroll ID: ${result.manifest?.scrollId || result.scrollId || 'N/A'}`,
         [
           {
             text: 'View Details',
@@ -286,7 +303,7 @@ export const usePublishing = (walletService = null) => {
         message: ''
       });
     }
-  }, [walletService, publishingService, isPublishing, drafts]);
+  }, [walletService, publishingService, isPublishing, drafts, selectedUser?.publicKey]);
   
   /**
    * Resume publishing for in-progress content
@@ -369,58 +386,59 @@ export const usePublishing = (walletService = null) => {
   
 
     /**
-     * Direct pass-through to service's publishToBlockchain
-     * Maintains compatibility with original code
-     */
-    const publishToBlockchain = useCallback(async (content, keypair, onProgress) => {
-    if (!content || !keypair) {
-        throw new Error('Content and keypair are required');
+ * Direct pass-through to service's publishContent with user context
+ * Maintains compatibility with PublishingScreen
+ */
+const publishToBlockchain = useCallback(async (content, keypair, onProgress, userPublicKey = null) => {
+  if (!content || !keypair) {
+    throw new Error('Content and keypair are required');
+  }
+  
+  try {
+    publishingRef.current = true;
+    setIsPublishing(true);
+    
+    // Wrap the onProgress to update our hook's state
+    const wrappedProgress = (status) => {
+      setProgress({
+        progress: status.progress || 0,
+        currentGlyph: status.currentGlyph || 0,
+        totalGlyphs: status.totalGlyphs || 0,
+        message: status.message || `Publishing glyph ${status.currentGlyph || 0}/${status.totalGlyphs || 0}...`
+      });
+      
+      // Call original callback if provided
+      if (onProgress) onProgress(status);
+    };
+    
+    // Call PublishingService method with user context
+    const result = await publishingService.publishContent(
+      content,
+      wrappedProgress,
+      userPublicKey  // Pass user context to the service
+    );
+    
+    // Reload content after successful publish
+    if (result && result.status === 'completed') {
+      await loadExistingContent();
     }
     
-    try {
-        publishingRef.current = true;
-        setIsPublishing(true);
-        
-        // Wrap the onProgress to update our hook's state
-        const wrappedProgress = (status) => {
-        setProgress({
-            progress: status.progress || 0,
-            currentGlyph: status.currentGlyph || 0,
-            totalGlyphs: status.totalGlyphs || 0,
-            message: status.message || `Publishing glyph ${status.currentGlyph || 0}/${status.totalGlyphs || 0}...`
-        });
-        
-        // Call original callback if provided
-        if (onProgress) onProgress(status);
-        };
-        
-        // Call service method directly
-        const result = await publishingService.blockchainPublisher.publishContent(
-        content,
-        keypair,
-        wrappedProgress
-        );
-        
-        // Reload content after successful publish
-        if (result && result.status === 'completed') {
-        await loadExistingContent();
-        }
-        
-        return result;
-        
-    } finally {
-        publishingRef.current = false;
-        setIsPublishing(false);
-        if (!isPublishing) {
-        setProgress({
-            progress: 0,
-            currentGlyph: 0,
-            totalGlyphs: 0,
-            message: ''
-        });
-        }
+    return result;
+    
+  } finally {
+    publishingRef.current = false;
+    setIsPublishing(false);
+    if (!isPublishing) {
+      setProgress({
+        progress: 0,
+        currentGlyph: 0,
+        totalGlyphs: 0,
+        message: ''
+      });
     }
-    }, [publishingService, loadExistingContent]);
+  }
+}, [publishingService, loadExistingContent, isPublishing, selectedUser?.publicKey]);
+
 
 
   // Computed values

@@ -39,21 +39,21 @@ export class BlockchainService {
    * @param {string} blockchain - Blockchain type (optional, defaults to Solana)
    * @returns {Promise<Object>} Publishing result with scroll information
    */
-  async publishContent(content, keypair, onProgress = null, blockchain = this.defaultPublisher) {
+  async publishContent(content, keypair, onProgress = null, blockchain = this.defaultPublisher, userPublicKey = null) {
     try {
       if (!content || !content.glyphs || content.glyphs.length === 0) {
-        throw new Error('No valid content to publish');
+        throw new Error('Blockchain Services: No valid content to publish');
       }
 
       if (!keypair) {
-        throw new Error('No wallet keypair provided');
+        throw new Error('Blockchain Services: No wallet keypair provided');
       }
 
       const publisher = this.getPublisher(blockchain);
       
       // Delegate to the specific blockchain publisher
       // The publisher handles its own status management through the shared manager
-      return await publisher.publishContent(content, keypair, onProgress);
+      return await publisher.publishContent(content, keypair, onProgress, userPublicKey);
       
     } catch (error) {
       console.error('❌ BlockchainServices publishing error:', error);
@@ -76,7 +76,7 @@ export class BlockchainService {
    * @param {string} blockchain - Blockchain type (optional, defaults to Solana)
    * @returns {Promise<Object>} Publishing result
    */
-  async resumePublishing(contentId, keypair, onProgress = null, blockchain = this.defaultPublisher) {
+  async resumePublishing(contentId, keypair, onProgress = null, blockchain = this.defaultPublisher, userPublicKey = null) {
     try {
       console.log(`🔄 BlockchainServices resuming publication of content: ${contentId}`);
       
@@ -87,7 +87,7 @@ export class BlockchainService {
       const publisher = this.getPublisher(blockchain);
       
       // Delegate to the specific blockchain publisher
-      return await publisher.resumePublishing(contentId, keypair, onProgress);
+      return await publisher.resumePublishing(contentId, keypair, onProgress, userPublicKey);
       
     } catch (error) {
       console.error('❌ BlockchainServices resume error:', error);

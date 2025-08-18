@@ -3,6 +3,7 @@
 import { Connection, Transaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import { CompressionService } from '../../compression/CompressionService';
 import { StorageService } from '../../storage/StorageService';
+import { UserStorageService } from '../../storage/UserStorageService';
 
 /**
  * Solana Publisher - Handles Solana-specific blockchain publishing operations
@@ -22,7 +23,7 @@ export class SolanaPublisher {
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result with scroll information
    */
-  async publishContent(content, keypair, onProgress = null) {
+  async publishContent(content, keypair, onProgress = null, userPublicKey = null) {
     try {
       if (!content || !content.glyphs || content.glyphs.length === 0) {
         throw new Error('No valid content to publish');
@@ -204,7 +205,7 @@ export class SolanaPublisher {
       };
 
       // Save to published content and create scroll
-      await StorageService.savePublishedContent(publishedContent);
+      // await StorageService.savePublishedContent(publishedContent);
 
       // Create scroll manifest
       const manifest = await StorageService.createScrollFromPublishedContent(publishedContent);
@@ -225,7 +226,16 @@ export class SolanaPublisher {
       }
       
       // Save as published content
-      await StorageService.savePublishedContent(publishedContent);
+      // await StorageService.savePublishedContent(publishedContent);
+      // NEW:
+      if (userPublicKey) {
+        console.log('SolanaPublisher: 💾 Saving resumed content to user-scoped storage for user:', userPublicKey.substring(0, 8) + '...');
+        await UserStorageService.savePublishedStory(publishedContent, userPublicKey);
+      } else {
+        console.log('SolanaPublisher: 💾 Saving resumed content to global storage (no user context)');
+        await StorageService.savePublishedContent(publishedContent);
+      }
+
       await StorageService.removeInProgressContent(contentId);
       
       status.stage = 'completed';
@@ -270,7 +280,7 @@ export class SolanaPublisher {
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result
    */
-  async resumePublishing(contentId, keypair, onProgress = null) {
+  async resumePublishing(contentId, keypair, onProgress = null, userPublicKey = null) {
     try {
       console.log(`🔄 Resuming Solana publication of content: ${contentId}`);
       
@@ -427,8 +437,16 @@ export class SolanaPublisher {
         transactionIds: status.transactionIds
       };
 
-      // Save to published content and create scroll
-      await StorageService.savePublishedContent(publishedContent);
+      // // Save to published content and create scroll
+      // await StorageService.savePublishedContent(publishedContent);
+      // NEW:
+      if (userPublicKey) {
+        console.log('SolanaPublisher: 💾 Saving to user-scoped storage for user:', userPublicKey.substring(0, 8) + '...');
+        await UserStorageService.savePublishedStory(publishedContent, userPublicKey);
+      } else {
+        console.log('SolanaPublisher: 💾 Saving to global storage (no user context)');
+        await StorageService.savePublishedContent(publishedContent);
+      }
 
       // Create scroll manifest
       const manifest = await StorageService.createScrollFromPublishedContent(publishedContent);

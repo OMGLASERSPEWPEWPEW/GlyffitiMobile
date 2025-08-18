@@ -4,6 +4,7 @@ import { MobileWalletService } from '../wallet/MobileWalletService';
 import { ContentService } from '../content/ContentService';
 import { BlockchainService } from '../blockchain/BlockchainService';
 import { StorageService } from '../storage/StorageService';
+import { UserStorageService } from '../storage/UserStorageService';
 
 /**
  * Mobile Publishing Service - Main orchestrator for publishing content
@@ -64,6 +65,11 @@ export class PublishingService {
    */
   createTextContent(text, title = 'Manual Entry') {
     return ContentService.createTextContent(text, title);
+  }
+
+  async saveUserPublishedContent(content, userPublicKey) {
+  // Save to user storage instead of global storage
+  return await UserStorageService.savePublishedStory(content, userPublicKey);
   }
 
   /**
@@ -171,52 +177,78 @@ export class PublishingService {
    * @param {Function} onProgress - Progress callback
    * @returns {Promise<Object>} Publishing result with scroll information
    */
-  async publishContent(content, onProgress = null) {
-    try {
-      if (!this.currentWallet) {
-        throw new Error('No wallet connected');
-      }
-
-      if (!content || !content.content) {
-        throw new Error('No valid content to publish');
-      }
-
-      const keypair = this.currentWallet.getWalletKeypair();
-      if (!keypair) {
-        throw new Error('Unable to access wallet keypair');
-      }
-
-      // Check if content is already prepared (has glyphs) or needs preparation
-      let preparedContent;
-      if (content.glyphs && content.glyphs.length > 0) {
-        // Content is already prepared
-        preparedContent = content;
-      } else {
-        // Content needs to be prepared first
-        console.log('📝 Preparing content for publishing...');
-        
-        const contentData = {
-          content: content.content,
-          filename: content.filename || `${content.title}.txt`,
-          size: content.content.length,
-          type: content.type || 'text/plain'
-        };
-
-        preparedContent = await this.prepareContent(
-          contentData,
-          content.title || 'Untitled',
-          {
-            authorName: content.authorName
-          }
-        );
-      }
-
-      return await this.blockchainPublisher.publishContent(preparedContent, keypair, onProgress);
-    } catch (error) {
-      console.error('❌ Publishing error:', error);
-      throw error;
+  /**
+ * Publish prepared content to blockchain with enhanced error handling and scroll creation
+ * @param {Object} content - Content object (raw or prepared)
+ * @param {Function} onProgress - Progress callback
+ * @param {string} userPublicKey - User's public key for scoped storage
+ * @returns {Promise<Object>} Publishing result with scroll information
+ */
+async publishContent(content, onProgress = null, userPublicKey = null) {
+  try {
+    if (!this.currentWallet) {
+      throw new Error('PublishingService: No wallet connected');
     }
+
+    // ✅ FIXED: Enhanced validation to handle both raw and prepared content
+    if (!content) {
+      throw new Error('PublishingService: No content provided');
+    }
+
+    // Check if content is prepared (has glyphs) or raw (has content text)
+    const isPreparedContent = content.glyphs && Array.isArray(content.glyphs) && content.glyphs.length > 0;
+    const isRawContent = content.content && typeof content.content === 'string' && content.content.trim().length > 0;
+
+    if (!isPreparedContent && !isRawContent) {
+      throw new Error('PublishingService: No valid content to publish - content must have either text content or prepared glyphs');
+    }
+
+    const keypair = this.currentWallet.getWalletKeypair();
+    if (!keypair) {
+      throw new Error('PublishingService: Unable to access wallet keypair');
+    }
+
+    // Check if content is already prepared (has glyphs) or needs preparation
+    let preparedContent;
+    if (isPreparedContent) {
+      // Content is already prepared
+      console.log('PublishingService: ✅ Using pre-prepared content with', content.glyphs.length, 'glyphs');
+      preparedContent = content;
+    } else {
+      // Content needs to be prepared first
+      console.log('PublishingService: 📝 Preparing content for publishing...');
+      
+      const contentData = {
+        content: content.content,
+        filename: content.filename || `${content.title || 'Untitled'}.txt`,
+        size: content.content.length,
+        type: content.type || 'text/plain'
+      };
+
+      preparedContent = await this.prepareContent(
+        contentData,
+        content.title || 'Untitled',
+        {
+          authorName: content.authorName
+        }
+      );
+    }
+
+    // ✅ FIXED: Pass userPublicKey to the blockchain publisher for user-scoped storage
+    return await this.blockchainPublisher.publishContent(
+      preparedContent, 
+      keypair, 
+      onProgress, 
+      'solana', // blockchain type
+      userPublicKey // Pass user context for scoped storage
+    );
+    
+  } catch (error) {
+    console.error('❌ PublishingService:', error);
+    throw error;
   }
+}
+
 
   /**
    * Resume publishing from a failed or partial state
