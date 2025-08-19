@@ -20,6 +20,7 @@ import { useUser } from '../hooks/useUser';
 import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
 import { spacing } from '../styles/tokens';
 import { Keypair } from '@solana/web3.js';
+import { UserStorageService } from '../services/storage/UserStorageService';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -357,28 +358,42 @@ useEffect(() => {
 
   // Clear draft/in-progress data (for testing)
   const handleClearDrafts = async () => {
-    Alert.alert(
-      'Clear Draft Data',
-      'This will remove all draft and in-progress content. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear Drafts', 
-          style: 'destructive', 
-          onPress: async () => {
-            try {
+  Alert.alert(
+    'Clear Draft Data',
+    'This will remove all draft and published content for this user. Are you sure?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Clear All', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            if (!selectedUser?.publicKey) {
+              Alert.alert('Error', 'No user selected');
+              return;
+            }
+            
+            // ✅ FIXED: Clear user-scoped data instead of global data
+            const result = await UserStorageService.clearUserData(selectedUser.publicKey);
+            
+            if (result.success) {
+              // Also clear global drafts and in-progress (these are still global)
               const { ClearPublishedScript } = await import('../utils/ClearPublishedScript');
               await ClearPublishedScript.clearInProgress();
-              await loadExistingContent(); // Use hook's method
-              Alert.alert('Success', 'All draft data cleared!');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear drafts: ' + error.message);
+              
+              await loadExistingContent(); // Refresh the UI
+              Alert.alert('Success', 'All user data cleared!');
+            } else {
+              throw new Error(result.error || 'Failed to clear user data');
             }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to clear data: ' + error.message);
           }
         }
-      ]
-    );
-  };
+      }
+    ]
+  );
+};
 
   // Handle back navigation
   const handleGoBack = () => {

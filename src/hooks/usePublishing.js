@@ -243,7 +243,8 @@ export const usePublishing = (walletService = null) => {
       
       // Progress callback
       const onProgress = (progressData) => {
-        console.log('📊 Progress:', progressData);
+        console.log(`usePublishing: 📊 Publishing progress: ${progressData.currentGlyph}/${progressData.totalGlyphs} (${progressData.progress}%) - ${progressData.stage}`);
+  setProgress(progressData);
         setProgress(progressData);
       };
       

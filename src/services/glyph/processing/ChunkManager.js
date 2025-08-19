@@ -1,5 +1,6 @@
 // src/services/glyph/processing/ChunkManager.js
 // Path: src/services/glyph/processing/ChunkManager.js
+
 import { CompressionService } from '../../compression/CompressionService';
 import { HashingService } from '../../hashing/HashingService';
 import { TextProcessor } from './TextProcessor';
@@ -23,20 +24,26 @@ export class ChunkManager {
       // Pre-process text to ensure optimal chunking
       originalText = TextProcessor.preprocessText(originalText);
       
-      // Calculate how many chunks we'll need
-      const totalChunks = Math.ceil(originalText.length / config.targetChunkSize);
+      // ✅ FIXED: Track actual position instead of calculated positions
+      let currentPosition = 0;
+      let chunkIndex = 0;
       
-      // Split content into chunks and compress each chunk individually
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * config.targetChunkSize;
-        const end = Math.min(start + config.targetChunkSize, originalText.length);
+      // Split content into chunks with proper boundary tracking
+      while (currentPosition < originalText.length) {
+        const remainingLength = originalText.length - currentPosition;
+        const targetEnd = Math.min(currentPosition + config.targetChunkSize, originalText.length);
         
-        // Extract chunk text content, finding natural breaking points
-        let chunkText = originalText.slice(start, end);
+        let chunkText;
+        let actualEnd;
         
-        // If not the last chunk, try to break at natural points
-        if (i < totalChunks - 1) {
-          chunkText = TextProcessor.findNaturalBreakPoint(originalText, start, end);
+        // If this is the last chunk or close to end, take everything remaining
+        if (remainingLength <= config.targetChunkSize * 1.2) {
+          chunkText = originalText.slice(currentPosition);
+          actualEnd = originalText.length;
+        } else {
+          // Find natural break point and get the actual chunk
+          chunkText = TextProcessor.findNaturalBreakPoint(originalText, currentPosition, targetEnd);
+          actualEnd = currentPosition + chunkText.length;
         }
         
         // Compress this individual chunk
@@ -47,47 +54,42 @@ export class ChunkManager {
         
         // Verify the chunk isn't too large after base64 encoding
         if (base64Size > config.maxMemoSize) {
-          console.warn(`Chunk ${i} exceeds maximum size after base64 encoding: ${base64Size} bytes. Max: ${config.maxMemoSize}`);
+          console.warn(`Chunk ${chunkIndex} exceeds maximum size after base64 encoding: ${base64Size} bytes. Max: ${config.maxMemoSize}`);
           
-          // Recursively split this chunk if too large
-          const smallerChunks = await this.splitOversizedChunk(chunkText, i, totalChunks, config);
+          // ✅ FIXED: Split oversized chunk and track position properly
+          const smallerChunks = await this.splitOversizedChunk(chunkText, chunkIndex, config);
           chunks.push(...smallerChunks);
+          chunkIndex += smallerChunks.length;
+        } else {
+          // Create hash for the chunk
+          const hash = await HashingService.hashContent(compressedChunk);
           
-          // Adjust total chunks count and update remaining indices
-          const additionalChunks = smallerChunks.length - 1;
-          for (let j = i + 1; j < totalChunks; j++) {
-            // Will need to update subsequent chunk indices
-          }
-          
-          continue;
+          // Create chunk with hash
+          chunks.push({
+            index: chunkIndex,
+            totalChunks: 0, // Will be updated after all chunks created
+            content: compressedChunk,
+            hash: hash,
+            originalText: chunkText
+          });
+          chunkIndex++;
         }
         
-        // Create hash for the chunk
-        const hash = await HashingService.hashContent(compressedChunk);
-        
-        // Create chunk with hash
-        chunks.push({
-          index: i,
-          totalChunks,
-          content: compressedChunk,
-          hash: hash,
-          originalText: chunkText
-        });
+        // ✅ FIXED: Move to actual end position, not calculated position
+        currentPosition = actualEnd;
         
         // Log progress for large content
-        if (totalChunks > 10 && (i + 1) % 5 === 0) {
-          console.log(`Created ${i + 1}/${totalChunks} glyphs...`);
+        if (chunkIndex > 0 && chunkIndex % 5 === 0) {
+          console.log(`Created ${chunkIndex} glyphs... (${currentPosition}/${originalText.length} chars)`);
         }
       }
       
-      // Update total chunks count in all chunks if we had splits
+      // Update total chunks count in all chunks
       const finalTotalChunks = chunks.length;
-      if (finalTotalChunks !== totalChunks) {
-        chunks.forEach((chunk, index) => {
-          chunk.index = index;
-          chunk.totalChunks = finalTotalChunks;
-        });
-      }
+      chunks.forEach((chunk, index) => {
+        chunk.index = index;
+        chunk.totalChunks = finalTotalChunks;
+      });
       
       return chunks;
     } catch (error) {
@@ -100,36 +102,42 @@ export class ChunkManager {
    * Split an oversized chunk into smaller pieces
    * @param {string} chunkText - Text that's too large
    * @param {number} originalIndex - Original chunk index
-   * @param {number} totalChunks - Total chunks count
    * @param {BlockchainConfig} config - Configuration for chunking
    * @returns {Promise<GlyphChunk[]>} Array of smaller chunks
    */
-  static async splitOversizedChunk(chunkText, originalIndex, totalChunks, config) {
+  static async splitOversizedChunk(chunkText, originalIndex, config) {
     const smallerChunks = [];
     const smallerSize = Math.floor(config.targetChunkSize / 2);
-    const subChunkCount = Math.ceil(chunkText.length / smallerSize);
     
-    console.log(`Splitting oversized chunk into ${subChunkCount} smaller pieces`);
+    // ✅ FIXED: Use position tracking for oversized chunks too
+    let position = 0;
+    let subIndex = 0;
     
-    for (let i = 0; i < subChunkCount; i++) {
-      const start = i * smallerSize;
-      const end = Math.min(start + smallerSize, chunkText.length);
-      const subChunkText = chunkText.slice(start, end);
+    while (position < chunkText.length) {
+      const remainingLength = chunkText.length - position;
+      const end = Math.min(position + smallerSize, chunkText.length);
+      
+      // For smaller chunks, don't worry about natural breaks to avoid infinite recursion
+      const subChunkText = chunkText.slice(position, end);
       
       const compressedSubChunk = CompressionService.compress(subChunkText);
       const hash = await HashingService.hashContent(compressedSubChunk);
       
       smallerChunks.push({
-        index: originalIndex + i, // Will be updated later
-        totalChunks: totalChunks, // Will be updated later
+        index: originalIndex + subIndex, // Will be updated later
+        totalChunks: 0, // Will be updated later
         content: compressedSubChunk,
         hash: hash,
         originalText: subChunkText
       });
+      
+      position = end;
+      subIndex++;
     }
     
+    console.log(`Split oversized chunk into ${smallerChunks.length} smaller pieces`);
     return smallerChunks;
   }
 }
 
-// Character count: 4639
+// Character count: 4327

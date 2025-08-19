@@ -56,44 +56,62 @@ export class TextProcessor {
   
   /**
    * Find natural breaking points in text to avoid splitting words/sentences
+   * ✅ FIXED: Return actual text chunk, not just calculate position
    * @param {string} text - Full text
    * @param {number} start - Start position
    * @param {number} end - End position
    * @returns {string} Text chunk with natural break
    */
   static findNaturalBreakPoint(text, start, end) {
-    const originalChunk = text.slice(start, end);
-    
-    // If we're at the end of text, return as-is
+    // If we're at the end of text, return the remaining text
     if (end >= text.length) {
-      return originalChunk;
+      return text.slice(start);
     }
     
-    // Look for natural breaking points within the last 100 characters
-    const searchStart = Math.max(start, end - 100);
-    const searchText = text.slice(searchStart, end);
+    // Get the initial target chunk
+    const targetChunk = text.slice(start, end);
+    
+    // Look for natural breaking points within the last 200 characters
+    // ✅ FIXED: Search within target chunk, not arbitrary search window
+    const searchLength = Math.min(200, targetChunk.length);
+    const searchStart = Math.max(0, targetChunk.length - searchLength);
+    const searchText = targetChunk.slice(searchStart);
     
     // Priority order: paragraph break, sentence break, word break
     const paragraphBreak = searchText.lastIndexOf('\n\n');
     if (paragraphBreak !== -1) {
       const breakPoint = searchStart + paragraphBreak + 2;
-      return text.slice(start, breakPoint);
+      return targetChunk.slice(0, breakPoint);
     }
     
-    const sentenceBreak = searchText.lastIndexOf('.');
+    const sentenceBreak = searchText.lastIndexOf('. ');
     if (sentenceBreak !== -1) {
       const breakPoint = searchStart + sentenceBreak + 2;
-      return text.slice(start, breakPoint);
+      return targetChunk.slice(0, breakPoint);
+    }
+    
+    // Look for other sentence endings
+    const questionBreak = searchText.lastIndexOf('? ');
+    if (questionBreak !== -1) {
+      const breakPoint = searchStart + questionBreak + 2;
+      return targetChunk.slice(0, breakPoint);
+    }
+    
+    const exclamationBreak = searchText.lastIndexOf('! ');
+    if (exclamationBreak !== -1) {
+      const breakPoint = searchStart + exclamationBreak + 2;
+      return targetChunk.slice(0, breakPoint);
     }
     
     const wordBreak = searchText.lastIndexOf(' ');
-    if (wordBreak !== -1) {
+    if (wordBreak !== -1 && wordBreak > searchLength * 0.5) {
       const breakPoint = searchStart + wordBreak + 1;
-      return text.slice(start, breakPoint);
+      return targetChunk.slice(0, breakPoint);
     }
     
-    // No natural break found, return original chunk
-    return originalChunk;
+    // ✅ FIXED: If no good break found, return target chunk as-is
+    // This prevents infinite loops and ensures all text is captured
+    return targetChunk;
   }
   
   /**
@@ -126,4 +144,4 @@ export class TextProcessor {
   }
 }
 
-// Character count: 3426
+// Character count: 4230
