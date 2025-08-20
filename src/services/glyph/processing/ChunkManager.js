@@ -90,7 +90,7 @@ export class ChunkManager {
             hash: hash,
             originalText: chunkText,
             // Story chain fields
-            previousStoryHash: chunkIndex === 0 ? content.previousStoryHash : null,
+            previousStoryHash: content.previousStoryHash,
             previousGlyphHash: previousHash,
             storySequence: storySequence,
             contentType: 'published_story'

@@ -22,6 +22,8 @@ import { spacing } from '../styles/tokens';
 import { Keypair } from '@solana/web3.js';
 import { UserStorageService } from '../services/storage/UserStorageService';
 import { StoryHeaderService } from '../services/feed/StoryHeaderService';
+import { clearContentOnly } from '../utils/ClearAsyncStorageContent';
+import { nuclearClearStories, totalWipe } from '../utils/NuclearClear';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -568,7 +570,7 @@ useEffect(() => {
                 console.log('🔍 Checking stories for user:', currentUser.username);
                 
                 // Check user storage for current user
-                const userPublished = await UserStorageService.getUserPublishedStories(currentUser.publicKey);
+                const userPublished = await UserStorageService.loadPublishedStories(currentUser.publicKey);
                 console.log('👤 User Published Stories:', userPublished.length);
                 
                 // Chain verification logic here...
@@ -601,7 +603,7 @@ useEffect(() => {
             <Text style={{ color: 'white' }}>🔍 Verify User Chain</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={{ backgroundColor: '#FF3B30', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
               try {
@@ -613,12 +615,12 @@ useEffect(() => {
                 }
                 
                 Alert.alert(
-                  'Clean Slate', 
+                  'Clean Slate',
                   `This will delete all published content for ${currentUser.username}. Continue?`,
                   [
                     { text: 'Cancel' },
-                    { 
-                      text: 'Clean Up', 
+                    {
+                      text: 'Clean Up',
                       onPress: async () => {
                         console.log('🧹 Cleaning up published content for:', currentUser.username);
                         
@@ -626,14 +628,26 @@ useEffect(() => {
                         await StorageService.resetPublishedContent();
                         await StorageService.resetInProgressContent();
                         
-                        // Clear user-scoped stories for current user
-                        await UserStorageService.clearUserPublishedStories(currentUser.publicKey);
+                        // Clear user-scoped stories for current user (USE EXISTING METHOD)
+                        await UserStorageService.clearUserData(currentUser.publicKey);
                         
-                        // Clear story headers to reset story count
-                        await StoryHeaderService.resetUserStoryHeads();
+                        // Remove ONLY this user from story headers (using existing methods)
+                        const storyHeads = await StoryHeaderService.loadUserStoryHeads();
+                        if (storyHeads.users[currentUser.publicKey]) {
+                          // Remove this user from the users object
+                          delete storyHeads.users[currentUser.publicKey];
+                          // Update total count
+                          storyHeads.totalUsers = Object.keys(storyHeads.users).length;
+                          // Save the updated headers
+                          await StoryHeaderService.saveUserStoryHeads(storyHeads);
+                          console.log(`🗑️ Removed ${currentUser.username} from story headers`);
+                        }
                         
                         console.log('✅ Cleanup complete for user:', currentUser.username);
                         Alert.alert('Success', `All content cleared for ${currentUser.username}!`);
+                        
+                        // Reload the data to reflect changes
+                        loadExistingContent();
                       }
                     }
                   ]
@@ -646,6 +660,47 @@ useEffect(() => {
           >
             <Text style={{ color: 'white' }}>🧹 Clean ALL Data</Text>
           </TouchableOpacity>
+
+
+
+          {/* Nuclear Clear Stories Button */}
+          <TouchableOpacity 
+            style={{ backgroundColor: '#FF0000', padding: 10, margin: 5, borderRadius: 5 }}
+            onPress={async () => {
+              try {
+                Alert.alert(
+                  '💥 Nuclear Clear Stories',
+                  'This will remove ALL story data from ALL storage locations. Wallets will be preserved. Continue?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Nuclear Clear', 
+                      style: 'destructive',
+                      onPress: async () => {
+                        console.log('💥 Starting nuclear clear...');
+                        const success = await nuclearClearStories();
+                        
+                        Alert.alert(
+                          success ? 'Nuclear Clear Complete' : 'Nuclear Clear Failed',
+                          success ? 'All story data removed!' : 'Some data may remain - check console'
+                        );
+                        
+                        // Reload your data to verify
+                        loadExistingContent();
+                      }
+                    }
+                  ]
+                );
+              } catch (error) {
+                console.error('Nuclear clear error:', error);
+                Alert.alert('Error', error.message);
+              }
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold' }}>💥 Nuclear Clear Stories</Text>
+          </TouchableOpacity>
+
+
 
           </View>
 
