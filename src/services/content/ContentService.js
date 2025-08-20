@@ -174,6 +174,7 @@ export class ContentService {
         authorName: options.authorName || 'Anonymous',
         timestamp: Date.now(),
         createdAt: new Date().toISOString(),
+        previousStoryHash: options.previousStoryHash || null,
         metadata: {
           filename: contentData.filename,
           size: contentData.size,
@@ -186,6 +187,7 @@ export class ContentService {
         glyphs: glyphs,
         glyphChunks,
         totalGlyphs: glyphs.length,
+        
 
         compressionStats: {
           originalSize,

@@ -153,6 +153,7 @@ export class SolanaPublisher {
             }
             
             console.log(`✅ Glyph ${index + 1} published: ${signature}`);
+
             
             // Update glyph status
             glyph.status = 'published';
@@ -229,9 +230,7 @@ export class SolanaPublisher {
       // Save as published content
       // await StorageService.savePublishedContent(publishedContent);
       // NEW:
-// Save as published content
-      // await StorageService.savePublishedContent(publishedContent);
-      // NEW:
+
       if (userPublicKey) {
         console.log('SolanaPublisher: 💾 Saving resumed content to user-scoped storage for user:', userPublicKey.substring(0, 8) + '...');
         await UserStorageService.savePublishedStory(publishedContent, userPublicKey);

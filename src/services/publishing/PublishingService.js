@@ -6,6 +6,7 @@ import { BlockchainService } from '../blockchain/BlockchainService';
 import { StorageService } from '../storage/StorageService';
 import { UserStorageService } from '../storage/UserStorageService';
 import { StoryHeaderService } from '../feed/StoryHeaderService';
+import userRegistry from '../../data/user-registry.json';
 
 /**
  * Mobile Publishing Service - Main orchestrator for publishing content
@@ -90,10 +91,30 @@ export class PublishingService {
     throw new Error('Unable to access wallet keypair');
     }
 
+    const userPublicKey = keypair.publicKey.toString();
+
     // Get previous story hash for story chain
     let previousStoryHash = null;
     try {
-    previousStoryHash = await StoryHeaderService.getUserStoryHead(keypair.publicKey.toString());
+      previousStoryHash = await StoryHeaderService.getUserStoryHead(keypair.publicKey.toString());
+
+      // If no previous story exists, fall back to the user's genesis block
+      if (!previousStoryHash) {
+        console.log('PublishingService: No previous story found. Linking to User Genesis Block.');
+        
+        // CORRECT: Use .find() to search the users array
+        const registryEntry = userRegistry.users.find(user => user.publicKey === userPublicKey);
+        
+        // CORRECT: The key for the genesis hash is 'transactionHash'
+        if (registryEntry && registryEntry.transactionHash) {
+          previousStoryHash = registryEntry.transactionHash;
+          console.log(`PublishingService: Found User Genesis hash: ${previousStoryHash.substring(0,8)}...`);
+        } else {
+          console.error(`PublishingService: Could not find User Genesis block for ${userPublicKey}! The story will not be anchored.`);
+        }
+      }
+
+
     console.log('PublishingService.prepareContent: Previous story hash found:', previousStoryHash ? previousStoryHash.substring(0, 8) + '...' : 'none (first story)');
     } catch (error) {
     console.error('PublishingService.prepareContent: Error getting previous story hash:', error);
