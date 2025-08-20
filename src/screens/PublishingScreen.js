@@ -21,6 +21,7 @@ import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublis
 import { spacing } from '../styles/tokens';
 import { Keypair } from '@solana/web3.js';
 import { UserStorageService } from '../services/storage/UserStorageService';
+import { StoryHeaderService } from '../services/feed/StoryHeaderService';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -514,6 +515,143 @@ useEffect(() => {
             handleResumePublishing={handleResumePublishing}
             handleViewStory={handleViewStory}
           />
+
+
+          {/* TEMPORARY DEBUG SECTION - Remove after testing */}
+          <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f0f0f0' }}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>Story Chain Debug</Text>
+            
+            <TouchableOpacity 
+              style={{ backgroundColor: '#007AFF', padding: 10, margin: 5, borderRadius: 5 }}
+              onPress={async () => {
+                try {
+                  const stats = await StoryHeaderService.getStats();
+                  console.log('📊 Story Stats:', stats);
+                  Alert.alert('Story Stats', JSON.stringify(stats, null, 2));
+                } catch (error) {
+                  console.error('Stats error:', error);
+                  Alert.alert('Error', error.message);
+                }
+              }}
+            >
+              <Text style={{ color: 'white' }}>Get Story Stats</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={{ backgroundColor: '#34C759', padding: 10, margin: 5, borderRadius: 5 }}
+              onPress={async () => {
+                try {
+                  const heads = await StoryHeaderService.getAllUserStoryHeads();
+                  console.log('📚 All Story Heads:', heads);
+                  Alert.alert('Story Heads', JSON.stringify(heads, null, 2));
+                } catch (error) {
+                  console.error('Heads error:', error);
+                  Alert.alert('Error', error.message);
+                }
+              }}
+            >
+              <Text style={{ color: 'white' }}>Get All Story Heads</Text>
+            </TouchableOpacity>
+
+
+          <TouchableOpacity 
+            style={{ backgroundColor: '#FF9500', padding: 10, margin: 5, borderRadius: 5 }}
+            onPress={async () => {
+              try {
+                // Get current user dynamically
+                const currentUser = selectedUser; // From useUser hook
+                if (!currentUser) {
+                  Alert.alert('Error', 'No user selected');
+                  return;
+                }
+                
+                console.log('🔍 Checking stories for user:', currentUser.username);
+                
+                // Check user storage for current user
+                const userPublished = await UserStorageService.getUserPublishedStories(currentUser.publicKey);
+                console.log('👤 User Published Stories:', userPublished.length);
+                
+                // Chain verification logic here...
+                if (userPublished.length >= 2) {
+                  const story1 = userPublished[userPublished.length - 2];
+                  const story2 = userPublished[userPublished.length - 1];
+                  
+                  console.log('Story 1 transaction IDs:', story1.transactionIds);
+                  console.log('Story 2 glyphs[0] data:', {
+                    previousStoryHash: story2.glyphs?.[0]?.previousStoryHash,
+                    storySequence: story2.glyphs?.[0]?.storySequence,
+                    contentType: story2.glyphs?.[0]?.contentType
+                  });
+                  
+                  Alert.alert('Chain Verification', 
+                    `USER: ${currentUser.username}\n` +
+                    `Story 1 hash: ${story1.transactionIds?.[story1.transactionIds?.length-1]?.substring(0,8)}...\n` +
+                    `Story 2 previousHash: ${story2.glyphs?.[0]?.previousStoryHash?.substring(0,8) || 'undefined'}...\n\n` +
+                    `contentType: ${story2.glyphs?.[0]?.contentType || 'undefined'}`
+                  );
+                } else {
+                  Alert.alert('Not Enough Stories', `User ${currentUser.username} has ${userPublished.length} stories. Need at least 2 for chain verification.`);
+                }
+              } catch (error) {
+                console.error('Chain verification error:', error);
+                Alert.alert('Error', error.message);
+              }
+            }}
+          >
+            <Text style={{ color: 'white' }}>🔍 Verify User Chain</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ backgroundColor: '#FF3B30', padding: 10, margin: 5, borderRadius: 5 }}
+            onPress={async () => {
+              try {
+                // Get current user dynamically
+                const currentUser = selectedUser; // From useUser hook
+                if (!currentUser) {
+                  Alert.alert('Error', 'No user selected');
+                  return;
+                }
+                
+                Alert.alert(
+                  'Clean Slate', 
+                  `This will delete all published content for ${currentUser.username}. Continue?`,
+                  [
+                    { text: 'Cancel' },
+                    { 
+                      text: 'Clean Up', 
+                      onPress: async () => {
+                        console.log('🧹 Cleaning up published content for:', currentUser.username);
+                        
+                        // Clear BOTH global and user-scoped published content
+                        await StorageService.resetPublishedContent();
+                        await StorageService.resetInProgressContent();
+                        
+                        // Clear user-scoped stories for current user
+                        await UserStorageService.clearUserPublishedStories(currentUser.publicKey);
+                        
+                        // Clear story headers to reset story count
+                        await StoryHeaderService.resetUserStoryHeads();
+                        
+                        console.log('✅ Cleanup complete for user:', currentUser.username);
+                        Alert.alert('Success', `All content cleared for ${currentUser.username}!`);
+                      }
+                    }
+                  ]
+                );
+              } catch (error) {
+                console.error('Cleanup error:', error);
+                Alert.alert('Error', error.message);
+              }
+            }}
+          >
+            <Text style={{ color: 'white' }}>🧹 Clean ALL Data</Text>
+          </TouchableOpacity>
+
+          </View>
+
+          
+
+
         </ContentArea>
 
         {/* Wallet Loading Overlay */}

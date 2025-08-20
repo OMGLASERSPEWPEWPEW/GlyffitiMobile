@@ -5,6 +5,7 @@ import { ContentService } from '../content/ContentService';
 import { BlockchainService } from '../blockchain/BlockchainService';
 import { StorageService } from '../storage/StorageService';
 import { UserStorageService } from '../storage/UserStorageService';
+import { StoryHeaderService } from '../feed/StoryHeaderService';
 
 /**
  * Mobile Publishing Service - Main orchestrator for publishing content
@@ -81,24 +82,34 @@ export class PublishingService {
    */
   async prepareContent(contentData, title, options = {}) {
     try {
-      if (!this.currentWallet) {
-        throw new Error('No wallet connected. Please connect a wallet first.');
-      }
+    if (!this.currentWallet) {
+    throw new Error('No wallet connected. Please connect a wallet first.');
+    }
+    const keypair = this.currentWallet.getWalletKeypair();
+    if (!keypair) {
+    throw new Error('Unable to access wallet keypair');
+    }
 
-      const keypair = this.currentWallet.getWalletKeypair();
-      if (!keypair) {
-        throw new Error('Unable to access wallet keypair');
-      }
+    // Get previous story hash for story chain
+    let previousStoryHash = null;
+    try {
+    previousStoryHash = await StoryHeaderService.getUserStoryHead(keypair.publicKey.toString());
+    console.log('PublishingService.prepareContent: Previous story hash found:', previousStoryHash ? previousStoryHash.substring(0, 8) + '...' : 'none (first story)');
+    } catch (error) {
+    console.error('PublishingService.prepareContent: Error getting previous story hash:', error);
+    // Continue with null - will be handled as first story
+    }
 
-      return await ContentService.prepareContent(
-        contentData,
-        title,
-        keypair.publicKey.toString(),
-        {
-          ...options,
-          authorName: options.authorName || `User_${keypair.publicKey.toString().substring(0, 8)}`
-        }
-      );
+    return await ContentService.prepareContent(
+    contentData,
+    title,
+    keypair.publicKey.toString(),
+    {
+    ...options,
+    authorName: options.authorName || `User_${keypair.publicKey.toString().substring(0, 8)}`,
+    previousStoryHash: previousStoryHash
+    }
+    );
     } catch (error) {
       console.error('Error preparing content:', error);
       throw error;

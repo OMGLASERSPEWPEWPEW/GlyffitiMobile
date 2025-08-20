@@ -62,15 +62,38 @@ export class ChunkManager {
           chunkIndex += smallerChunks.length;
         } else {
           // Create hash for the chunk
+          // Create hash for the chunk
           const hash = await HashingService.hashContent(compressedChunk);
           
-          // Create chunk with hash
+          // Determine previous hash for story chaining
+          let previousHash = null;
+          if (chunkIndex === 0) {
+            // First glyph: use previous story hash (or user genesis for first story)
+            previousHash = content.previousStoryHash || null;
+          } else {
+            // Subsequent glyphs: chain to previous glyph hash
+            previousHash = chunks[chunkIndex - 1].hash;
+          }
+          
+          // Calculate story sequence (incremental number for this user)
+          // This will be the same for all glyphs in the same story
+          const storySequence = this.calculateStorySequence(content);
+          
+          console.log(`ChunkManager.createGlyphs: Glyph ${chunkIndex} previousHash:`, 
+            previousHash ? previousHash.substring(0, 8) + '...' : 'none');
+          
+          // Create chunk with story chain fields
           chunks.push({
             index: chunkIndex,
             totalChunks: 0, // Will be updated after all chunks created
             content: compressedChunk,
             hash: hash,
-            originalText: chunkText
+            originalText: chunkText,
+            // Story chain fields
+            previousStoryHash: chunkIndex === 0 ? content.previousStoryHash : null,
+            previousGlyphHash: previousHash,
+            storySequence: storySequence,
+            contentType: 'published_story'
           });
           chunkIndex++;
         }
@@ -138,6 +161,18 @@ export class ChunkManager {
     console.log(`Split oversized chunk into ${smallerChunks.length} smaller pieces`);
     return smallerChunks;
   }
+
+    /**
+     * Calculate story sequence number for chaining
+     * This is a placeholder - in practice, this should be passed from the publishing service
+     * @param {GlyphContent} content - Content object
+     * @returns {number} Story sequence number
+     */
+    static calculateStorySequence(content) {
+      // For now, use timestamp-based sequence
+      // In full implementation, this should come from StoryHeaderService
+      return content.storySequence || Math.floor(Date.now() / 1000);
+    }
 }
 
 // Character count: 4327

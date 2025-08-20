@@ -120,17 +120,23 @@ export class ContentService {
         title: title.trim(),
         content: content,
         authorPublicKey: authorPublicKey,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        // Add story chain data if provided
+        previousStoryHash: options.previousStoryHash || null
       };
+      
+      console.log('ContentService.prepareContent: Previous story hash passed to GlyphService:', 
+        glyphContent.previousStoryHash ? glyphContent.previousStoryHash.substring(0, 8) + '...' : 'none (first story)');
       
       // Generate chunks using GlyphService.createGlyphs
       const glyphChunks = await GlyphService.createGlyphs(glyphContent);
+
 
       if (!glyphChunks || glyphChunks.length === 0) {
         throw new Error('Failed to process content into glyphs');
       }
 
-      // ✅ FIX #1: Normalize glyphs to what MobileBlockchainPublisher expects
+// ✅ FIX #1: Normalize glyphs to what MobileBlockchainPublisher expects
       const glyphs = glyphChunks.map((chunk, index) => ({
         id: `glyph_${index}_${Date.now()}`,
         index: (typeof chunk.index === 'number') ? chunk.index : index,
@@ -139,7 +145,12 @@ export class ContentService {
         totalGlyphs: glyphChunks.length,
         transactionId: null,
         status: 'pending',
-        originalText: chunk.originalText || ''
+        originalText: chunk.originalText || '',
+        // Preserve story chain fields from ChunkManager
+        previousStoryHash: chunk.previousStoryHash || null,
+        previousGlyphHash: chunk.previousGlyphHash || null,
+        storySequence: chunk.storySequence || null,
+        contentType: chunk.contentType || null
       }));
 
       // Calculate compression stats

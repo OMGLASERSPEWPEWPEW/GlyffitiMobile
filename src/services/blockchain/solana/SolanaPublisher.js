@@ -4,6 +4,7 @@ import { Connection, Transaction, TransactionInstruction, PublicKey } from '@sol
 import { CompressionService } from '../../compression/CompressionService';
 import { StorageService } from '../../storage/StorageService';
 import { UserStorageService } from '../../storage/UserStorageService';
+import { StoryHeaderService } from '../../feed/StoryHeaderService';
 
 /**
  * Solana Publisher - Handles Solana-specific blockchain publishing operations
@@ -228,12 +229,42 @@ export class SolanaPublisher {
       // Save as published content
       // await StorageService.savePublishedContent(publishedContent);
       // NEW:
+// Save as published content
+      // await StorageService.savePublishedContent(publishedContent);
+      // NEW:
       if (userPublicKey) {
         console.log('SolanaPublisher: 💾 Saving resumed content to user-scoped storage for user:', userPublicKey.substring(0, 8) + '...');
         await UserStorageService.savePublishedStory(publishedContent, userPublicKey);
       } else {
         console.log('SolanaPublisher: 💾 Saving resumed content to global storage (no user context)');
         await StorageService.savePublishedContent(publishedContent);
+      }
+
+      // Update story chain header after successful publish
+      if (userPublicKey && status.transactionIds.length > 0 && !content.socialPost) {
+        try {
+          // Use the last transaction as the story hash (represents the complete story)
+          const storyHash = status.transactionIds[status.transactionIds.length - 1];
+          const username = content.authorName || `User_${userPublicKey.substring(0, 8)}`;
+          
+          console.log('SolanaPublisher: 📖 Updating story chain for user:', username);
+          console.log('SolanaPublisher: 📖 Story hash:', storyHash.substring(0, 8) + '...');
+          
+          const updateSuccess = await StoryHeaderService.updateUserStoryHead(
+            userPublicKey,
+            username,
+            storyHash
+          );
+          
+          if (updateSuccess) {
+            console.log('SolanaPublisher: ✅ Story chain updated successfully');
+          } else {
+            console.error('SolanaPublisher: ❌ Failed to update story chain');
+          }
+        } catch (storyError) {
+          console.error('SolanaPublisher: ❌ Error updating story chain:', storyError);
+          // Don't fail the entire publish for story chain errors
+        }
       }
 
       await StorageService.removeInProgressContent(contentId);
@@ -446,6 +477,33 @@ export class SolanaPublisher {
       } else {
         console.log('SolanaPublisher: 💾 Saving to global storage (no user context)');
         await StorageService.savePublishedContent(publishedContent);
+      }
+
+      // Update story chain header after successful publish
+      if (userPublicKey && status.transactionIds.length > 0 && content.contentType !== 'social_post') {
+        try {
+          // Use the last transaction as the story hash (represents the complete story)
+          const storyHash = status.transactionIds[status.transactionIds.length - 1];
+          const username = content.authorName || `User_${userPublicKey.substring(0, 8)}`;
+          
+          console.log('SolanaPublisher: 📖 Updating story chain for user:', username);
+          console.log('SolanaPublisher: 📖 Story hash:', storyHash.substring(0, 8) + '...');
+          
+          const updateSuccess = await StoryHeaderService.updateUserStoryHead(
+            userPublicKey,
+            username,
+            storyHash
+          );
+          
+          if (updateSuccess) {
+            console.log('SolanaPublisher: ✅ Story chain updated successfully');
+          } else {
+            console.error('SolanaPublisher: ❌ Failed to update story chain');
+          }
+        } catch (storyError) {
+          console.error('SolanaPublisher: ❌ Error updating story chain:', storyError);
+          // Don't fail the entire publish for story chain errors
+        }
       }
 
       // Create scroll manifest
