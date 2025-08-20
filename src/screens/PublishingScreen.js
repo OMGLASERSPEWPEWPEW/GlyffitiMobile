@@ -624,12 +624,10 @@ useEffect(() => {
                       onPress: async () => {
                         console.log('🧹 Cleaning up published content for:', currentUser.username);
                         
-                        // Clear BOTH global and user-scoped published content
-                        await StorageService.resetPublishedContent();
-                        await StorageService.resetInProgressContent();
                         
                         // Clear user-scoped stories for current user (USE EXISTING METHOD)
                         await UserStorageService.clearUserData(currentUser.publicKey);
+                        await StoryHeaderService.resetUserStoryHeads();
                         
                         // Remove ONLY this user from story headers (using existing methods)
                         const storyHeads = await StoryHeaderService.loadUserStoryHeads();
