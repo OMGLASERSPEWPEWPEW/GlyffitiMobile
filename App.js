@@ -12,7 +12,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PublishingScreen } from './src/screens/PublishingScreen';
 import { StoryViewScreen } from './src/screens/StoryViewScreen';
-import { StoryDiscoveryScreen } from './src/screens/StoryDiscoveryScreen';
 import { ComposerModal } from './src/screens/ComposerModal';
 import { ErrorBoundary } from './src/components/shared';
 import { UserProvider } from './src/context/UserContext';
@@ -77,13 +76,7 @@ export default function App() {
                 gestureEnabled: true,
               }}
             />
-            <Stack.Screen 
-              name="StoryDiscovery" 
-              component={StoryDiscoveryScreen}
-              options={{
-                title: 'Discover Stories',
-              }}
-            />
+
             <Stack.Screen 
               name="ComposeModal" 
               component={ComposerModal}

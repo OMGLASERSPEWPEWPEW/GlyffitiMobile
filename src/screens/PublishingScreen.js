@@ -27,6 +27,7 @@ import { nuclearClearStories, totalWipe } from '../utils/NuclearClear';
 import { chunkReaderService } from '../services/story/ChunkReaderService';
 import { CompressionService } from '../services/compression/CompressionService'; // We need this to decompress the memo
 import userRegistry from '../data/user-registry.json';
+import { PostTransactionReader } from '../services/blockchain/PostTransactionReader';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -611,90 +612,178 @@ useEffect(() => {
            {/* TEMPORARY DEBUG SECTION - Read from Solana */}
           
           
-         
-        <TouchableOpacity 
-          style={{ backgroundColor: '#007AFF', padding: 10, margin: 5, borderRadius: 5 }}
-          onPress={async () => {
-            const currentUser = selectedUser;
-            if (!currentUser) {
-              Alert.alert('Error', 'No user selected');
-              return;
-            }
 
-            Alert.alert('On-Chain Verification', 'Starting traversal from latest story head...');
 
-            /**
-             * Helper function to fetch, decompress, and parse a transaction memo,
-             * matching the working pattern from ContentAssembler.js.
-             */
-            const fetchAndParseMemo = async (txId) => {
-              // 1. Fetch the raw, compressed memo data as a Uint8Array
-              const compressedMemo = await chunkReaderService.fetchChunk(txId);
-              if (!compressedMemo) {
-                throw new Error(`Failed to fetch data for tx ${txId.substring(0,8)}`);
+          <TouchableOpacity
+            style={{ backgroundColor: '#007AFF', padding: 10, margin: 5, borderRadius: 5 }}
+            onPress={async () => {
+              const currentUser = selectedUser;
+              if (!currentUser) {
+                Alert.alert('Error', 'No user selected');
+                return;
               }
-
-              // 2. Decompress the data
-              const decompressedMemo = CompressionService.decompress(compressedMemo);
               
-              // 3. Decode the DECOMPRESSED bytes into our JSON string
-              const memoString = new TextDecoder().decode(decompressedMemo);
+              Alert.alert('On-Chain Verification', 'Starting chain verification with correct approach...');
+              
+              /**
+               * CORRECTED: Fetch and parse glyph metadata structure
+               * Stories contain linking metadata in the glyph structure, not in content JSON
+               */
+              const fetchGlyphMetadata = async (txId) => {
+                try {
+                  console.log(`PublishingScreen.fetchGlyphMetadata: Fetching glyph structure from ${txId.substring(0,8)}...`);
+                  
+                  // Use PostTransactionReader which knows how to read the full glyph structure
+                  const postReader = new (await import('../services/blockchain/PostTransactionReader')).PostTransactionReader();
+                  const postData = await postReader.readPostFromTransaction(txId, currentUser.alias, currentUser.publicKey);
+                  
+                  if (!postData) {
+                    throw new Error(`No post data found for transaction ${txId.substring(0,8)}`);
+                  }
+                  
+                  console.log(`PublishingScreen.fetchGlyphMetadata: Post data structure:`, {
+                    hasGlyphs: !!postData.glyphData,
+                    hasPreviousHash: !!postData.previousPostHash,
+                    glyphCount: postData.glyphData?.totalGlyphs || 0
+                  });
+                  
+                  return postData;
+                  
+                } catch (error) {
+                  console.error(`PublishingScreen.fetchGlyphMetadata: Error for tx ${txId.substring(0,8)}:`, error);
+                  throw new Error(`Failed to read glyph metadata for ${txId.substring(0,8)}: ${error.message}`);
+                }
+              };
 
-              // 4. Parse the JSON
-              return JSON.parse(memoString);
-            };
+              try {
+                console.log('PublishingScreen.verifyChain: Starting CORRECTED chain verification...');
+                
+                // Step 1: Get the head of the latest story
+                const latestStoryHash = await StoryHeaderService.getUserStoryHead(currentUser.publicKey);
+                if (!latestStoryHash) {
+                  Alert.alert('Verification Failed', 'Could not find any story head for this user.');
+                  return;
+                }
+                
+                console.log(`PublishingScreen.verifyChain: Found latest story: ${latestStoryHash.substring(0,12)}...`);
 
-            try {
-              // Step 1: Get the head of the latest story (Story 2)
-              const story2Head = await StoryHeaderService.getUserStoryHead(currentUser.publicKey);
-              if (!story2Head) {
-                Alert.alert('Verification Failed', 'Could not find any story head for this user.');
+                // Step 2: Read the latest story's glyph metadata
+                const latestStory = await fetchGlyphMetadata(latestStoryHash);
+                const previousStoryHash = latestStory.previousPostHash; // This contains the chain link
+                
+                console.log(`PublishingScreen.verifyChain: Latest story links to:`, 
+                  previousStoryHash ? previousStoryHash.substring(0,12) + '...' : 'none (first story)');
+
+                if (!previousStoryHash) {
+                  // This is the first story - should link to user genesis
+                  const registryEntry = userRegistry.users.find(u => u.publicKey === currentUser.publicKey);
+                  const expectedGenesisHash = registryEntry?.transactionHash;
+                  
+                  Alert.alert('✅ First Story Verification', 
+                    `This appears to be the user's first story.\n\n` +
+                    `📖 Story Hash:\n${latestStoryHash.substring(0, 12)}...\n\n` +
+                    `🎯 Expected to link to User Genesis:\n${expectedGenesisHash ? expectedGenesisHash.substring(0, 12) + '...' : 'Not Found'}\n\n` +
+                    `Note: First stories should be linked to User Genesis during publishing.`);
+                  return;
+                }
+
+                // Step 3: Read the previous story's metadata
+                const previousStory = await fetchGlyphMetadata(previousStoryHash);
+                const genesisHashFromChain = previousStory.previousPostHash;
+                
+                console.log(`PublishingScreen.verifyChain: Previous story links to:`, 
+                  genesisHashFromChain ? genesisHashFromChain.substring(0,12) + '...' : 'none');
+
+                // Step 4: Verify against user registry
+                const registryEntry = userRegistry.users.find(u => u.publicKey === currentUser.publicKey);
+                const expectedGenesisHash = registryEntry?.transactionHash;
+                
+                // For a 2-story chain: Latest → Previous → Genesis
+                const isChainValid = genesisHashFromChain === expectedGenesisHash;
+                
+                console.log(`PublishingScreen.verifyChain: Chain validation result: ${isChainValid}`);
+                console.log(`PublishingScreen.verifyChain: Expected genesis: ${expectedGenesisHash?.substring(0,12)}...`);
+                console.log(`PublishingScreen.verifyChain: Found genesis: ${genesisHashFromChain?.substring(0,12)}...`);
+
+                // Step 5: Display the verification result
+                Alert.alert(
+                  isChainValid ? '✅ On-Chain Verification SUCCESS' : '❌ On-Chain Verification FAILED',
+                  `Story Chain Verification:\n\n` +
+                  `📖 Latest Story:\n${latestStoryHash.substring(0, 12)}...\n` +
+                  `Author: ${latestStory.author || 'Unknown'}\n` +
+                  `Glyphs: ${latestStory.glyphData?.totalGlyphs || 0}\n` +
+                  ` ⬇️ links to\n` +
+                  `📖 Previous Story:\n${previousStoryHash.substring(0, 12)}...\n` +
+                  `Author: ${previousStory.author || 'Unknown'}\n` +
+                  `Glyphs: ${previousStory.glyphData?.totalGlyphs || 0}\n` +
+                  ` ⬇️ links to\n` +
+                  `🎯 Genesis Reference:\n${genesisHashFromChain ? genesisHashFromChain.substring(0, 12) + '...' : 'None'}\n\n` +
+                  `🏷️ Expected Genesis:\n${expectedGenesisHash ? expectedGenesisHash.substring(0, 12) + '...' : 'Not Found'}\n\n` +
+                  `${isChainValid ? '🎉 Perfect chain integrity!' : '⚠️ Chain linkage issue detected!'}\n\n` +
+                  `📊 Verification Method: Reading glyph metadata structure`
+                );
+                
+              } catch (error) {
+                console.error('PublishingScreen.verifyChain: Chain verification error:', error);
+                
+                // More helpful error for architectural misunderstanding
+                if (error.message.includes('JSON Parse error') || error.message.includes('Unexpected character')) {
+                  Alert.alert('Verification Error', 
+                    `Architecture Issue Detected:\n\n` +
+                    `The transactions contain story content (text), not JSON metadata.\n\n` +
+                    `Story linking information is embedded in the glyph structure.\n\n` +
+                    `Error: ${error.message}\n\n` +
+                    `Solution: Use PostTransactionReader to read full glyph metadata.`);
+                } else {
+                  Alert.alert('Verification Error', 
+                    `An error occurred during chain verification:\n\n${error.message}\n\nCheck console for details.`);
+                }
+              }
+            }}
+          >
+            <Text style={{ color: 'white' }}>⛓️ Verify Story Chain (Glyph Metadata)</Text>
+          </TouchableOpacity>
+
+         
+          <TouchableOpacity
+            style={{ backgroundColor: '#28a745', padding: 10, margin: 5, borderRadius: 5 }}
+            onPress={async () => {
+              const currentUser = selectedUser;
+              if (!currentUser) {
+                Alert.alert('Error', 'No user selected');
                 return;
               }
 
-              // Step 2: Read Story 2's memo and find the hash for Story 1
-              const story2Memo = await fetchAndParseMemo(story2Head);
-              const story1Head = story2Memo?.prev;
-
-              if (!story1Head) {
-                Alert.alert('Verification Failed', `Story 2 (${story2Head.substring(0,8)}) is not linked to a previous story. Memo: ${JSON.stringify(story2Memo)}`);
-                return;
+              try {
+                console.log('PublishingScreen.simpleVerify: Checking local story chain integrity...');
+                
+                // Get local story chain data
+                const latestStoryHash = await StoryHeaderService.getUserStoryHead(currentUser.publicKey);
+                const allHeads = await StoryHeaderService.getAllUserStoryHeads();
+                const userHead = allHeads.find(head => head.publicKey === currentUser.publicKey);
+                
+                // Check user registry
+                const registryEntry = userRegistry.users.find(u => u.publicKey === currentUser.publicKey);
+                
+                Alert.alert('📊 Local Chain Status', 
+                  `👤 User: ${currentUser.alias}\n` +
+                  `🔑 Public Key: ${currentUser.publicKey.substring(0,12)}...\n\n` +
+                  `📖 Latest Story: ${latestStoryHash ? latestStoryHash.substring(0,12) + '...' : 'None'}\n` +
+                  `📈 Story Count: ${userHead?.storyCount || 0}\n` +
+                  `⏰ Last Updated: ${userHead?.lastUpdated || 'Never'}\n\n` +
+                  `🎯 User Genesis: ${registryEntry?.transactionHash ? registryEntry.transactionHash.substring(0,12) + '...' : 'Not Found'}\n\n` +
+                  `ℹ️ This shows local tracking data.\nUse the blue button for on-chain verification.`
+                );
+                
+              } catch (error) {
+                console.error('PublishingScreen.simpleVerify: Error:', error);
+                Alert.alert('Error', `Failed to check local chain status: ${error.message}`);
               }
+            }}
+          >
+            <Text style={{ color: 'white' }}>📊 Check Local Chain Status</Text>
+          </TouchableOpacity>
 
-              // Step 3: Read Story 1's memo and find the User Genesis hash
-              const story1Memo = await fetchAndParseMemo(story1Head);
-              const genesisHashFromChain = story1Memo?.prev;
-
-              if (!genesisHashFromChain) {
-                Alert.alert('Verification Failed', `Story 1 (${story1Head.substring(0,8)}) is not linked to a User Genesis block. Memo: ${JSON.stringify(story1Memo)}`);
-                return;
-              }
-
-              // Step 4: Verify the hash against the user registry
-              const registryEntry = userRegistry.users.find(u => u.publicKey === currentUser.publicKey);
-              const expectedGenesisHash = registryEntry?.transactionHash;
-
-              const isChainValid = genesisHashFromChain === expectedGenesisHash;
-
-              // Step 5: Display the full, verified chain
-              Alert.alert(
-                isChainValid ? '✅ On-Chain Verification SUCCESS' : '❌ On-Chain Verification FAILED',
-                `Latest Story (Story 2):\n${story2Head.substring(0, 12)}...\n` +
-                `   ⬇️ points to\n` +
-                `Previous Story (Story 1):\n${story1Head.substring(0, 12)}...\n` +
-                `   ⬇️ points to\n` +
-                `On-Chain Genesis Link:\n${genesisHashFromChain.substring(0, 12)}...\n\n` +
-                `Expected Genesis:\n${expectedGenesisHash ? expectedGenesisHash.substring(0, 12) : 'Not Found'}...`
-              );
-
-            } catch (error) {
-              console.error('On-chain verification error:', error);
-              Alert.alert('Verification Error', `An error occurred while reading from Solana: ${error.message}`);
-            }
-          }}
-        >
-          <Text style={{ color: 'white' }}>⛓️ Verify User Chain (On-Chain)</Text>
-        </TouchableOpacity>
 
           <TouchableOpacity
             style={{ backgroundColor: '#FF3B30', padding: 10, margin: 5, borderRadius: 5 }}
