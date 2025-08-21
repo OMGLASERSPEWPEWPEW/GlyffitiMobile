@@ -24,6 +24,9 @@ import { UserStorageService } from '../services/storage/UserStorageService';
 import { StoryHeaderService } from '../services/feed/StoryHeaderService';
 import { clearContentOnly } from '../utils/ClearAsyncStorageContent';
 import { nuclearClearStories, totalWipe } from '../utils/NuclearClear';
+import { chunkReaderService } from '../services/story/ChunkReaderService';
+import { CompressionService } from '../services/compression/CompressionService'; // We need this to decompress the memo
+import userRegistry from '../data/user-registry.json';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -555,7 +558,7 @@ useEffect(() => {
               <Text style={{ color: 'white' }}>Get All Story Heads</Text>
             </TouchableOpacity>
 
-
+                 {/* TEMPORARY DEBUG SECTION - Verify User Chain */}
           <TouchableOpacity 
             style={{ backgroundColor: '#FF9500', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
@@ -588,6 +591,8 @@ useEffect(() => {
                   Alert.alert('Chain Verification', 
                     `USER: ${currentUser.username}\n` +
                     `Story 1 hash: ${story1.transactionIds?.[story1.transactionIds?.length-1]?.substring(0,8)}...\n` +
+                    `Story 1 previousHash: ${story1.glyphs?.[0]?.previousStoryHash?.substring(0,8) || 'undefined'}...\n\n` +
+                    `Story 2 hash: ${story2.transactionIds?.[story1.transactionIds?.length-1]?.substring(0,8)}...\n` +
                     `Story 2 previousHash: ${story2.glyphs?.[0]?.previousStoryHash?.substring(0,8) || 'undefined'}...\n\n` +
                     `contentType: ${story2.glyphs?.[0]?.contentType || 'undefined'}`
                   );
@@ -602,6 +607,94 @@ useEffect(() => {
           >
             <Text style={{ color: 'white' }}>🔍 Verify User Chain</Text>
           </TouchableOpacity>
+
+           {/* TEMPORARY DEBUG SECTION - Read from Solana */}
+          
+          
+         
+        <TouchableOpacity 
+          style={{ backgroundColor: '#007AFF', padding: 10, margin: 5, borderRadius: 5 }}
+          onPress={async () => {
+            const currentUser = selectedUser;
+            if (!currentUser) {
+              Alert.alert('Error', 'No user selected');
+              return;
+            }
+
+            Alert.alert('On-Chain Verification', 'Starting traversal from latest story head...');
+
+            /**
+             * Helper function to fetch, decompress, and parse a transaction memo,
+             * matching the working pattern from ContentAssembler.js.
+             */
+            const fetchAndParseMemo = async (txId) => {
+              // 1. Fetch the raw, compressed memo data as a Uint8Array
+              const compressedMemo = await chunkReaderService.fetchChunk(txId);
+              if (!compressedMemo) {
+                throw new Error(`Failed to fetch data for tx ${txId.substring(0,8)}`);
+              }
+
+              // 2. Decompress the data
+              const decompressedMemo = CompressionService.decompress(compressedMemo);
+              
+              // 3. Decode the DECOMPRESSED bytes into our JSON string
+              const memoString = new TextDecoder().decode(decompressedMemo);
+
+              // 4. Parse the JSON
+              return JSON.parse(memoString);
+            };
+
+            try {
+              // Step 1: Get the head of the latest story (Story 2)
+              const story2Head = await StoryHeaderService.getUserStoryHead(currentUser.publicKey);
+              if (!story2Head) {
+                Alert.alert('Verification Failed', 'Could not find any story head for this user.');
+                return;
+              }
+
+              // Step 2: Read Story 2's memo and find the hash for Story 1
+              const story2Memo = await fetchAndParseMemo(story2Head);
+              const story1Head = story2Memo?.prev;
+
+              if (!story1Head) {
+                Alert.alert('Verification Failed', `Story 2 (${story2Head.substring(0,8)}) is not linked to a previous story. Memo: ${JSON.stringify(story2Memo)}`);
+                return;
+              }
+
+              // Step 3: Read Story 1's memo and find the User Genesis hash
+              const story1Memo = await fetchAndParseMemo(story1Head);
+              const genesisHashFromChain = story1Memo?.prev;
+
+              if (!genesisHashFromChain) {
+                Alert.alert('Verification Failed', `Story 1 (${story1Head.substring(0,8)}) is not linked to a User Genesis block. Memo: ${JSON.stringify(story1Memo)}`);
+                return;
+              }
+
+              // Step 4: Verify the hash against the user registry
+              const registryEntry = userRegistry.users.find(u => u.publicKey === currentUser.publicKey);
+              const expectedGenesisHash = registryEntry?.transactionHash;
+
+              const isChainValid = genesisHashFromChain === expectedGenesisHash;
+
+              // Step 5: Display the full, verified chain
+              Alert.alert(
+                isChainValid ? '✅ On-Chain Verification SUCCESS' : '❌ On-Chain Verification FAILED',
+                `Latest Story (Story 2):\n${story2Head.substring(0, 12)}...\n` +
+                `   ⬇️ points to\n` +
+                `Previous Story (Story 1):\n${story1Head.substring(0, 12)}...\n` +
+                `   ⬇️ points to\n` +
+                `On-Chain Genesis Link:\n${genesisHashFromChain.substring(0, 12)}...\n\n` +
+                `Expected Genesis:\n${expectedGenesisHash ? expectedGenesisHash.substring(0, 12) : 'Not Found'}...`
+              );
+
+            } catch (error) {
+              console.error('On-chain verification error:', error);
+              Alert.alert('Verification Error', `An error occurred while reading from Solana: ${error.message}`);
+            }
+          }}
+        >
+          <Text style={{ color: 'white' }}>⛓️ Verify User Chain (On-Chain)</Text>
+        </TouchableOpacity>
 
           <TouchableOpacity
             style={{ backgroundColor: '#FF3B30', padding: 10, margin: 5, borderRadius: 5 }}
