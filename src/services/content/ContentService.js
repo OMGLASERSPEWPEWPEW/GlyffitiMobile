@@ -42,8 +42,8 @@ export class ContentService {
           content = await FileSystem.readAsStringAsync(file.uri);
 
           // Basic validation
-          if (!content || content.trim().length < 10) {
-            throw new Error('File content is too short or empty');
+          if (!content) {
+            throw new Error('File content is empty');
           }
         } catch (readError) {
           throw new Error(`Cannot read file as text. Please select a text file (.txt, .md, etc.)`);

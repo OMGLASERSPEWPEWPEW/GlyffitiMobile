@@ -1,33 +1,27 @@
 // src/screens/PublishingScreen.js
 // Path: src/screens/PublishingScreen.js
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
-  ScrollView,
   TouchableOpacity,
   Alert
 } from 'react-native';
-import { LoadingOverlay, Button, ErrorBoundary, ErrorDisplay, RetryButton, ScreenContainer, ContentArea } from '../components/shared';
+import { LoadingOverlay, ErrorBoundary, ErrorDisplay, ScreenContainer, ContentArea } from '../components/shared';
 import { TopBar, BottomBar } from '../components/navigation';
 import { UserPanel, UserSelectorPanel } from '../components/panels';
 import { publishingStyles } from '../styles/publishingStyles';
-import { WalletSection, ProgressBar, ContentSections } from '../components/publishing';
+import { ProgressBar, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../hooks/useUser';
-import { usePublishing } from '../hooks/usePublishing'; // NEW: Import usePublishing hook
+import { usePublishing } from '../hooks/usePublishing'; 
 import { spacing } from '../styles/tokens';
 import { Keypair } from '@solana/web3.js';
 import { UserStorageService } from '../services/storage/UserStorageService';
 import { StoryHeaderService } from '../services/feed/StoryHeaderService';
-import { clearContentOnly } from '../utils/ClearAsyncStorageContent';
-import { nuclearClearStories, totalWipe } from '../utils/NuclearClear';
-import { chunkReaderService } from '../services/story/ChunkReaderService';
-import { CompressionService } from '../services/compression/CompressionService'; // We need this to decompress the memo
+import { nuclearClearStories } from '../utils/NuclearClear';
 import userRegistry from '../data/user-registry.json';
-import { PostTransactionReader } from '../services/blockchain/PostTransactionReader';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -402,25 +396,6 @@ useEffect(() => {
   );
 };
 
-  // Handle back navigation
-  const handleGoBack = () => {
-    if (publishing) {
-      Alert.alert(
-        'Publishing in Progress',
-        'Are you sure you want to go back?',
-        [
-          { text: 'Continue Publishing', style: 'cancel' },
-          { 
-            text: 'Go Back', 
-            style: 'destructive',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
-    } else {
-      navigation.goBack();
-    }
-  };
 
   // Show loading screen during initialization
     if (isLoading && walletStatus === 'checking') {
@@ -523,7 +498,7 @@ useEffect(() => {
           />
 
 
-          {/* TEMPORARY DEBUG SECTION - Remove after testing */}
+          {/* TEMPORARY DEBUG SECTION - Get Story Stats */}
           <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f0f0f0' }}>
             <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>Story Chain Debug</Text>
             
@@ -543,6 +518,7 @@ useEffect(() => {
               <Text style={{ color: 'white' }}>Get Story Stats</Text>
             </TouchableOpacity>
 
+            {/* TEMPORARY DEBUG SECTION - Get All Story Heads */}
             <TouchableOpacity 
               style={{ backgroundColor: '#34C759', padding: 10, margin: 5, borderRadius: 5 }}
               onPress={async () => {
@@ -559,61 +535,8 @@ useEffect(() => {
               <Text style={{ color: 'white' }}>Get All Story Heads</Text>
             </TouchableOpacity>
 
-                 {/* TEMPORARY DEBUG SECTION - Verify User Chain */}
-          <TouchableOpacity 
-            style={{ backgroundColor: '#FF9500', padding: 10, margin: 5, borderRadius: 5 }}
-            onPress={async () => {
-              try {
-                // Get current user dynamically
-                const currentUser = selectedUser; // From useUser hook
-                if (!currentUser) {
-                  Alert.alert('Error', 'No user selected');
-                  return;
-                }
-                
-                console.log('🔍 Checking stories for user:', currentUser.username);
-                
-                // Check user storage for current user
-                const userPublished = await UserStorageService.loadPublishedStories(currentUser.publicKey);
-                console.log('👤 User Published Stories:', userPublished.length);
-                
-                // Chain verification logic here...
-                if (userPublished.length >= 2) {
-                  const story1 = userPublished[userPublished.length - 2];
-                  const story2 = userPublished[userPublished.length - 1];
-                  
-                  console.log('Story 1 transaction IDs:', story1.transactionIds);
-                  console.log('Story 2 glyphs[0] data:', {
-                    previousStoryHash: story2.glyphs?.[0]?.previousStoryHash,
-                    storySequence: story2.glyphs?.[0]?.storySequence,
-                    contentType: story2.glyphs?.[0]?.contentType
-                  });
-                  
-                  Alert.alert('Chain Verification', 
-                    `USER: ${currentUser.username}\n` +
-                    `Story 1 hash: ${story1.transactionIds?.[story1.transactionIds?.length-1]?.substring(0,8)}...\n` +
-                    `Story 1 previousHash: ${story1.glyphs?.[0]?.previousStoryHash?.substring(0,8) || 'undefined'}...\n\n` +
-                    `Story 2 hash: ${story2.transactionIds?.[story1.transactionIds?.length-1]?.substring(0,8)}...\n` +
-                    `Story 2 previousHash: ${story2.glyphs?.[0]?.previousStoryHash?.substring(0,8) || 'undefined'}...\n\n` +
-                    `contentType: ${story2.glyphs?.[0]?.contentType || 'undefined'}`
-                  );
-                } else {
-                  Alert.alert('Not Enough Stories', `User ${currentUser.username} has ${userPublished.length} stories. Need at least 2 for chain verification.`);
-                }
-              } catch (error) {
-                console.error('Chain verification error:', error);
-                Alert.alert('Error', error.message);
-              }
-            }}
-          >
-            <Text style={{ color: 'white' }}>🔍 Verify User Chain</Text>
-          </TouchableOpacity>
 
-           {/* TEMPORARY DEBUG SECTION - Read from Solana */}
-          
-          
-
-
+          {/* TEMPORARY DEBUG SECTION - Read from Solana */}
           <TouchableOpacity
             style={{ backgroundColor: '#007AFF', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
@@ -744,7 +667,7 @@ useEffect(() => {
             <Text style={{ color: 'white' }}>⛓️ Verify Story Chain (Glyph Metadata)</Text>
           </TouchableOpacity>
 
-         
+         {/* TEMPORARY DEBUG SECTION - Check Local Chain Status */}
           <TouchableOpacity
             style={{ backgroundColor: '#28a745', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
@@ -784,7 +707,7 @@ useEffect(() => {
             <Text style={{ color: 'white' }}>📊 Check Local Chain Status</Text>
           </TouchableOpacity>
 
-
+          {/* TEMPORARY DEBUG SECTION - Clear ALL User Data */}
           <TouchableOpacity
             style={{ backgroundColor: '#FF3B30', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
@@ -838,12 +761,12 @@ useEffect(() => {
               }
             }}
           >
-            <Text style={{ color: 'white' }}>🧹 Clean ALL Data</Text>
+            <Text style={{ color: 'white' }}>🧹 Clean ALL User Data</Text>
           </TouchableOpacity>
 
 
 
-          {/* Nuclear Clear Stories Button */}
+          {/* TEMPORARY DEBUG SECTION - Nuclear Clear Stories Button */}
           <TouchableOpacity 
             style={{ backgroundColor: '#FF0000', padding: 10, margin: 5, borderRadius: 5 }}
             onPress={async () => {
