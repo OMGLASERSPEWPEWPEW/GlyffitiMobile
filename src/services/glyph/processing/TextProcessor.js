@@ -131,6 +131,34 @@ export class TextProcessor {
     
     return text;
   }
+
+   /**
+   * Split text into chunks for merkle tree processing
+   * This is a simplified version that creates a single chunk for testing.
+   * In production, this would intelligently split large content.
+   * @param {string} text - Text to chunk
+   * @returns {string[]} Array of text chunks
+   */
+  static chunkText(text) {
+    console.log('TextProcessor.chunkText: Processing text for merkle chunks');
+    
+    if (!text || typeof text !== 'string') {
+      throw new Error('Text must be a non-empty string');
+    }
+    
+    // For testing, just return the text as a single chunk
+    // In production, this would:
+    // 1. Split at natural boundaries (paragraphs, sentences)
+    // 2. Respect size limits for blockchain transactions
+    // 3. Maintain readability
+    
+    const preprocessed = this.preprocessText(text);
+    
+    // For now, return as single chunk for testing
+    // TODO: Implement intelligent chunking for large content
+    return [preprocessed];
+  }
+
   
   /**
    * Estimate the number of chunks a piece of content will require

@@ -80,51 +80,144 @@ export const PublishingScreen = ({ navigation, route }) => {
   const [userWalletService, setUserWalletService] = useState(null);
   
 
+  const [isMerklePublishing, setIsMerklePublishing] = useState(false);
+  const [merkleProgress, setMerkleProgress] = useState({ 
+    current: 0, 
+    total: 0, 
+    message: '' 
+  });
+
+
   const handleMerklePublish = async () => {
-    if (!selectedUserData) {
-      Alert.alert('User Not Selected', 'Please select a user first.');
-      return;
-    }
+  console.log('🚀 handleMerklePublish: Starting...');
+  
+  // Check if both selectedUser and selectedUserData are available
+  if (!selectedUser || !selectedUserData) {
+    console.log('❌ handleMerklePublish: Missing user data');
+    console.log('  selectedUser:', !!selectedUser);
+    console.log('  selectedUserData:', !!selectedUserData);
+    Alert.alert('User Not Selected', 'Please select a user first.');
+    return;
+  }
+  
+  // Extract the Glyffiti genesis from the decoded user data
+  // selectedUserData contains the decoded genesis block with the 'parent' field
+  const glyffitiGenesisHash = selectedUserData.parent || selectedUserData.parentGenesis;
+  
+  if (!glyffitiGenesisHash) {
+    console.error('❌ handleMerklePublish: No Glyffiti genesis found in user data:', selectedUserData);
+    Alert.alert('Error', 'Could not find Glyffiti genesis hash in user data.');
+    return;
+  }
+  
+  console.log('✅ handleMerklePublish: User selected:', {
+    username: selectedUser.username,
+    publicKey: selectedUser.publicKey?.substring(0, 16) + '...',
+    transactionHash: selectedUser.transactionHash?.substring(0, 16) + '...',
+    glyffitiGenesis: glyffitiGenesisHash?.substring(0, 16) + '...'
+  });
 
-    // Correctly get the keypair from the wallet service, just like the legacy functions do.
-    const keypair = await walletService.getKeypair(selectedUserData.publicKey);
+  // Check if userWalletService is ready
+  if (!userWalletService) {
+    console.log('❌ handleMerklePublish: No userWalletService');
+    Alert.alert('Wallet Not Ready', 'User wallet is not initialized.');
+    return;
+  }
+  console.log('✅ handleMerklePublish: userWalletService exists');
+
+  // Get keypair from userWalletService
+  let keypair;
+  try {
+    keypair = userWalletService.getWalletKeypair();
     if (!keypair) {
-      Alert.alert('Wallet Locked', 'Could not retrieve keypair. Please ensure the wallet is unlocked.');
+      console.log('❌ handleMerklePublish: getWalletKeypair returned null');
+      Alert.alert('Wallet Error', 'Could not retrieve user keypair.');
       return;
     }
+    console.log('✅ handleMerklePublish: Got keypair:', keypair.publicKey.toString());
+  } catch (error) {
+    console.error('❌ handleMerklePublish: Error getting keypair:', error);
+    Alert.alert('Wallet Error', 'Failed to get keypair: ' + error.message);
+    return;
+  }
 
-    setIsPublishing(true);
-    setProgress({ current: 0, total: 1, message: 'Preparing Merkle story...' });
+  // Check if already publishing
+  if (publishing) {
+    console.log('⚠️ handleMerklePublish: Already publishing');
+    Alert.alert('Publishing', 'Already publishing, please wait...');
+    return;
+  }
 
-    try {
-      const testContent = "This is a test of the Unified Merkle Tree publishing system. If you can read this on-chain, it worked.";
-      const preparedContent = await ContentServiceM.prepareContentForMerklePublishing(
-        testContent,
-        selectedUserData.publicKey,
-        1000 // Test reGlyphCap
-      );
+  console.log('📝 handleMerklePublish: Starting merkle publish process...');
 
-      const txIds = await PublishingServiceM.publishStory(
-        preparedContent,
-        keypair, // Pass the correctly retrieved keypair here
-        (update) => {
-          setProgress({
-            current: update.current,
-            total: update.total,
-            message: `Broadcasting glyph ${update.current} of ${update.total}...`,
-          });
-        }
-      );
+  try {
+    const testContent = "This is a test of the Unified Merkle Tree publishing system. If you can read this on-chain, it worked.";
+    console.log('📄 handleMerklePublish: Test content ready');
+    
+    // ✅ Use data from both selectedUser (registry) and selectedUserData (decoded genesis)
+    console.log('🔨 handleMerklePublish: Calling ContentServiceM with correct parameters...');
+    console.log('  Author Public Key:', selectedUser.publicKey);
+    console.log('  User Genesis Hash:', selectedUser.transactionHash);
+    console.log('  Glyffiti Genesis Hash:', glyffitiGenesisHash);
+    
+    const preparedContent = await ContentServiceM.prepareContentForMerklePublishing(
+      testContent,
+      selectedUser.publicKey,        // User's public key from registry
+      selectedUser.transactionHash,  // User's genesis transaction hash from registry
+      glyffitiGenesisHash,          // Glyffiti genesis from decoded user data
+      1000 // Test reGlyphCap
+    );
+    
+    console.log('✅ handleMerklePublish: Content prepared:', {
+      glyphs: preparedContent.glyphs?.length || 0,
+      reGlyphCap: preparedContent.reGlyphCap,
+      authorPublicKey: preparedContent.authorPublicKey?.substring(0, 16) + '...',
+      userGenesisHash: preparedContent.userGenesisHash?.substring(0, 16) + '...',
+      glyffitiGenesisHash: preparedContent.glyffitiGenesisHash?.substring(0, 16) + '...'
+    });
 
-      Alert.alert('Merkle Publish Success!', `Story published successfully. First TX ID: ${txIds[0]}`);
-    } catch (error) {
-      console.error('Merkle Publishing Failed:', error);
-      Alert.alert('Merkle Publish Error', error.message);
-    } finally {
-      setIsPublishing(false);
-      setProgress({ current: 0, total: 0, message: '' });
-    }
-  };
+    // Publish the story using the merkle system
+    console.log('📡 handleMerklePublish: Calling PublishingServiceM.publishStory...');
+    const txIds = await PublishingServiceM.publishStory(
+      preparedContent,
+      keypair,  // Use the keypair from userWalletService
+      (update) => {
+        console.log('📊 handleMerklePublish: Progress update:', update);
+        // Update progress display
+        setProgress({
+          current: update.current,
+          total: update.total,
+          message: `Broadcasting glyph ${update.current} of ${update.total}...`,
+          progress: Math.round((update.current / update.total) * 100)
+        });
+      }
+    );
+    
+    console.log('🎉 handleMerklePublish: Success! Transaction IDs:', txIds);
+    Alert.alert(
+      'Merkle Publish Success!', 
+      `Story published successfully!\n\nFirst TX ID: ${txIds[0]?.substring(0, 12)}...`
+    );
+    
+    // Optionally refresh content after successful publish
+    await loadExistingContent();
+    
+  } catch (error) {
+    console.error('❌ handleMerklePublish: Publishing failed:', error);
+    console.error('Stack trace:', error.stack);
+    Alert.alert('Merkle Publish Error', error.message || 'Failed to publish story');
+  } finally {
+    console.log('🏁 handleMerklePublish: Cleaning up...');
+    // Reset progress
+    setProgress({ 
+      current: 0, 
+      total: 0, 
+      message: '',
+      progress: 0
+    });
+  }
+};
+
 
   // Initialize data on component mount
   useEffect(() => {
@@ -528,6 +621,20 @@ useEffect(() => {
           
           {/* Progress Bar - EXACTLY THE SAME */}
           <ProgressBar publishing={publishing} progress={progress} />
+
+          {/* Merkle Publishing Progress */}
+                  {isMerklePublishing && (
+                    <View style={publishingStyles.progressContainer}>
+                      <Text style={publishingStyles.progressText}>
+                        {merkleProgress.message}
+                      </Text>
+                      {merkleProgress.total > 0 && (
+                        <Text style={publishingStyles.progressNumbers}>
+                          {merkleProgress.current} / {merkleProgress.total}
+                        </Text>
+                      )}
+                    </View>
+                  )}
           
           {/* Content Sections - EXACTLY THE SAME */}
           <ContentSections 
@@ -893,11 +1000,13 @@ useEffect(() => {
             });
           }}
           onLongPressMenu={(action) => {
-            // This log is coming from the BottomBar, let's add one here for clarity.
             console.log('PublishingScreen: onLongPressMenu received action:', action);
+            // Handle publishing-specific actions
             switch (action) {
-              // This case now matches the action from the log ('publish')
-              case 'publish':
+              case 'publish':  // ✅ This is what's actually being sent based on the logs
+                handleMerklePublish();
+                break;
+              case 'merkle-publish':  // Keep this as backup
                 handleMerklePublish();
                 break;
               case 'pickfile-publish':
@@ -910,8 +1019,7 @@ useEffect(() => {
                 handleClearDrafts();
                 break;
               default:
-                // We also add a log here for robust debugging in the future.
-                console.warn('PublishingScreen: Received an unknown BottomBar action:', action);
+                console.log('Unknown action:', action);
             }
           }}
           onHomePress={() => {
@@ -920,7 +1028,7 @@ useEffect(() => {
           }}
           customRadialButtons={{
             top: {
-              action: 'publish',
+              action: 'publish',  // ✅ Changed from 'merkle-publish' to match what's being sent
               label: 'MerklePub',
               icon: 'cloud-upload'
             },
@@ -937,6 +1045,7 @@ useEffect(() => {
           }}
           isDarkMode={false}
         />
+
 
         {/* User Panels */}
         <UserPanel

@@ -1,10 +1,12 @@
 // src/services/content/ContentService-M.js
+// Path: src/services/content/ContentService-M.js
+
 import ChunkManagerM from '../glyph/processing/ChunkManager-M';
-import { blockchainServices } from '../blockchain/BlockchainService';
 
 /**
  * A high-level service for preparing content for publishing using the new
- * Unified Merkle Tree architecture. This service replaces the legacy ContentService.
+ * Unified Merkle Tree architecture. This service uses actual genesis data
+ * from the user registry.
  */
 class ContentServiceM {
   /**
@@ -13,49 +15,58 @@ class ContentServiceM {
    *
    * @param {string} content - The raw text content to be published.
    * @param {string} authorPublicKey - The public key of the content's author.
+   * @param {string} userGenesisHash - The user's genesis transaction hash.
+   * @param {string} glyffitiGenesisHash - The platform's genesis transaction hash.
    * @param {number|null} reGlyphCap - The maximum number of re-glyphs allowed.
-   * @returns {Promise<Object>} A promise that resolves to the complete package,
-   * including the array of prepared glyphs and any top-level metadata.
+   * @returns {Promise<Object>} A promise that resolves to the complete package.
    */
-  static async prepareContentForMerklePublishing(content, authorPublicKey, reGlyphCap = null) {
-    console.log('ContentService-M.js: prepareContentForMerklePublishing: Preparing content for author:', authorPublicKey);
+  static async prepareContentForMerklePublishing(content, authorPublicKey, userGenesisHash, glyffitiGenesisHash, reGlyphCap = null) {
+    console.log('ContentService-M.js: prepareContentForMerklePublishing: Preparing content');
+    console.log('  Author:', authorPublicKey);
+    console.log('  User Genesis:', userGenesisHash?.substring(0, 16) + '...');
+    console.log('  Glyffiti Genesis:', glyffitiGenesisHash?.substring(0, 16) + '...');
 
-    // 1. Fetch the user's full genesis block object from the blockchain.
-    const userGenesisBlock = await blockchainServices.retrieveUserGenesisBlock(authorPublicKey);
-
-    if (!userGenesisBlock) {
-      console.error('ContentService-M.js: prepareContentForMerklePublishing: Failed to retrieve user genesis block.');
-      throw new Error('Could not find the user\'s genesis block on-chain.');
+    // Validate inputs
+    if (!content) {
+      throw new Error('Content is required for merkle publishing');
     }
-    console.log('ContentService-M.js: prepareContentForMerklePublishing: Retrieved user genesis block.');
-
-    // 2. Extract the required hashes from the genesis block object.
-    const userGenesisHash = await userGenesisBlock.getHash();
-    const glyffitiGenesisHash = userGenesisBlock.getParentHash(); // The user's parent is the platform's genesis.
-
-    if (!glyffitiGenesisHash || !userGenesisHash) {
-      console.error('ContentService-M.js: prepareContentForMerklePublishing: Failed to extract one or more genesis hashes from the block.');
-      throw new Error('Could not extract required genesis hashes for publishing.');
+    
+    if (!authorPublicKey) {
+      throw new Error('Author public key is required for merkle publishing');
+    }
+    
+    if (!userGenesisHash) {
+      throw new Error('User genesis hash is required for merkle publishing');
+    }
+    
+    if (!glyffitiGenesisHash) {
+      throw new Error('Glyffiti genesis hash is required for merkle publishing');
     }
 
-    // 3. Call the ChunkManager to process the content and create the glyph set.
+    // Call the ChunkManager to process the content and create the glyph set
+    // The merkle tree will use the actual transaction hashes as the genesis identifiers
     const preparedGlyphs = await ChunkManagerM.createUnifiedGlyphs(
       content,
-      userGenesisHash,
-      glyffitiGenesisHash
+      userGenesisHash,      // User's genesis transaction hash
+      glyffitiGenesisHash   // Platform's genesis transaction hash
     );
 
-    // 4. Return the complete package, ready for the publishing service.
+    // Return the complete package, ready for the publishing service
     const finalPackage = {
       glyphs: preparedGlyphs,
       reGlyphCap: reGlyphCap,
+      authorPublicKey: authorPublicKey,
+      userGenesisHash: userGenesisHash,
+      glyffitiGenesisHash: glyffitiGenesisHash
     };
     
     console.log('ContentService-M.js: prepareContentForMerklePublishing: Content successfully prepared for Merkle publishing.');
+    console.log('  Total glyphs:', preparedGlyphs.length);
+    
     return finalPackage;
   }
 }
 
 export default ContentServiceM;
 
-// 2276
+// Character count: 2,718
