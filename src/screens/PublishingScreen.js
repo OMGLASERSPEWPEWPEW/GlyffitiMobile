@@ -46,6 +46,7 @@ export const PublishingScreen = ({ navigation, route }) => {
     publishingService,
     isPublishing: publishing,
     progress,
+    setProgress,
     drafts,
     inProgressContent,
     publishedContent,

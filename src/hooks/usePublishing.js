@@ -430,6 +430,7 @@ const publishToBlockchain = useCallback(async (content, keypair, onProgress, use
     // State
     isPublishing,
     progress,
+    setProgress,
     drafts,
     inProgressContent,
     publishedContent,

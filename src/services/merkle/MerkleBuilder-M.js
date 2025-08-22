@@ -16,7 +16,7 @@ class MerkleBuilderM {
    */
   static async _hashPair(hashA, hashB) {
     const sortedHashes = [hashA, hashB].sort((a, b) => a.localeCompare(b));
-    return HashingService(sortedHashes[0] + sortedHashes[1]);
+    return HashingService.hashContent(sortedHashes[0] + sortedHashes[1]);
   }
 
   /**
@@ -32,7 +32,7 @@ class MerkleBuilderM {
     }
 
     const levels = [];
-    let currentLevel = await Promise.all(leafData.map(data => HashingService(data)));
+    let currentLevel = await Promise.all(leafData.map(data => HashingService.hashContent(data)));
     levels.push(currentLevel);
 
     while (currentLevel.length > 1) {
@@ -99,7 +99,7 @@ class MerkleBuilderM {
    */
   static async verifyProof(leafData, proof, expectedRoot) {
     console.log('MerkleBuilder-M.js: verifyProof: Verifying proof against root', expectedRoot);
-    let computedHash = await HashingService(leafData);
+    let computedHash = await HashingService.hashContent(leafData);
 
     for (const proofElement of proof) {
       if (proofElement.position === 'left') {
