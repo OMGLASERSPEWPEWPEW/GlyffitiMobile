@@ -22,6 +22,8 @@ import { UserStorageService } from '../services/storage/UserStorageService';
 import { StoryHeaderService } from '../services/feed/StoryHeaderService';
 import { nuclearClearStories } from '../utils/NuclearClear';
 import userRegistry from '../data/user-registry.json';
+import ContentServiceM from '../services/content/ContentService-M';
+import PublishingServiceM from '../services/publishing/PublishingService-M';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -77,6 +79,52 @@ export const PublishingScreen = ({ navigation, route }) => {
   const [publishError, setPublishError] = useState(null);
   const [userWalletService, setUserWalletService] = useState(null);
   
+
+  const handleMerklePublish = async () => {
+    if (!selectedUserData) {
+      Alert.alert('User Not Selected', 'Please select a user first.');
+      return;
+    }
+
+    // Correctly get the keypair from the wallet service, just like the legacy functions do.
+    const keypair = await walletService.getKeypair(selectedUserData.publicKey);
+    if (!keypair) {
+      Alert.alert('Wallet Locked', 'Could not retrieve keypair. Please ensure the wallet is unlocked.');
+      return;
+    }
+
+    setIsPublishing(true);
+    setProgress({ current: 0, total: 1, message: 'Preparing Merkle story...' });
+
+    try {
+      const testContent = "This is a test of the Unified Merkle Tree publishing system. If you can read this on-chain, it worked.";
+      const preparedContent = await ContentServiceM.prepareContentForMerklePublishing(
+        testContent,
+        selectedUserData.publicKey,
+        1000 // Test reGlyphCap
+      );
+
+      const txIds = await PublishingServiceM.publishStory(
+        preparedContent,
+        keypair, // Pass the correctly retrieved keypair here
+        (update) => {
+          setProgress({
+            current: update.current,
+            total: update.total,
+            message: `Broadcasting glyph ${update.current} of ${update.total}...`,
+          });
+        }
+      );
+
+      Alert.alert('Merkle Publish Success!', `Story published successfully. First TX ID: ${txIds[0]}`);
+    } catch (error) {
+      console.error('Merkle Publishing Failed:', error);
+      Alert.alert('Merkle Publish Error', error.message);
+    } finally {
+      setIsPublishing(false);
+      setProgress({ current: 0, total: 0, message: '' });
+    }
+  };
 
   // Initialize data on component mount
   useEffect(() => {
@@ -845,8 +893,13 @@ useEffect(() => {
             });
           }}
           onLongPressMenu={(action) => {
-            // Handle publishing-specific actions
+            // This log is coming from the BottomBar, let's add one here for clarity.
+            console.log('PublishingScreen: onLongPressMenu received action:', action);
             switch (action) {
+              // This case now matches the action from the log ('publish')
+              case 'publish':
+                handleMerklePublish();
+                break;
               case 'pickfile-publish':
                 handlePublishFile();
                 break;
@@ -857,7 +910,8 @@ useEffect(() => {
                 handleClearDrafts();
                 break;
               default:
-                console.log('Unknown action:', action);
+                // We also add a log here for robust debugging in the future.
+                console.warn('PublishingScreen: Received an unknown BottomBar action:', action);
             }
           }}
           onHomePress={() => {
@@ -866,9 +920,9 @@ useEffect(() => {
           }}
           customRadialButtons={{
             top: {
-              action: 'pickfile-publish',
-              label: 'Pick & Pub',
-              icon: 'file'
+              action: 'publish',
+              label: 'MerklePub',
+              icon: 'cloud-upload'
             },
             right: {
               action: 'clear-drafts', 
