@@ -112,7 +112,7 @@ export class ContentService {
       }
 
       // Generate content ID
-      const contentId = `content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const contentId = contentData.id ?? `content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Create content object for GlyphService
       const glyphContent = {
@@ -121,7 +121,6 @@ export class ContentService {
         content: content,
         authorPublicKey: authorPublicKey,
         timestamp: Date.now(),
-        // Add story chain data if provided
         previousStoryHash: options.previousStoryHash || null
       };
       

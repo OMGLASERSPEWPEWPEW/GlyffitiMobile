@@ -118,29 +118,6 @@ export const usePublishing = (walletService = null) => {
     }
   }, [publishingService, isLoadingContent]);
   
-  /**
-   * Handle file selection
-   * @returns {Promise<Object|null>} Selected content or null
-   */
-  const selectFile = useCallback(async () => {
-    try {
-      console.log('📄 Opening file picker...');
-      const content = await publishingService.pickAndLoadFile();
-      
-      if (content) {
-        console.log('✅ File loaded:', content.filename);
-        // Save as draft automatically
-        await saveDraft(content);
-        return content;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('❌ Error selecting file:', error);
-      Alert.alert('Error', 'Failed to load file: ' + error.message);
-      return null;
-    }
-  }, [publishingService]);
   
   /**
    * Create text content manually
@@ -386,10 +363,10 @@ export const usePublishing = (walletService = null) => {
   }, [publishingService]);
   
 
-    /**
- * Direct pass-through to service's publishContent with user context
- * Maintains compatibility with PublishingScreen
- */
+/**
+* Direct pass-through to service's publishContent with user context
+* Maintains compatibility with PublishingScreen
+*/
 const publishToBlockchain = useCallback(async (content, keypair, onProgress, userPublicKey = null) => {
   if (!content || !keypair) {
     throw new Error('Content and keypair are required');
@@ -458,10 +435,9 @@ const publishToBlockchain = useCallback(async (content, keypair, onProgress, use
     publishedContent,
     publishingStats,
     isLoadingContent,
-    publishToBlockchain,  // Add this line
-    publishingService,     // Make sure this is included too
+    publishToBlockchain,  
+    publishingService,     
     // Actions
-    selectFile,
     createTextContent,
     saveDraft,
     deleteDraft,

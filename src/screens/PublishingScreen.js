@@ -185,7 +185,7 @@ useEffect(() => {
     
     try {
       // Pick and load file
-      const content = await publishingService.pickAndLoadFile();
+      const content = await publishingService.pickAndLoadFile(); // eight vars: id, title, content, filename, size, type, authorPublicKey, createdAt
       if (!content) {
         console.log('📄 No file selected');
         return;

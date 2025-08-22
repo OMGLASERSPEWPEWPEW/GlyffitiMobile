@@ -83,18 +83,22 @@ export class PublishingService {
    */
   async prepareContent(contentData, title, options = {}) {
     try {
-    if (!this.currentWallet) {
-    throw new Error('No wallet connected. Please connect a wallet first.');
-    }
-    const keypair = this.currentWallet.getWalletKeypair();
-    if (!keypair) {
-    throw new Error('Unable to access wallet keypair');
-    }
+
+      if (!this.currentWallet) {
+        throw new Error('No wallet connected. Please connect a wallet first.');
+      }
+
+      const keypair = this.currentWallet.getWalletKeypair();
+
+      if (!keypair) {
+        throw new Error('Unable to access wallet keypair');
+      }
 
     const userPublicKey = keypair.publicKey.toString();
 
     // Get previous story hash for story chain
     let previousStoryHash = null;
+    
     try {
       previousStoryHash = await StoryHeaderService.getUserStoryHead(keypair.publicKey.toString());
 
