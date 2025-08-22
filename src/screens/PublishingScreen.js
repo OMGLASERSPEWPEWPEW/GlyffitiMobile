@@ -24,6 +24,7 @@ import { nuclearClearStories } from '../utils/NuclearClear';
 import userRegistry from '../data/user-registry.json';
 import ContentServiceM from '../services/content/ContentService-M';
 import PublishingServiceM from '../services/publishing/PublishingService-M';
+import StoryViewerServiceM from '../services/story/StoryViewerService-M';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -218,6 +219,65 @@ export const PublishingScreen = ({ navigation, route }) => {
     });
   }
 };
+
+const handleViewPublishedContent = async (item) => {
+    // This function now handles both types of content
+    if (item.type === 'merkle-v1') {
+      // Handle new Merkle stories
+      setIsPublishing(true);
+      setProgress({ message: 'Fetching and verifying story...' });
+      try {
+        const firstTxId = item.transactionIds[0];
+        const content = await StoryViewerServiceM.fetchAndVerifyStory(firstTxId, item.authorPublicKey);
+        
+        // Navigate to the viewer screen with the verified content
+        navigation.navigate('StoryView', {
+          storyId: item.id,
+          // Create a temporary manifest for the viewer screen
+          manifest: { title: item.title, authorName: selectedUser },
+          preloadedContent: content, // Pass the already loaded content
+        });
+
+      } catch (error) {
+        Alert.alert("Verification Failed", error.message);
+      } finally {
+        setIsPublishing(false);
+        setProgress({ message: '' });
+      }
+    } else {
+      // Handle old legacy stories
+      navigation.navigate('StoryView', {
+        storyId: item.contentId,
+        manifest: item,
+      });
+    }
+  };
+
+const handleMerkleVerify = async () => {
+    setIsPublishing(true);
+    setProgress({ current: 0, total: 1, message: 'Verifying on-chain data...' });
+    
+    // The transaction ID from our last successful test
+    const testTxId = '5qe2nyLeGRvCMgM5KmsUuyPLq5Hke6xTFrLXHr8bRxxYAvMk5ATHXGUD9pL2CsMX5HauZVz4X8ntsTWi7Rsd1ipb';
+
+    try {
+      console.log(`🚀 handleMerkleVerify: Verifying TX ID: ${testTxId}`);
+      const decodedContent = await StoryViewerServiceM.fetchAndVerifyStory(testTxId);
+
+      Alert.alert(
+        'Verification Success! ✅',
+        `The content has been successfully decoded and its Merkle proof is valid.\n\nDecoded Content:\n"${decodedContent}"`
+      );
+      console.log(`🎉 handleMerkleVerify: Success! Decoded content: "${decodedContent}"`);
+
+    } catch (error) {
+      console.error('❌ handleMerkleVerify: Verification failed:', error);
+      Alert.alert('Verification Error ❌', error.message);
+    } finally {
+      setIsPublishing(false);
+      setProgress({ current: 0, total: 0, message: '' });
+    }
+  };
 
 
   // Initialize data on component mount
@@ -640,6 +700,7 @@ useEffect(() => {
           {/* Content Sections - EXACTLY THE SAME */}
           <ContentSections 
             inProgressContent={inProgressContent}
+            onPressPublished={handleViewPublishedContent}
             drafts={drafts}
             publishedContent={publishedContent.filter(item => 
               item.type !== 'social_post' && 
@@ -1002,13 +1063,12 @@ useEffect(() => {
           }}
           onLongPressMenu={(action) => {
             console.log('PublishingScreen: onLongPressMenu received action:', action);
-            // Handle publishing-specific actions
             switch (action) {
-              case 'publish':  // ✅ This is what's actually being sent based on the logs
+              case 'publish':
                 handleMerklePublish();
                 break;
-              case 'merkle-publish':  // Keep this as backup
-                handleMerklePublish();
+              case 'merkle-verify':
+                handleMerkleVerify();
                 break;
               case 'pickfile-publish':
                 handlePublishFile();
@@ -1020,16 +1080,12 @@ useEffect(() => {
                 handleClearDrafts();
                 break;
               default:
-                console.log('Unknown action:', action);
+                console.warn('PublishingScreen: Received an unknown BottomBar action:', action);
             }
-          }}
-          onHomePress={() => {
-            // Navigate back to home screen
-            navigation.goBack();
           }}
           customRadialButtons={{
             top: {
-              action: 'publish',  // ✅ Changed from 'merkle-publish' to match what's being sent
+              action: 'publish',
               label: 'MerklePub',
               icon: 'cloud-upload'
             },
@@ -1039,9 +1095,9 @@ useEffect(() => {
               icon: 'clear'
             },
             left: {
-              action: 'clear-test',
-              label: 'Clear Test',
-              icon: 'clear'
+              action: 'merkle-verify',
+              label: 'Merkle Verify',
+              icon: 'check-circle'
             }
           }}
           isDarkMode={false}

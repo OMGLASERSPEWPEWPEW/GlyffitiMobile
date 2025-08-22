@@ -1,22 +1,23 @@
 // src/services/publishing/PublishingService-M.js
 import { blockchainServices } from '../blockchain/BlockchainService';
+import { CompressionService } from '../compression/CompressionService';
 
 /**
  * Manages the process of taking prepared Merkle-based content and publishing
  * it to the blockchain.
  */
 class PublishingServiceM {
-  /**
-   * Serializes a glyph object into a JSON string suitable for a transaction memo.
-   * Uses short keys to conserve space.
+/**
+   * Serializes, compresses, and encodes a glyph object into a Base64 string
+   * suitable for a transaction memo.
    * @param {object} glyph - The prepared glyph object from ChunkManagerM.
    * @param {number|null} reGlyphCap - The re-glyph cap for the story.
-   * @returns {string} A JSON string representing the memo.
+   * @returns {string} A compressed, Base64 encoded string representing the memo.
    * @private
    */
   static _serializeGlyphToMemo(glyph, reGlyphCap) {
     const memoObject = {
-      p: 'glyffiti-m-v1', // Protocol: glyffiti-merkle-version-1
+      p: 'g-m-v1c', // Protocol: glyffiti-merkle-v1-compressed
       i: glyph.index,
       t: glyph.totalGlyphs,
       r: glyph.unifiedRoot,
@@ -24,13 +25,20 @@ class PublishingServiceM {
       pr: glyph.merkleProof,
     };
 
-    // As per ADR-002, the re-glyph cap is only included in the first glyph
-    // to save space on subsequent transactions.
     if (glyph.index === 0 && reGlyphCap !== null) {
       memoObject.rgc = reGlyphCap;
     }
 
-    return JSON.stringify(memoObject);
+    // 1. Serialize the object to a JSON string
+    const jsonString = JSON.stringify(memoObject);
+
+    // 2. Compress the JSON string into a Uint8Array
+    const compressedData = CompressionService.compress(jsonString);
+
+    // 3. Encode the compressed bytes into a Base64 string for transport
+    const base64String = CompressionService.uint8ArrayToBase64(compressedData);
+    
+    return base64String;
   }
 
   /**
