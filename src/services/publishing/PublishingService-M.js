@@ -211,48 +211,57 @@ class PublishingServiceM {
    */
   // REPLACE ENTIRE METHOD WITH:
  static async _publishTasksWithConcurrency(tasks, taskPublisher, concurrencyLimit = 2, onProgressUpdate) {
-    console.log('PublishingService-M.js: _publishTasksWithConcurrency: Publishing', tasks.length, 'tasks using GlobalRPCRateLimiter coordination');
+  console.log('PublishingService-M.js: _publishTasksWithConcurrency: Publishing', tasks.length, 'tasks using GlobalRPCRateLimiter coordination');
+  
+  const results = [];
+  let completed = 0;
+  
+  // Process tasks in smaller batches with GlobalRPCRateLimiter coordination
+  for (let i = 0; i < tasks.length; i += concurrencyLimit) {
+    const batch = tasks.slice(i, i + concurrencyLimit);
+    console.log('PublishingService-M.js: _publishTasksWithConcurrency: Processing batch', Math.floor(i / concurrencyLimit) + 1, 'with', batch.length, 'tasks');
     
-    const results = [];
-    let completed = 0;
-    
-    // Process tasks in smaller batches with GlobalRPCRateLimiter coordination
-    for (let i = 0; i < tasks.length; i += concurrencyLimit) {
-      const batch = tasks.slice(i, i + concurrencyLimit);
-      console.log('PublishingService-M.js: _publishTasksWithConcurrency: Processing batch', Math.floor(i / concurrencyLimit) + 1, 'with', batch.length, 'tasks');
+    // Process batch concurrently - GlobalRPCRateLimiter will coordinate the actual RPC calls
+    const batchPromises = batch.map(async (task, batchIndex) => {
+      const globalIndex = i + batchIndex;
       
-      // Process batch concurrently - GlobalRPCRateLimiter will coordinate the actual RPC calls
-      const batchPromises = batch.map(async (task, batchIndex) => {
-        const globalIndex = i + batchIndex;
+      try {
+        const txId = await taskPublisher(task);
+        console.log('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'completed:', txId.substring(0, 12) + '...');
         
-        try {
-          const txId = await taskPublisher(task);
-          console.log('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'completed:', txId.substring(0, 12) + '...');
-          
-          completed++;
-          
-          if (onProgressUpdate) {
-            onProgressUpdate(completed, tasks.length);
-          }
-          
-          return txId;
-        } catch (error) {
-          console.error('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'failed:', error);
-          throw error;
+        completed++;
+        
+        // FIXED: Call progress update immediately after each task completion
+        // This ensures the UI gets frequent updates during publishing
+        if (onProgressUpdate) {
+          onProgressUpdate(completed, tasks.length);
         }
-      });
-      
-      // Wait for this batch to complete before starting next batch
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
-      
-      // NO artificial delays - GlobalRPCRateLimiter handles optimal timing
-      console.log('PublishingService-M.js: _publishTasksWithConcurrency: Batch', Math.floor(i / concurrencyLimit) + 1, 'complete');
+        
+        return txId;
+      } catch (error) {
+        console.error('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'failed:', error);
+        throw error;
+      }
+    });
+    
+    // FIXED: Process each task individually to get immediate progress updates
+    // instead of waiting for entire batch to complete
+    const batchResults = [];
+    for (const promise of batchPromises) {
+      const result = await promise;
+      batchResults.push(result);
+      // Progress callback is already called inside the promise above
     }
     
-    console.log('PublishingService-M.js: _publishTasksWithConcurrency: All', tasks.length, 'tasks completed via GlobalRPCRateLimiter');
-    return results;
+    results.push(...batchResults);
+    
+    // NO artificial delays - GlobalRPCRateLimiter handles optimal timing
+    console.log('PublishingService-M.js: _publishTasksWithConcurrency: Batch', Math.floor(i / concurrencyLimit) + 1, 'complete');
   }
+  
+  console.log('PublishingService-M.js: _publishTasksWithConcurrency: All', tasks.length, 'tasks completed via GlobalRPCRateLimiter');
+  return results;
+}
 
   /**
    * Enhanced serialization for 3-tier architecture

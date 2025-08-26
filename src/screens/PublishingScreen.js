@@ -11,7 +11,7 @@ import { LoadingOverlay, ErrorBoundary, ErrorDisplay, ScreenContainer, ContentAr
 import { TopBar, BottomBar } from '../components/navigation';
 import { UserPanel, UserSelectorPanel } from '../components/panels';
 import { publishingStyles } from '../styles/publishingStyles';
-import { ProgressBar, ContentSections } from '../components/publishing';
+import { ProgressBar, PublishingStatusIndicator, ContentSections } from '../components/publishing';
 import { StorageService } from '../services/storage/StorageService';
 import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../hooks/useUser';
@@ -181,13 +181,23 @@ export const PublishingScreen = ({ navigation, route }) => {
       reGlyphCap: 1000
     }
   );
-  
+
   // Store the original content info for later storage
   preparedContent.originalTitle = content.title || 'Untitled Story';
   preparedContent.originalFilename = content.filename;
   preparedContent.originalSize = content.size;
   preparedContent.originalType = content.type;
     
+  // ADD: Store the publicationPackage in progress state for the new PublishingStatusIndicator
+  setProgress(prev => ({
+    phase: 'manifest',
+    current: 0,
+    total: 1 + (preparedContent.hashListChunks?.length || 0) + (preparedContent.contentChunks?.length || 0),
+    message: 'Preparing to publish story manifest...',
+    progress: 0,
+    publicationPackage: preparedContent  // <-- ADD THIS LINE
+  }));
+
     console.log('✅ handleMerklePublish: Content prepared:', {
       glyphs: preparedContent.glyphs?.length || 0,
       reGlyphCap: preparedContent.reGlyphCap,
@@ -729,8 +739,13 @@ useEffect(() => {
               </View>
             )}
           
-          {/* Progress Bar - EXACTLY THE SAME */}
-          <ProgressBar publishing={publishing} progress={progress} />
+          {/* New Blueprint & Fill Publishing Status Indicator */}
+          {publishing && (
+            <PublishingStatusIndicator 
+              progress={progress} 
+              isDarkMode={false} 
+            />
+          )}
 
           {/* Merkle Publishing Progress */}
                   {isMerklePublishing && (
@@ -1131,6 +1146,10 @@ useEffect(() => {
               default:
                 console.warn('PublishingScreen: Received an unknown BottomBar action:', action);
             }
+          }}
+          onHomePress={() => {
+            console.log('PublishingScreen: Home button pressed - navigating to Home');
+            navigation.navigate('Home');
           }}
           customRadialButtons={{
             top: {
