@@ -132,43 +132,50 @@ export class TextProcessor {
     return text;
   }
 
-   /**
+
+
+  /**
    * Split text into chunks for merkle tree processing
-   * This is a simplified version that creates a single chunk for testing.
-   * In production, this would intelligently split large content.
+   * Intelligently splits large content at natural boundaries
    * @param {string} text - Text to chunk
+   * @param {number} targetChunkSize - Target size for each chunk (default 250 chars)
    * @returns {string[]} Array of text chunks
    */
-  static chunkText(text) {
+  static chunkText(text, targetChunkSize = 250) {
     console.log('TextProcessor.chunkText: Processing text for merkle chunks');
     
     if (!text || typeof text !== 'string') {
       throw new Error('Text must be a non-empty string');
     }
     
-    // For testing, just return the text as a single chunk
-    // In production, this would:
-    // 1. Split at natural boundaries (paragraphs, sentences)
-    // 2. Respect size limits for blockchain transactions
-    // 3. Maintain readability
-    
     const preprocessed = this.preprocessText(text);
+    const chunks = [];
+    let currentPosition = 0;
     
-    // For now, return as single chunk for testing
-    // TODO: Implement intelligent chunking for large content
-    return [preprocessed];
-  }
-
-  
-  /**
-   * Estimate the number of chunks a piece of content will require
-   * @param {string} content - Content to estimate
-   * @param {number} targetChunkSize - Target size for chunks
-   * @returns {number} Estimated chunk count
-   */
-  static estimateChunkCount(content, targetChunkSize) {
-    const processedContent = this.preprocessText(content);
-    return Math.ceil(processedContent.length / targetChunkSize);
+    while (currentPosition < preprocessed.length) {
+      const remainingLength = preprocessed.length - currentPosition;
+      const targetEnd = Math.min(currentPosition + targetChunkSize, preprocessed.length);
+      
+      let chunkText;
+      
+      // If this is the last chunk or close to end, take everything remaining
+      if (remainingLength <= targetChunkSize * 1.2) {
+        chunkText = preprocessed.slice(currentPosition);
+      } else {
+        // Find natural break point
+        chunkText = this.findNaturalBreakPoint(
+          preprocessed, 
+          currentPosition, 
+          targetEnd
+        );
+      }
+      
+      chunks.push(chunkText);
+      currentPosition += chunkText.length;
+    }
+    
+    console.log(`TextProcessor.chunkText: Created ${chunks.length} chunks from ${preprocessed.length} characters`);
+    return chunks;
   }
 }
 

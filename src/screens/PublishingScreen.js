@@ -153,22 +153,40 @@ export const PublishingScreen = ({ navigation, route }) => {
   console.log('📝 handleMerklePublish: Starting merkle publish process...');
 
   try {
-    const testContent = "This is a test of the Unified Merkle Tree publishing system. If you can read this on-chain, it worked.";
-    console.log('📄 handleMerklePublish: Test content ready');
-    
-    // ✅ Use data from both selectedUser (registry) and selectedUserData (decoded genesis)
-    console.log('🔨 handleMerklePublish: Calling ContentServiceM with correct parameters...');
-    console.log('  Author Public Key:', selectedUser.publicKey);
-    console.log('  User Genesis Hash:', selectedUser.transactionHash);
-    console.log('  Glyffiti Genesis Hash:', glyffitiGenesisHash);
-    
-    const preparedContent = await ContentServiceM.prepareContentForMerklePublishing(
-      testContent,
-      selectedUser.publicKey,        // User's public key from registry
-      selectedUser.transactionHash,  // User's genesis transaction hash from registry
-      glyffitiGenesisHash,          // Glyffiti genesis from decoded user data
-      1000 // Test reGlyphCap
-    );
+  // Pick and load file (same as handlePublishFile)
+  const content = await publishingService.pickAndLoadFile();
+  if (!content) {
+    console.log('📄 handleMerklePublish: No file selected');
+    return;
+  }
+  
+  console.log('📄 handleMerklePublish: File selected:', {
+    title: content.title,
+    size: content.size,
+    type: content.type
+  });
+  
+  // ✅ Use data from both selectedUser (registry) and selectedUserData (decoded genesis)
+  console.log('🔨 handleMerklePublish: Calling ContentServiceM with correct parameters...');
+  console.log('  Author Public Key:', selectedUser.publicKey);
+  console.log('  User Genesis Hash:', selectedUser.transactionHash);
+  console.log('  Glyffiti Genesis Hash:', glyffitiGenesisHash);
+  
+  const preparedContent = await ContentServiceM.prepareContentForManifestPublishing(
+    content.content,              // Use actual file content
+    content.title || 'Untitled Story', // Add title parameter (required)
+    selectedUser.publicKey,        // User's public key from registry
+    {
+      tags: ['test'],
+      reGlyphCap: 1000
+    }
+  );
+  
+  // Store the original content info for later storage
+  preparedContent.originalTitle = content.title || 'Untitled Story';
+  preparedContent.originalFilename = content.filename;
+  preparedContent.originalSize = content.size;
+  preparedContent.originalType = content.type;
     
     console.log('✅ handleMerklePublish: Content prepared:', {
       glyphs: preparedContent.glyphs?.length || 0,
@@ -180,29 +198,60 @@ export const PublishingScreen = ({ navigation, route }) => {
 
     // Publish the story using the merkle system
     console.log('📡 handleMerklePublish: Calling PublishingServiceM.publishStory...');
-    const txIds = await PublishingServiceM.publishStory(
-      preparedContent,
-      keypair,  // Use the keypair from userWalletService
-      (update) => {
-        console.log('📊 handleMerklePublish: Progress update:', update);
-        // Update progress display
-        setProgress({
-          current: update.current,
-          total: update.total,
-          message: `Broadcasting glyph ${update.current} of ${update.total}...`,
-          progress: Math.round((update.current / update.total) * 100)
-        });
-      }
-    );
+    const result = await PublishingServiceM.publishStoryWithManifest(
+    preparedContent,
+    keypair,  // Use the keypair from userWalletService
+    (update) => {
+      console.log('📊 handleMerklePublish: Progress update:', update);
+      // Update progress display
+      setProgress({
+        current: update.current,
+        total: update.total,
+        message: update.message || `${update.phase}: ${update.current}/${update.total}`,
+        progress: Math.round((update.current / update.total) * 100)
+      });
+    }
+  );
     
-    console.log('🎉 handleMerklePublish: Success! Transaction IDs:', txIds);
-    Alert.alert(
-      'Merkle Publish Success!', 
-      `Story published successfully!\n\nFirst TX ID: ${txIds[0]?.substring(0, 12)}...`
-    );
-    
-    // Optionally refresh content after successful publish
-    await loadExistingContent();
+    const txIds = result.glyphTransactionIds;
+    console.log('🎉 handleMerklePublish: Success! Story ID:', result.storyId);
+    console.log('🎉 handleMerklePublish: Transaction IDs:', txIds);
+
+// Store the published item in user storage (same pattern as old system)
+try {
+  const publishedItem = {
+    id: `merkle-${Date.now()}`,
+    type: 'merkle-v1',
+    title: preparedContent.originalTitle,
+    filename: preparedContent.originalFilename,
+    size: preparedContent.originalSize,
+    contentType: preparedContent.originalType,
+    transactionIds: txIds,
+    authorPublicKey: selectedUser.publicKey,
+    publishedAt: new Date().toISOString(),
+    glyphCount: preparedContent.summary.totalChunks || 0,
+    storyId: result.storyId,
+    manifestTxId: result.manifestTransactionId,
+    reGlyphCap: preparedContent.reGlyphCap,
+    status: 'completed'
+  };
+  
+  // Store in user-scoped published content
+  await UserStorageService.addPublishedContent(selectedUser.publicKey, publishedItem);
+  console.log('✅ handleMerklePublish: Stored published item in user storage');
+  
+} catch (storageError) {
+  console.error('⚠️ handleMerklePublish: Failed to store published item:', storageError);
+  // Continue anyway - the item was published successfully
+}
+
+Alert.alert(
+  'Merkle Publish Success!', 
+  `"${preparedContent.originalTitle}" published successfully!\n\nTransaction ID: ${txIds[0]?.substring(0, 12)}...`
+);
+
+// Refresh content to show the new published item
+await loadExistingContent();
     
   } catch (error) {
     console.error('❌ handleMerklePublish: Publishing failed:', error);
