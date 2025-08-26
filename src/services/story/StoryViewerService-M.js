@@ -49,7 +49,7 @@ class StoryViewerServiceM {
   static async _fetchAndDecodeGlyph(transactionId) {
     try {
       // Use the existing, working ChunkReaderService to get the memo
-      const memoContent = await chunkReaderService.fetchChunkData(transactionId);
+      const memoContent = await chunkReaderService.fetchChunk(transactionId);
       if (!memoContent) throw new Error('No memo content found in transaction.');
       
       const decompressedJson = CompressionService.decompressFromBase64(memoContent);

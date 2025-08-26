@@ -3,6 +3,7 @@
 
 import { blockchainServices } from '../blockchain/BlockchainService';
 import { CompressionService } from '../compression/CompressionService';
+import { globalRPCRateLimiter } from '../blockchain/shared/GlobalRPCRateLimiter';
 
 /**
  * 3-Phase Manifest Tree Publishing Service
@@ -24,8 +25,10 @@ class PublishingServiceM {
    * @param {Function} [onProgress] - Optional callback for progress updates
    * @returns {Promise<Object>} Publication result with all transaction IDs
    */
-  static async publishStoryWithManifest(publicationPackage, keypair, onProgress) {
+   static async publishStoryWithManifest(publicationPackage, keypair, onProgress) {
     console.log('PublishingService-M.js: publishStoryWithManifest: Beginning 3-tier manifest tree publication');
+    console.log('PublishingService-M.js: publishStoryWithManifest: Using GlobalRPCRateLimiter for coordinated publishing');
+    console.log('PublishingService-M.js: publishStoryWithManifest: Pre-publish rate limiter stats:', globalRPCRateLimiter.getStats());
     
     const { primaryManifest, hashListChunks, contentChunks, summary } = publicationPackage;
     const totalSteps = 1 + hashListChunks.length + contentChunks.length; // manifest + hash lists + content
@@ -66,7 +69,7 @@ class PublishingServiceM {
         protocol: 'glyffiti-manifest-tree-v1'
       });
 
-      // Publish manifest transaction
+      // Publish manifest transaction (GlobalRPCRateLimiter coordinates this automatically)
       const manifestTxId = await publisher.publishSingleTransaction(manifestMemo, keypair);
       
       // Set the story ID from manifest transaction signature
@@ -90,7 +93,7 @@ class PublishingServiceM {
         hashes: hashChunk
       }));
 
-      // Publish hash lists with concurrency
+      // Publish hash lists with reduced concurrency - GlobalRPCRateLimiter handles optimal rate
       result.hashListTransactionIds = await this._publishTasksWithConcurrency(
         hashListTasks,
         async (task) => {
@@ -102,7 +105,7 @@ class PublishingServiceM {
           });
           return await publisher.publishSingleTransaction(memo, keypair);
         },
-        3, // Concurrency limit for hash lists
+        2, // Lower concurrency - GlobalRPCRateLimiter handles optimal rate
         (completed, total) => {
           if (onProgress) {
             onProgress({
@@ -132,7 +135,7 @@ class PublishingServiceM {
         reGlyphCap: index === 0 ? primaryManifest.reGlyphCap : undefined // Only on first chunk
       }));
 
-      // Publish content with concurrency
+      // Publish content with reduced concurrency - GlobalRPCRateLimiter handles optimal rate
       result.glyphTransactionIds = await this._publishTasksWithConcurrency(
         contentTasks,
         async (task) => {
@@ -145,7 +148,7 @@ class PublishingServiceM {
           });
           return await publisher.publishSingleTransaction(memo, keypair);
         },
-        5, // Higher concurrency for content chunks
+        2, // Lower concurrency - GlobalRPCRateLimiter handles optimal rate
         (completed, total) => {
           if (onProgress) {
             onProgress({
@@ -174,11 +177,13 @@ class PublishingServiceM {
       console.log('PublishingService-M.js: publishStoryWithManifest: 3-tier publication complete');
       console.log('PublishingService-M.js: publishStoryWithManifest: Story ID:', result.storyId);
       console.log('PublishingService-M.js: publishStoryWithManifest: Total transactions:', totalSteps);
+      console.log('PublishingService-M.js: publishStoryWithManifest: Final rate limiter stats:', globalRPCRateLimiter.getStats());
 
       return result;
 
     } catch (error) {
       console.error('PublishingService-M.js: publishStoryWithManifest: Publication failed:', error);
+      console.error('PublishingService-M.js: publishStoryWithManifest: Rate limiter stats at failure:', globalRPCRateLimiter.getStats());
       
       // Mark failed phases
       if (!result.manifestTransactionId) {
@@ -194,6 +199,7 @@ class PublishingServiceM {
     }
   }
 
+
   /**
    * Publish tasks with controlled concurrency to avoid rate limiting
    * @param {Array} tasks - Array of tasks to publish
@@ -203,28 +209,26 @@ class PublishingServiceM {
    * @returns {Promise<Array>} Array of transaction IDs
    * @private
    */
-  static async _publishTasksWithConcurrency(tasks, taskPublisher, concurrencyLimit = 5, onProgressUpdate) {
-    console.log('PublishingService-M.js: _publishTasksWithConcurrency: Publishing', tasks.length, 'tasks with concurrency limit', concurrencyLimit);
+  // REPLACE ENTIRE METHOD WITH:
+ static async _publishTasksWithConcurrency(tasks, taskPublisher, concurrencyLimit = 2, onProgressUpdate) {
+    console.log('PublishingService-M.js: _publishTasksWithConcurrency: Publishing', tasks.length, 'tasks using GlobalRPCRateLimiter coordination');
     
     const results = [];
-    const inProgress = new Set();
     let completed = 0;
     
-    // Process tasks in batches
+    // Process tasks in smaller batches with GlobalRPCRateLimiter coordination
     for (let i = 0; i < tasks.length; i += concurrencyLimit) {
       const batch = tasks.slice(i, i + concurrencyLimit);
       console.log('PublishingService-M.js: _publishTasksWithConcurrency: Processing batch', Math.floor(i / concurrencyLimit) + 1, 'with', batch.length, 'tasks');
       
-      // Publish batch concurrently
+      // Process batch concurrently - GlobalRPCRateLimiter will coordinate the actual RPC calls
       const batchPromises = batch.map(async (task, batchIndex) => {
         const globalIndex = i + batchIndex;
-        inProgress.add(globalIndex);
         
         try {
           const txId = await taskPublisher(task);
           console.log('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'completed:', txId.substring(0, 12) + '...');
           
-          inProgress.delete(globalIndex);
           completed++;
           
           if (onProgressUpdate) {
@@ -233,7 +237,6 @@ class PublishingServiceM {
           
           return txId;
         } catch (error) {
-          inProgress.delete(globalIndex);
           console.error('PublishingService-M.js: _publishTasksWithConcurrency: Task', globalIndex, 'failed:', error);
           throw error;
         }
@@ -243,14 +246,11 @@ class PublishingServiceM {
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
       
-      // Small delay between batches to be blockchain-friendly
-      if (i + concurrencyLimit < tasks.length) {
-        console.log('PublishingService-M.js: _publishTasksWithConcurrency: Batch complete, waiting 1s before next batch...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      // NO artificial delays - GlobalRPCRateLimiter handles optimal timing
+      console.log('PublishingService-M.js: _publishTasksWithConcurrency: Batch', Math.floor(i / concurrencyLimit) + 1, 'complete');
     }
     
-    console.log('PublishingService-M.js: _publishTasksWithConcurrency: All', tasks.length, 'tasks completed');
+    console.log('PublishingService-M.js: _publishTasksWithConcurrency: All', tasks.length, 'tasks completed via GlobalRPCRateLimiter');
     return results;
   }
 

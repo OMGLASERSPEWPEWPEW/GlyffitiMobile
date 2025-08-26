@@ -5,6 +5,8 @@ import { CompressionService } from '../../compression/CompressionService';
 import { StorageService } from '../../storage/StorageService';
 import { UserStorageService } from '../../storage/UserStorageService';
 import { StoryHeaderService } from '../../feed/StoryHeaderService';
+import { globalRPCRateLimiter } from '../shared/GlobalRPCRateLimiter';
+
 
 /**
  * Solana Publisher - Handles Solana-specific blockchain publishing operations
@@ -312,26 +314,30 @@ export class SolanaPublisher {
      * @param {Object} keypair - Wallet keypair for signing
      * @returns {Promise<string>} Transaction ID
      */
-    async publishSingleTransaction(memoData, keypair) {
-      console.log('SolanaPublisher.publishSingleTransaction: Publishing single transaction with memo data');
-      
-      try {
-        if (!memoData) {
-          throw new Error('No memo data provided');
-        }
+    // REPLACE ENTIRE METHOD WITH:
+async publishSingleTransaction(memoData, keypair) {
+  console.log('SolanaPublisher: publishSingleTransaction: Publishing single transaction with memo data');
+  
+  try {
+    if (!memoData) {
+      throw new Error('No memo data provided');
+    }
 
-        if (!keypair) {
-          throw new Error('No wallet keypair provided');
-        }
+    if (!keypair) {
+      throw new Error('No wallet keypair provided');
+    }
 
-        // Check memo size limit (Solana memo program limit is 566 bytes for UTF-8)
-        const memoBuffer = Buffer.from(memoData, 'utf-8');
-        if (memoBuffer.length > 566) {
-          throw new Error(`Memo data too large: ${memoBuffer.length} bytes (max 566)`);
-        }
+    // Check memo size limit (Solana memo program limit is 566 bytes for UTF-8)
+    const memoBuffer = Buffer.from(memoData, 'utf-8');
+    if (memoBuffer.length > 566) {
+      throw new Error(`Memo data too large: ${memoBuffer.length} bytes (max 566)`);
+    }
 
-        console.log(`SolanaPublisher.publishSingleTransaction: Memo size: ${memoBuffer.length} bytes`);
+    console.log(`SolanaPublisher: publishSingleTransaction: Memo size: ${memoBuffer.length} bytes`);
 
+    // Use GlobalRPCRateLimiter for the entire transaction process
+    return await globalRPCRateLimiter.executeWithRateLimit(
+      async () => {
         // Create transaction
         const transaction = new Transaction();
         
@@ -349,65 +355,42 @@ export class SolanaPublisher {
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = keypair.publicKey;
         
-        // Sign and send with retry logic
-        let retryCount = 0;
-        const maxRetries = 3;
-        let signature;
+        // Sign transaction
+        transaction.sign(keypair);
         
-        while (retryCount <= maxRetries) {
-          try {
-            // Sign transaction
-            transaction.sign(keypair);
-            
-            // Send transaction
-            signature = await this.connection.sendRawTransaction(
-              transaction.serialize(),
-              { 
-                skipPreflight: false, 
-                preflightCommitment: 'confirmed' 
-              }
-            );
-            
-            console.log(`SolanaPublisher.publishSingleTransaction: Transaction sent, signature: ${signature}`);
-            
-            // Wait for confirmation
-            const confirmation = await this.connection.confirmTransaction(
-              signature,
-              'confirmed'
-            );
-            
-            if (confirmation.value.err) {
-              throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-            }
-            
-            console.log(`SolanaPublisher.publishSingleTransaction: ✅ Transaction confirmed: ${signature}`);
-            return signature;
-            
-          } catch (error) {
-            retryCount++;
-            
-            if (retryCount > maxRetries) {
-              console.error(`SolanaPublisher.publishSingleTransaction: ❌ Failed after ${maxRetries} retries:`, error);
-              throw new Error(`Failed to publish transaction after ${maxRetries} retries: ${error.message}`);
-            }
-            
-            console.warn(`SolanaPublisher.publishSingleTransaction: ⚠️ Attempt ${retryCount} failed, retrying...`, error.message);
-            
-            // Wait before retry with exponential backoff
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
-            
-            // Get fresh blockhash for retry
-            const { blockhash: newBlockhash } = await this.connection.getLatestBlockhash();
-            transaction.recentBlockhash = newBlockhash;
+        // Send transaction
+        const signature = await this.connection.sendRawTransaction(
+          transaction.serialize(),
+          { 
+            skipPreflight: false, 
+            preflightCommitment: 'confirmed' 
           }
+        );
+        
+        console.log(`SolanaPublisher: publishSingleTransaction: Transaction sent, signature: ${signature}`);
+        
+        // Wait for confirmation
+        const confirmation = await this.connection.confirmTransaction(
+          signature,
+          'confirmed'
+        );
+        
+        if (confirmation.value.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
         }
         
-      } catch (error) {
-        console.error('SolanaPublisher.publishSingleTransaction: ❌ Error publishing single transaction:', error);
-        throw error;
-      }
-    }
-
+        console.log(`SolanaPublisher: publishSingleTransaction: ✅ Transaction confirmed: ${signature}`);
+        return signature;
+      },
+      `publish transaction with ${memoBuffer.length}b memo`,
+      'SolanaPublisher'
+    );
+    
+  } catch (error) {
+    console.error('SolanaPublisher: publishSingleTransaction: ❌ Failed to publish:', error);
+    throw error;
+  }
+}
   // Character count: 3,567
 
 
@@ -693,15 +676,20 @@ export class SolanaPublisher {
    * Check connection health to Solana network
    * @returns {Promise<boolean>} Connection status
    */
-  async checkConnection() {
-    try {
-      await this.connection.getVersion();
-      return true;
-    } catch (error) {
-      console.error('Solana connection check failed:', error);
-      return false;
-    }
+// REPLACE ENTIRE METHOD WITH:
+async checkConnection() {
+  try {
+    await globalRPCRateLimiter.executeWithRateLimit(
+      async () => await this.connection.getVersion(),
+      'connection health check',
+      'SolanaPublisher'
+    );
+    return true;
+  } catch (error) {
+    console.error('SolanaPublisher: checkConnection: Solana connection check failed:', error);
+    return false;
   }
+}
 
   /**
    * Get current Solana network endpoint

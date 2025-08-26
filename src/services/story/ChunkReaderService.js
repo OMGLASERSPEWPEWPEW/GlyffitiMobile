@@ -1,6 +1,7 @@
 // src/services/story/ChunkReaderService.js
 // Path: src/services/story/ChunkReaderService.js
 import { Connection, clusterApiUrl, PublicKey } from '@solana/web3.js';
+import { globalRPCRateLimiter } from '../blockchain/shared/GlobalRPCRateLimiter';
 import bs58 from 'bs58';
 
 /**
@@ -18,22 +19,6 @@ export class ChunkReaderService {
     // Memo program ID for finding memo instructions
     this.MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
     
-    // Rate limiting configuration
-    this.rateLimitConfig = {
-      maxRequestsPerSecond: 2, // Conservative rate to avoid blocking
-      requestQueue: [],
-      isProcessingQueue: false,
-      lastRequestTime: 0,
-      minRequestInterval: 500, // Minimum 500ms between requests
-    };
-    
-    // Retry configuration
-    this.retryConfig = {
-      maxRetries: 3,
-      baseDelay: 1000, // Start with 1 second delay
-      maxDelay: 10000, // Max 10 second delay
-    };
-    
     // Cache for recently fetched transactions to avoid redundant requests
     this.transactionCache = new Map();
     this.cacheMaxSize = 100;
@@ -45,127 +30,56 @@ export class ChunkReaderService {
    * @param {string} transactionId - Transaction ID containing the chunk
    * @returns {Promise<string>} Raw chunk data
    */
-  async fetchChunk(transactionId) {
-    // Check cache first
-    const cachedData = this.getCachedTransaction(transactionId);
-    if (cachedData) {
-      console.log(`Using cached data for transaction: ${transactionId}`);
-      return cachedData;
-    }
-
-    // Add to rate-limited queue
-    return new Promise((resolve, reject) => {
-      this.rateLimitConfig.requestQueue.push({
-        transactionId,
-        resolve,
-        reject,
-        attempts: 0,
-        timestamp: Date.now()
-      });
-
-      this.processQueue();
-    });
+  // REPLACE ENTIRE METHOD WITH:
+async fetchChunk(transactionId) {
+  // Check cache first
+  const cachedData = this.getCachedTransaction(transactionId);
+  if (cachedData) {
+    console.log(`ChunkReaderService: fetchChunk: Using cached data for transaction: ${transactionId}`);
+    return cachedData;
   }
 
-  /**
-   * Process the rate-limited request queue
-   */
-  async processQueue() {
-    if (this.rateLimitConfig.isProcessingQueue || this.rateLimitConfig.requestQueue.length === 0) {
-      return;
-    }
+  // Use global rate limiter for the actual operation
+  const result = await globalRPCRateLimiter.executeWithRateLimit(
+    () => this.fetchSingleChunk(transactionId),
+    `fetch chunk ${transactionId.substring(0, 8)}...`,
+    'ChunkReaderService'
+  );
+  
+  // Cache the result
+  this.cacheTransaction(transactionId, result);
+  return result;
+}
 
-    this.rateLimitConfig.isProcessingQueue = true;
-
-    while (this.rateLimitConfig.requestQueue.length > 0) {
-      const request = this.rateLimitConfig.requestQueue.shift();
-      
-      // Ensure minimum interval between requests
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.rateLimitConfig.lastRequestTime;
-      
-      if (timeSinceLastRequest < this.rateLimitConfig.minRequestInterval) {
-        await this.sleep(this.rateLimitConfig.minRequestInterval - timeSinceLastRequest);
-      }
-
-      try {
-        const result = await this.fetchSingleChunk(request.transactionId);
-        this.cacheTransaction(request.transactionId, result);
-        request.resolve(result);
-      } catch (error) {
-        request.reject(error);
-      }
-
-      this.rateLimitConfig.lastRequestTime = Date.now();
-    }
-
-    this.rateLimitConfig.isProcessingQueue = false;
-  }
 
   /**
    * Fetch a single chunk with retry logic
    * @param {string} transactionId - Transaction ID
    * @returns {Promise<string>} Chunk data
    */
-  async fetchSingleChunk(transactionId) {
-    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
-      try {
-        console.log(`Fetching transaction ${transactionId} (attempt ${attempt + 1})`);
-        
-        // Use getParsedTransaction like the working TypeScript version
-        const transaction = await this.connection.getParsedTransaction(transactionId, {
-          maxSupportedTransactionVersion: 0
-        });
+  // REPLACE fetchSingleChunk METHOD WITH:
+async fetchSingleChunk(transactionId) {
+  console.log(`ChunkReaderService: fetchSingleChunk: Fetching transaction ${transactionId}`);
+  
+  // Make the actual RPC call - GlobalRPCRateLimiter handles retries
+  const transaction = await this.connection.getParsedTransaction(transactionId, {
+    maxSupportedTransactionVersion: 0
+  });
 
-        if (!transaction) {
-          throw new Error(`Transaction not found: ${transactionId}`);
-        }
-
-        console.log('Transaction structure:', {
-          version: transaction.version,
-          hasMeta: !!transaction.meta,
-          hasInstructions: !!transaction.transaction.message.instructions,
-          instructionCount: transaction.transaction.message.instructions.length
-        });
-
-        // Extract the chunk data from the memo instruction
-        const chunkData = this.extractChunkDataFromTransaction(transaction);
-        
-        if (!chunkData) {
-          throw new Error(`No chunk data found in transaction: ${transactionId}`);
-        }
-
-        console.log(`Successfully fetched chunk from transaction: ${transactionId}`);
-        return chunkData;
-
-      } catch (error) {
-        console.error(`Attempt ${attempt + 1} failed for ${transactionId}:`, error.message);
-        
-        // Handle rate limiting with exponential backoff
-        if (error?.message?.includes('429') || error?.statusCode === 429 || error?.status === 429) {
-          if (attempt < this.retryConfig.maxRetries) {
-            const backoff = this.retryConfig.baseDelay * Math.pow(2, attempt);
-            console.warn(`Server responded with 429 (rate limit). Retrying after ${backoff}ms delay...`);
-            await this.sleep(backoff);
-            continue;
-          }
-        }
-        
-        if (attempt === this.retryConfig.maxRetries) {
-          throw new Error(`Failed to fetch transaction after ${this.retryConfig.maxRetries + 1} attempts: ${error.message}`);
-        }
-
-        // Calculate exponential backoff delay
-        const delay = Math.min(
-          this.retryConfig.baseDelay * Math.pow(2, attempt),
-          this.retryConfig.maxDelay
-        );
-        
-        console.log(`Retrying in ${delay}ms...`);
-        await this.sleep(delay);
-      }
-    }
+  if (!transaction) {
+    throw new Error(`Transaction not found: ${transactionId}`);
   }
+
+  // Extract chunk data from memo instruction
+  const chunkData = this.extractChunkDataFromTransaction(transaction);
+  
+  if (!chunkData) {
+    throw new Error(`No chunk data found in transaction: ${transactionId}`);
+  }
+
+  console.log(`ChunkReaderService: fetchSingleChunk: Successfully fetched chunk from transaction: ${transactionId}`);
+  return chunkData;
+}
 
   /**
    * Extract chunk data from a Solana transaction (matching TypeScript implementation)
