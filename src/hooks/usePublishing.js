@@ -191,7 +191,7 @@ export const usePublishing = (walletService = null) => {
     
     try {
       publishingRef.current = true;
-      setIsPublishing(true);
+      setIsMerklePublishing(true);
       setProgress({
         progress: 0,
         currentGlyph: 0,
@@ -273,7 +273,7 @@ export const usePublishing = (walletService = null) => {
       
     } finally {
       publishingRef.current = false;
-      setIsPublishing(false);
+      setIsMerklePublishing(false);
       setProgress({
         progress: 0,
         currentGlyph: 0,
@@ -374,18 +374,20 @@ const publishToBlockchain = useCallback(async (content, keypair, onProgress, use
   
   try {
     publishingRef.current = true;
-    setIsPublishing(true);
+    setIsMerklePublishing(true);
     
     // Wrap the onProgress to update our hook's state
     const wrappedProgress = (status) => {
       setProgress({
-        progress: status.progress || 0,
-        currentGlyph: status.currentGlyph || 0,
-        totalGlyphs: status.totalGlyphs || 0,
-        message: status.message || `Publishing glyph ${status.currentGlyph || 0}/${status.totalGlyphs || 0}...`
+        // Normalize to the indicator’s contract
+        phase: 'content',
+        current: status.currentGlyph ?? 0,
+        total: status.totalGlyphs ?? 0,
+        message: status.message ??
+          `Publishing glyph ${status.currentGlyph ?? 0}/${status.totalGlyphs ?? 0}...`,
+        // No publicationPackage for legacy flow
+        publicationPackage: null,
       });
-      
-      // Call original callback if provided
       if (onProgress) onProgress(status);
     };
     
@@ -405,7 +407,7 @@ const publishToBlockchain = useCallback(async (content, keypair, onProgress, use
     
   } finally {
     publishingRef.current = false;
-    setIsPublishing(false);
+    setIsMerklePublishing(false);
     if (!isPublishing) {
       setProgress({
         progress: 0,

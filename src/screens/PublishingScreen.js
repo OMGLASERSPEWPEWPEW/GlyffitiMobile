@@ -182,6 +182,18 @@ export const PublishingScreen = ({ navigation, route }) => {
     }
   );
 
+  setIsMerklePublishing(true);
+    const totalSteps =
+      1 + (preparedContent.hashListChunks?.length || 0) + (preparedContent.contentChunks?.length || 0);
+
+    setProgress({
+      phase: 'manifest',
+      current: 0,
+      total: totalSteps,
+      message: 'Preparing 3-tier manifest…',
+      publicationPackage: preparedContent,
+    });
+
   // Store the original content info for later storage
   preparedContent.originalTitle = content.title || 'Untitled Story';
   preparedContent.originalFilename = content.filename;
@@ -215,6 +227,7 @@ export const PublishingScreen = ({ navigation, route }) => {
       console.log('📊 handleMerklePublish: Progress update:', update);
       // Update progress display
       setProgress({
+        phase: update.phase,
         current: update.current,
         total: update.total,
         message: update.message || `${update.phase}: ${update.current}/${update.total}`,
@@ -269,12 +282,14 @@ await loadExistingContent();
     Alert.alert('Merkle Publish Error', error.message || 'Failed to publish story');
   } finally {
     console.log('🏁 handleMerklePublish: Cleaning up...');
+    setIsMerklePublishing(false);
     // Reset progress
-    setProgress({ 
+    setProgress({
+      phase: 'complete', 
       current: 0, 
       total: 0, 
       message: '',
-      progress: 0
+      publicationPackage: undefined,
     });
   }
 };
@@ -739,27 +754,12 @@ useEffect(() => {
               </View>
             )}
           
-          {/* New Blueprint & Fill Publishing Status Indicator */}
-          {publishing && (
+          {(publishing || isMerklePublishing) && (
             <PublishingStatusIndicator 
-              progress={progress} 
-              isDarkMode={false} 
+              progress={progress}   // we standardize this below
+              isDarkMode={false}
             />
           )}
-
-          {/* Merkle Publishing Progress */}
-                  {isMerklePublishing && (
-                    <View style={publishingStyles.progressContainer}>
-                      <Text style={publishingStyles.progressText}>
-                        {merkleProgress.message}
-                      </Text>
-                      {merkleProgress.total > 0 && (
-                        <Text style={publishingStyles.progressNumbers}>
-                          {merkleProgress.current} / {merkleProgress.total}
-                        </Text>
-                      )}
-                    </View>
-                  )}
           
           {/* Content Sections - EXACTLY THE SAME */}
           <ContentSections 
