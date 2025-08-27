@@ -2,7 +2,7 @@
 // Path: src/hooks/useStoryViewer.js
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert, Share } from 'react-native';
-import { storyViewerService } from '../services/story/StoryViewerService';
+import StoryViewerServiceM from '../services/story/StoryViewerService-M';
 import { storyCache } from '../services/story/StoryCache';
 
 /**
@@ -222,7 +222,7 @@ export const useStoryViewer = (initialStoryId = null, initialManifest = null, op
           })();
 
       // Start progressive loading
-      await storyViewerService.loadStoryProgressively(
+      await StoryViewerServiceM.loadStoryProgressively(
         storyId,
         fixedManifest,
         handleChunkLoaded,
@@ -244,7 +244,7 @@ export const useStoryViewer = (initialStoryId = null, initialManifest = null, op
   const stopLoading = useCallback(() => {
     if (storyId && isLoading) {
       console.log(`⏹️ Cancelling story loading: ${storyId}`);
-      storyViewerService.cancelStoryLoading(storyId);
+      StoryViewerServiceM.cancelStoryLoading(storyId);
       setIsLoading(false);
     }
   }, [storyId, isLoading]);
@@ -445,7 +445,7 @@ export const useStoryViewer = (initialStoryId = null, initialManifest = null, op
     return () => {
       if (storyIdRef.current && isLoadingRef.current) {
         console.log(`🧹 Cleaning up story loading: ${storyIdRef.current}`);
-        storyViewerService.cancelStoryLoading(storyIdRef.current);
+        StoryViewerServiceM.cancelStoryLoading(storyIdRef.current);
       }
     };
   }, []);

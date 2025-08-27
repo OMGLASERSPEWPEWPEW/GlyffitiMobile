@@ -25,6 +25,7 @@ import userRegistry from '../data/user-registry.json';
 import ContentServiceM from '../services/content/ContentService-M';
 import PublishingServiceM from '../services/publishing/PublishingService-M';
 import StoryViewerServiceM from '../services/story/StoryViewerService-M';
+import { HashingService } from '../services/hashing/HashingService';
 
 export const PublishingScreen = ({ navigation, route }) => {
   // Use the wallet hook (keeping this as-is)
@@ -266,28 +267,49 @@ publishedItem.contentId = result.storyId; // canonical id for deletes & lookups
 const contentTxIds = result.glyphTransactionIds || [];
 const contentCount = contentTxIds.length;
 
+  console.log('📝 handleMerklePublish: Computing content chunk hashes for manifest...');
+  const contentChunkHashes = await Promise.all(
+    preparedContent.contentChunks.map(async (chunk, index) => {
+      const hash = await HashingService.hashContent(chunk);
+      console.log(`📝 handleMerklePublish: Chunk ${index} hash: ${hash.substring(0, 16)}...`);
+      return hash;
+    })
+  );
+
 publishedItem.manifest = {
-  storyId: result.storyId,
-  title: publishedItem.title,
-  author: selectedUser?.username || selectedUser?.publicKey,
-  chunks: contentTxIds,       // just the 9 glyph txs
-  totalChunks: contentCount   // must equal chunks.length
-};
+    storyId: result.storyId,
+    title: publishedItem.title,
+    author: selectedUser?.username || selectedUser?.publicKey,
+    chunks: contentTxIds.map((transactionId, index) => ({
+      index: index,
+      transactionId: transactionId,
+      hash: contentChunkHashes[index] || '' // Get hash from computed hashes
+    })),
+    totalChunks: contentCount // must equal chunks.length
+  };
+
+  console.log('📝 handleMerklePublish: Created manifest with', publishedItem.manifest.chunks.length, 'properly structured chunks');
+
+
 
 // Persist in user-scoped storage
 await UserStorageService.savePublishedStory(publishedItem, selectedUser.publicKey);
 
 // (optional, but nice) also save a user-scoped scroll/manifest record
-await UserStorageService.saveUserScroll(
-  {
-    storyId: result.storyId,
-    title: publishedItem.title,
-    createdAt: Date.now(),
-    chunks: result.glyphTransactionIds,
-    totalChunks: publishedItem.glyphCount
-  },
-  selectedUser.publicKey
-);
+ await UserStorageService.saveUserScroll(
+    {
+      storyId: result.storyId,
+      title: publishedItem.title,
+      createdAt: Date.now(),
+      chunks: contentTxIds.map((transactionId, index) => ({
+        index: index,
+        transactionId: transactionId,
+        hash: contentChunkHashes[index] || ''
+      })),
+      totalChunks: publishedItem.glyphCount
+    },
+    selectedUser.publicKey
+  );
 
 console.log('✅ handleMerklePublish: Stored published item (user-scoped)');
 

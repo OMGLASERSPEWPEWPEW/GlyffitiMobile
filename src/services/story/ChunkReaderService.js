@@ -2,6 +2,7 @@
 // Path: src/services/story/ChunkReaderService.js
 import { Connection, clusterApiUrl, PublicKey } from '@solana/web3.js';
 import { globalRPCRateLimiter } from '../blockchain/shared/GlobalRPCRateLimiter';
+import { CompressionService } from '../compression/CompressionService';
 import bs58 from 'bs58';
 
 /**

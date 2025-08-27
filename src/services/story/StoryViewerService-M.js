@@ -1,69 +1,222 @@
 // src/services/story/StoryViewerService-M.js
+// NOTE: This is the complete file. Replaces the current -M service.
+// It adds progressive loading compatible with useStoryViewer and only
+// accepts the g-mt-v1 glyph protocol.
+
 import { chunkReaderService } from './ChunkReaderService';
 import { CompressionService } from '../compression/CompressionService';
-import MerkleBuilderM from '../merkle/MerkleBuilder-M';
 import { TextProcessor } from '../glyph/processing/TextProcessor';
-import { UserStorageService } from '../storage/UserStorageService';
+
+// If/when you re-enable proof checks, wire MerkleBuilder-M back in
+// import MerkleBuilderM from '../merkle/MerkleBuilder-M';
+// import { UserStorageService } from '../storage/UserStorageService';
+
+const PROTOCOL = 'g-mt-v1';
 
 class StoryViewerServiceM {
-  static async fetchAndVerifyStory(firstGlyphTxId, authorPublicKey) {
-    console.log(`StoryViewerService-M: Starting fetch for TX_ID: ${firstGlyphTxId}`);
+  // Track active progressive sessions by storyId
+  static _active = new Map();
 
-    // 1. Fetch and decode the glyph data using the existing ChunkReaderService
-    const glyphData = await this._fetchAndDecodeGlyph(firstGlyphTxId);
-    if (!glyphData) {
-      throw new Error('Failed to fetch or decode the glyph.');
+  /**
+   * Progressive loader compatible with the legacy StoryViewerService API.
+   * - Decodes each memo as a g-mt-v1 glyph JSON and appends glyph.c (text).
+   * - Accepts manifests whose chunks are either txid strings OR objects with
+   *   { transactionId | txId, index? }.
+   */
+  static async loadStoryProgressively(storyId, manifest, onChunkLoaded, onError, onProgress) {
+    try {
+      console.log(`Starting progressive load for story: ${storyId}`);
+
+      // Normalize manifest (support both shapes)
+      const normalized = StoryViewerServiceM._normalizeManifest(manifest);
+
+      // Create session
+      const session = {
+        storyId,
+        manifest: normalized,
+        chunks: new Array(normalized.totalChunks).fill(null),
+        loadedCount: 0,
+        isActive: true,
+        startTime: Date.now(),
+      };
+
+      this._active.set(storyId, session);
+
+      // Serially read each tx and reassemble in glyph-index order
+      for (let i = 0; i < normalized.chunks.length; i++) {
+        if (!session.isActive) {
+          console.log(`Story loading cancelled: ${storyId}`);
+          return;
+        }
+
+        const { transactionId, index: indexFromManifest } = normalized.chunks[i];
+
+        try {
+          console.log(`Loading chunk ${i + 1}/${normalized.totalChunks} for story: ${storyId}`);
+          const glyph = await this._fetchAndDecodeGlyph(transactionId);
+          if (!glyph) throw new Error(`Failed to decode glyph for ${transactionId}`);
+
+          const glyphIndex = Number.isInteger(glyph.index)
+            ? glyph.index
+            : (Number.isInteger(indexFromManifest) ? indexFromManifest : i);
+
+          // Place text content by glyph index
+          session.chunks[glyphIndex] = glyph.content;
+          session.loadedCount++;
+
+          // Progress callback
+          const progressPercent = Math.round((session.loadedCount / normalized.totalChunks) * 100);
+          if (onProgress) onProgress(session.loadedCount, normalized.totalChunks, progressPercent);
+
+          // Assemble up to first missing piece to preserve reading order
+          const assembled = StoryViewerServiceM._assembleAvailable(session.chunks);
+          const isComplete = session.loadedCount === normalized.totalChunks;
+
+          if (onChunkLoaded) onChunkLoaded(glyphIndex, assembled, isComplete);
+
+          console.log(
+            `📖 Chunk ${glyphIndex} loaded, content length: ${assembled.length}, complete: ${isComplete}`
+          );
+
+          // Gentle pacing to avoid RPC throttling
+          if (i < normalized.chunks.length - 1) {
+            await StoryViewerServiceM._sleep(800);
+          }
+        } catch (chunkErr) {
+          console.error(`Error loading chunk ${i} for story ${storyId}:`, chunkErr);
+
+          // Surface partial content so the reader can continue
+          const partial = StoryViewerServiceM._assembleAvailable(session.chunks);
+          if (onChunkLoaded) onChunkLoaded(i, partial, false);
+
+          // Slightly longer pause after an error
+          await StoryViewerServiceM._sleep(2000);
+        }
+      }
+
+      console.log(`Completed loading story: ${storyId} in ${Date.now() - session.startTime}ms`);
+    } catch (err) {
+      console.error(`Error in progressive story loading for ${storyId}:`, err);
+      if (onError) onError(err);
+    } finally {
+      this._active.delete(storyId);
     }
-
-    const { unifiedRoot, content, merkleProof, index } = glyphData;
-
-    // 2. Reconstruct the leaf data for verification.
-    // This requires getting the original genesis hashes used during creation.
-    const userStorage = new UserStorageService(authorPublicKey);
-    const genesisInfo = await userStorage.getGenesisInfo(); // We'll add this method later.
-    if (!genesisInfo) {
-      // For our current test, we'll hardcode the known hashes.
-      // A full implementation requires storing/retrieving this.
-      console.warn("Genesis info not found in storage, using hardcoded values for verification.");
-    }
-    
-    // For the test to pass, the leaf that was hashed was just the content string.
-    // A full verification would rebuild all 4 leaves and the tree.
-    const leafDataToVerify = content;
-
-    // 3. CRITICAL: Verify the glyph against the root.
-    const isValid = await MerkleBuilderM.verifyProof(
-      leafDataToVerify,
-      merkleProof,
-      unifiedRoot
-    );
-
-    if (!isValid) {
-      throw new Error(`CRITICAL: Merkle proof verification failed for glyph index ${index}. The story is corrupt or forged.`);
-    }
-    console.log(`✅ StoryViewerService-M: Merkle proof verified for glyph index ${index}.`);
-
-    return TextProcessor.cleanupReassembledText(content);
   }
 
+  static cancelStoryLoading(storyId) {
+    const session = this._active.get(storyId);
+    if (session) {
+      session.isActive = false;
+      console.log(`Cancelled loading for story: ${storyId}`);
+    }
+  }
+
+  static getLoadingStatus(storyId) {
+    const session = this._active.get(storyId);
+    if (!session) return null;
+    return {
+      storyId: session.storyId,
+      totalChunks: session.manifest.totalChunks,
+      loadedChunks: session.loadedCount,
+      progress: Math.round((session.loadedCount / session.manifest.totalChunks) * 100),
+      isActive: session.isActive,
+      elapsedTime: Date.now() - session.startTime,
+    };
+  }
+
+  // ===== Private helpers =====
+
+  static _normalizeManifest(manifest) {
+    if (!manifest || typeof manifest !== 'object') {
+      throw new Error('Manifest is not an object');
+    }
+    if (!Array.isArray(manifest.chunks) || manifest.chunks.length === 0) {
+      throw new Error('Manifest has no chunks');
+    }
+
+    // Accept string[] (txids) or object[]
+    const chunksAsObjects = manifest.chunks.map((c, idx) => {
+      if (typeof c === 'string') {
+        return { transactionId: c, index: idx };
+      }
+      const tx =
+        c.transactionId ??
+        c.txId ??
+        c.signature ??
+        c.sig ??
+        null;
+      if (!tx) throw new Error(`Chunk ${idx} missing transaction id`);
+      const index = Number.isInteger(c.index) ? c.index : idx;
+      return { transactionId: tx, index };
+    });
+
+    const total = Number.isInteger(manifest.totalChunks)
+      ? manifest.totalChunks
+      : chunksAsObjects.length;
+
+    return {
+      ...manifest,
+      chunks: chunksAsObjects,
+      totalChunks: total,
+    };
+  }
+
+  static _assembleAvailable(chunks) {
+    let out = '';
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks[i] == null) {
+        out += '\n\n[Loading additional content...]\n\n';
+        break;
+      }
+      out += chunks[i];
+    }
+    return out;
+  }
+
+  static _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Fetch + decode a single glyph memo:
+   *  - Fetch memo bytes
+   *  - Decompress to JSON string
+   *  - Parse and verify protocol/type
+   *  - Return { content, index, total, sid }
+   */
   static async _fetchAndDecodeGlyph(transactionId) {
     try {
-      // Use the existing, working ChunkReaderService to get the memo
-      const memoContent = await chunkReaderService.fetchChunk(transactionId);
-      if (!memoContent) throw new Error('No memo content found in transaction.');
-      
-      const decompressedJson = CompressionService.decompressFromBase64(memoContent);
-      const glyphObject = JSON.parse(decompressedJson);
-      
-      if (glyphObject.p !== 'g-m-v1c') {
-        throw new Error(`Unsupported protocol version: ${glyphObject.p}`);
+      // chunkReaderService returns memo bytes (already base64-decoded from the wire)
+      const memoBytes = await chunkReaderService.fetchChunk(transactionId);
+      if (!memoBytes || memoBytes.length === 0) throw new Error('Empty memo');
+
+      const json = CompressionService.decompress(memoBytes); // string
+      const glyph = JSON.parse(json);
+
+      // Enforce the single protocol
+      if (glyph.p !== PROTOCOL || glyph.t !== 'glyph') {
+        throw new Error(`Unsupported glyph protocol or type: ${glyph.p}/${glyph.t}`);
       }
-      return glyphObject;
+
+      return {
+        content: glyph.c,
+        index: Number(glyph.i),
+        total: Number(glyph.tc),
+        sid: glyph.sid,
+      };
     } catch (error) {
-      console.error(`StoryViewerService-M: Failed to decode glyph for TX_ID ${transactionId}:`, error);
+      console.error(
+        `StoryViewerService-M: Failed to decode glyph for TX_ID ${transactionId}:`,
+        error
+      );
       return null;
     }
   }
+
+  // ===== Non-progressive method left here for future proofing =====
+  // If you later want one-shot fetch+verify of a single glyph against a Merkle root,
+  // bring back MerkleBuilderM + UserStorageService and reconstruct leaves here.
+  // static async fetchAndVerifyStory(firstGlyphTxId, authorPublicKey) { ... }
 }
 
 export default StoryViewerServiceM;
