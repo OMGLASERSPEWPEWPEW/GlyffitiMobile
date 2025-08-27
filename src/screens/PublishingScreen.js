@@ -259,9 +259,38 @@ try {
     status: 'completed'
   };
   
-  // Store in user-scoped published content
-  await UserStorageService.addPublishedContent(selectedUser.publicKey, publishedItem);
-  console.log('✅ handleMerklePublish: Stored published item in user storage');
+  // src/screens/PublishingScreen.js — handleMerklePublish()
+// Save to user-scoped storage using the canonical API & id field
+publishedItem.contentId = result.storyId; // canonical id for deletes & lookups
+
+const contentTxIds = result.glyphTransactionIds || [];
+const contentCount = contentTxIds.length;
+
+publishedItem.manifest = {
+  storyId: result.storyId,
+  title: publishedItem.title,
+  author: selectedUser?.username || selectedUser?.publicKey,
+  chunks: contentTxIds,       // just the 9 glyph txs
+  totalChunks: contentCount   // must equal chunks.length
+};
+
+// Persist in user-scoped storage
+await UserStorageService.savePublishedStory(publishedItem, selectedUser.publicKey);
+
+// (optional, but nice) also save a user-scoped scroll/manifest record
+await UserStorageService.saveUserScroll(
+  {
+    storyId: result.storyId,
+    title: publishedItem.title,
+    createdAt: Date.now(),
+    chunks: result.glyphTransactionIds,
+    totalChunks: publishedItem.glyphCount
+  },
+  selectedUser.publicKey
+);
+
+console.log('✅ handleMerklePublish: Stored published item (user-scoped)');
+
   
 } catch (storageError) {
   console.error('⚠️ handleMerklePublish: Failed to store published item:', storageError);
@@ -295,37 +324,40 @@ await loadExistingContent();
 };
 
 const handleViewPublishedContent = async (item) => {
-    // This function now handles both types of content
-    if (item.type === 'merkle-v1') {
-      // Handle new Merkle stories
-      setIsPublishing(true);
-      setProgress({ message: 'Fetching and verifying story...' });
-      try {
-        const firstTxId = item.transactionIds[0];
-        const content = await StoryViewerServiceM.fetchAndVerifyStory(firstTxId, item.authorPublicKey);
-        
-        // Navigate to the viewer screen with the verified content
-        navigation.navigate('StoryView', {
-          storyId: item.id,
-          // Create a temporary manifest for the viewer screen
-          manifest: { title: item.title, authorName: selectedUser },
-          preloadedContent: content, // Pass the already loaded content
-        });
+  // New/Merkle-v1 stories (3-tier)
+  if (item.type === 'merkle-v1') {
+    // Normalize to a viewer-ready manifest
+    const txs = item.transactionIds || item.glyphTransactionIds || [];
+    const viewerManifest = item.manifest || {
+      protocol: 'merkle-v1',
+      storyId: item.storyId || item.contentId || item.id,
+      title: item.title,
+      author: (selectedUser?.username || selectedUser?.publicKey || item.authorName),
+      chunks: txs.map((txId, index) => ({ txId, index, type: 'glyph' })), // << required objects
+      totalChunks: txs.length
+    };
 
-      } catch (error) {
-        Alert.alert("Verification Failed", error.message);
-      } finally {
-        setIsPublishing(false);
-        setProgress({ message: '' });
-      }
-    } else {
-      // Handle old legacy stories
-      navigation.navigate('StoryView', {
-        storyId: item.contentId,
-        manifest: item,
-      });
-    }
-  };
+    console.log('📖 Opening story viewer for:', viewerManifest.title);
+    console.log('✅ Navigating to story view with manifest:', {
+      storyId: viewerManifest.storyId,
+      title: viewerManifest.title,
+      chunks: viewerManifest.totalChunks
+    });
+
+    navigation.navigate('StoryView', {
+      storyId: viewerManifest.storyId,
+      manifest: viewerManifest,
+      autoStart: true
+    });
+    return;
+  }
+
+  // Legacy stories
+  navigation.navigate('StoryView', {
+    storyId: item.contentId,
+    manifest: item,
+  });
+};
 
 const handleMerkleVerify = async () => {
     setIsPublishing(true);
@@ -556,57 +588,61 @@ useEffect(() => {
   };
 
   // Handle viewing a published story
-  const handleViewStory = async (item) => {
-    try {
-      console.log('📖 Opening story viewer for:', item.title);
-      
-      // Get manifest from the item or try to load it
-      let manifest = item.manifest;
-      
-      if (!manifest && item.scrollId) {
-        try {
-          manifest = await StorageService.loadScroll(item.scrollId);
-        } catch (error) {
-          console.warn('⚠️ Could not load manifest from ScrollManager:', error);
-          Alert.alert(
-            'Story Loading Issue',
-            'The story data may be incomplete.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
+  // src/screens/PublishingScreen.js
+const handleViewStory = async (item) => {
+  try {
+    console.log('📖 Opening story viewer for:', item.title);
+
+    // 1) Start with any manifest already on the item
+    let manifest = item.manifest || null;
+
+    // 2) If none, try loading any persisted scroll by id
+    if (!manifest && item.scrollId) {
+      try {
+        manifest = await StorageService.loadScroll(item.scrollId);
+      } catch (err) {
+        console.warn('⚠️ Could not load manifest from ScrollManager:', err);
       }
-      
-      if (!manifest || !manifest.chunks || manifest.chunks.length === 0) {
-        Alert.alert(
-          'Story Unavailable',
-          'This story cannot be viewed because the content data is missing or incomplete.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-      
-      console.log('✅ Navigating to story view with manifest:', {
-        storyId: manifest.storyId,
-        title: manifest.title,
-        chunks: manifest.chunks.length
-      });
-      
-      navigation.navigate('StoryView', {
-        storyId: manifest.storyId,
-        manifest: manifest,
-        autoStart: true
-      });
-      
-    } catch (error) {
-      console.error('❌ Error opening story:', error);
-      Alert.alert(
-        'Error',
-        'Failed to open the story. Please try again.',
-        [{ text: 'OK' }]
-      );
     }
-  };
+
+    // 3) If still none, backfill from the item’s fields (new merkle saved items have transactionIds)
+    if (!manifest && Array.isArray(item.transactionIds) && item.transactionIds.length > 0) {
+      manifest = {
+        storyId: item.storyId || item.contentId || item.id,
+        title: item.title,
+        chunks: item.transactionIds.slice(),   // clone
+        totalChunks: item.transactionIds.length
+      };
+    }
+
+    // 4) Final validation / normalization
+    if (!manifest || !Array.isArray(manifest.chunks) || manifest.chunks.length === 0) {
+      Alert.alert('Story Unavailable', 'This story cannot be viewed because the content data is missing or incomplete.', [{ text: 'OK' }]);
+      return;
+    }
+    if (manifest.totalChunks !== manifest.chunks.length) {
+      // normalize to content-only totals
+      manifest = { ...manifest, totalChunks: manifest.chunks.length };
+    }
+
+    console.log('✅ Navigating to story view with manifest:', {
+      storyId: manifest.storyId,
+      title: manifest.title,
+      chunks: manifest.chunks.length
+    });
+
+    navigation.navigate('StoryView', {
+      storyId: manifest.storyId,
+      manifest,
+      autoStart: true
+    });
+
+  } catch (error) {
+    console.error('❌ Error opening story:', error);
+    Alert.alert('Error', 'Failed to open the story. Please try again.', [{ text: 'OK' }]);
+  }
+};
+
 
   // Clear published data (for testing)
   const handleClearPublished = async () => {

@@ -212,10 +212,19 @@ export const useStoryViewer = (initialStoryId = null, initialManifest = null, op
         setManifest(manifestToLoad);
       }
       
+      const fixedManifest = (() => {
+        const m = manifestToLoad;
+          if (!m || !Array.isArray(m.chunks)) throw new Error('Invalid manifest structure');
+            if (typeof m.totalChunks !== 'number' || m.totalChunks !== m.chunks.length) {
+              return { ...m, totalChunks: m.chunks.length };
+            }
+            return m;
+          })();
+
       // Start progressive loading
       await storyViewerService.loadStoryProgressively(
         storyId,
-        manifestToLoad,
+        fixedManifest,
         handleChunkLoaded,
         handleError,
         handleProgress
@@ -225,6 +234,9 @@ export const useStoryViewer = (initialStoryId = null, initialManifest = null, op
       handleError(error);
     }
   }, [storyId, manifest, cacheEnabled, loadFromCache, handleChunkLoaded, handleError, handleProgress]);
+  
+
+
   
   /**
    * Stop loading
