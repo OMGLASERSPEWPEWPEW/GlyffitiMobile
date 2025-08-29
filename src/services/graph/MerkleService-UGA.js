@@ -17,29 +17,20 @@ import { HashingServiceUGA } from '../hashing/HashingService-UGA';
  */
 export class MerkleServiceUGA {
 
-  // Fixed structure constants for ADR-006
-  static LANE_COUNT = 8;  // UGR always has exactly 8 lanes
+  // Fixed structure constants for ADR-006 (Updated to 32 lanes)
+  static LANE_COUNT = 32;  // UGR now has exactly 32 lanes
   static IDENTITY_LEAVES = 3;  // Identity root always has exactly 3 leaves
 
   // Zero hash for empty/placeholder lanes
   static ZERO_HASH = '0'.repeat(64);
 
   /**
-   * Create User Graph Root (UGR) from exactly 8 lane roots
+   * Create User Graph Root (UGR) from a power-of-two number of lane roots
    * 
-   * This implements the fixed-shape 8-leaf Merkle tree specified in ADR-006.
-   * Unlike general Merkle trees, this structure is always complete and predictable.
+   * This implements the fixed-shape Merkle tree specified in our protocol.
+   * The structure is always complete and predictable.
    * 
-   * Tree structure:
-   *           UGR
-   *         /     \
-   *     L01-23   L45-67
-   *    /     \   /     \
-   *  L0-1  L2-3 L4-5  L6-7
-   *  / \   / \ / \   / \
-   * L0 L1 L2 L3 L4 L5 L6 L7
-   * 
-   * @param {string[]} laneRoots - Array of exactly 8 lane root hashes
+   * @param {string[]} laneRoots - Array of exactly LANE_COUNT root hashes
    * @returns {Promise<{root: string, tree: Object}>} - UGR root hash and tree structure
    */
   static async createUGR(laneRoots) {
@@ -54,6 +45,11 @@ export class MerkleServiceUGA {
       if (laneRoots.length !== this.LANE_COUNT) {
         throw new Error(`UGR requires exactly ${this.LANE_COUNT} lane roots, got ${laneRoots.length}`);
       }
+      
+      // Optional but recommended: Validate that the count is a power of two
+      if ((laneRoots.length & (laneRoots.length - 1)) !== 0 || laneRoots.length === 0) {
+        throw new Error('Number of lane roots must be a power of two.');
+      }
 
       // Validate that each lane root is a valid hash (64 hex characters)
       for (let i = 0; i < laneRoots.length; i++) {
@@ -63,36 +59,30 @@ export class MerkleServiceUGA {
         }
       }
 
-      console.log('MerkleService-UGA.js: createUGR: Building 3-level fixed Merkle tree');
+      const treeDepth = Math.log2(laneRoots.length);
+      console.log(`MerkleService-UGA.js: createUGR: Building ${treeDepth}-level fixed Merkle tree for ${this.LANE_COUNT} lanes`);
 
-      // Level 0: Leaf hashes (8 lane roots)
-      const level0 = [...laneRoots];
+      const levels = [[...laneRoots]];
+      let currentLevel = levels[0];
 
-      // Level 1: Pair up adjacent leaves (4 internal nodes)
-      const level1 = [];
-      for (let i = 0; i < level0.length; i += 2) {
-        const left = level0[i];
-        const right = level0[i + 1];
-        const parentHash = await this._hashPair(left, right);
-        level1.push(parentHash);
+      while (currentLevel.length > 1) {
+        const nextLevel = [];
+        for (let i = 0; i < currentLevel.length; i += 2) {
+          const left = currentLevel[i];
+          const right = currentLevel[i + 1];
+          const parentHash = await this._hashPair(left, right);
+          nextLevel.push(parentHash);
+        }
+        levels.push(nextLevel);
+        currentLevel = nextLevel;
       }
 
-      // Level 2: Pair up level 1 nodes (2 internal nodes)
-      const level2 = [];
-      for (let i = 0; i < level1.length; i += 2) {
-        const left = level1[i];
-        const right = level1[i + 1];
-        const parentHash = await this._hashPair(left, right);
-        level2.push(parentHash);
-      }
-
-      // Level 3: Final UGR root (1 root node)
-      const ugrRoot = await this._hashPair(level2[0], level2[1]);
+      const ugrRoot = currentLevel[0];
 
       const tree = {
         root: ugrRoot,
-        levels: [level0, level1, level2, [ugrRoot]],
-        structure: 'fixed-8-leaf'
+        levels: levels,
+        structure: `fixed-${this.LANE_COUNT}-leaf`
       };
 
       console.log('MerkleService-UGA.js: createUGR: UGR created successfully, root:', ugrRoot.substring(0, 16) + '...');
@@ -283,7 +273,7 @@ export class MerkleServiceUGA {
 
   /**
    * Create placeholder lane roots for testing (all zeros)
-   * @returns {string[]} - Array of 8 zero hashes
+   * @returns {string[]} - Array of 32 zero hashes
    */
   static createPlaceholderLaneRoots() {
     console.log('MerkleService-UGA.js: createPlaceholderLaneRoots: Creating placeholder lane roots');

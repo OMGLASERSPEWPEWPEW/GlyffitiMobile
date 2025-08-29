@@ -115,54 +115,7 @@ export class HashingServiceUGA {
     }
   }
 
-  /**
-   * Create User Graph Root (UGR) hash from 8 lane roots
-   * @param {string[]} laneRoots - Array of 8 lane root hashes (fixed-shape tree)
-   * @returns {Promise<string>} - UGR hash with domain separation
-   */
-  static async createUGRHash(laneRoots) {
-    console.log('HashingService-UGA.node.js: createUGRHash: Creating UGR hash from lane roots');
-    
-    try {
-      if (!Array.isArray(laneRoots) || laneRoots.length !== 8) {
-        throw new Error('UGR requires exactly 8 lane roots');
-      }
-
-      // Concatenate all lane roots
-      const payload = laneRoots.join('');
-      const ugrHash = await this.hashWithDomain(this.DOMAINS.UGR, payload);
-      
-      console.log('HashingService-UGA.node.js: createUGRHash: UGR hash created successfully');
-      return ugrHash;
-    } catch (error) {
-      console.error('HashingService-UGA.node.js: createUGRHash: Error creating UGR hash:', error);
-      throw new Error(`Failed to create UGR hash: ${error.message}`);
-    }
-  }
-
-  /**
-   * Create final identity root hash from UGR, user genesis, and platform genesis
-   * @param {string} ugrHash - User Graph Root hash
-   * @param {string} userGenesisHash - User genesis hash
-   * @param {string} glyffitiGenesisHash - Platform genesis hash
-   * @returns {Promise<string>} - Identity root hash
-   */
-  static async createIdentityRootHash(ugrHash, userGenesisHash, glyffitiGenesisHash) {
-    console.log('HashingService-UGA.node.js: createIdentityRootHash: Creating identity root hash');
-    
-    try {
-      // ADR-006 specification: concatenate the three components
-      const payload = ugrHash + userGenesisHash + glyffitiGenesisHash;
-      const identityRoot = await this.hashWithDomain(this.DOMAINS.IDENTITY_ROOT, payload);
-      
-      console.log('HashingService-UGA.node.js: createIdentityRootHash: Identity root hash created successfully');
-      return identityRoot;
-    } catch (error) {
-      console.error('HashingService-UGA.node.js: createIdentityRootHash: Error creating identity root hash:', error);
-      throw new Error(`Failed to create identity root hash: ${error.message}`);
-    }
-  }
-
+  
   /**
    * Run comprehensive self-test for UGA hashing functionality (Node.js version)
    * @returns {Promise<boolean>} - True if all tests pass
@@ -188,19 +141,6 @@ export class HashingServiceUGA {
       const userGenesisHash = await this.createUserGenesisHash(testUserKey, testGenesisHash, testUsername);
       if (!userGenesisHash || userGenesisHash.length !== 64) {
         throw new Error('User genesis hash creation failed');
-      }
-
-      // Test 3: UGR hash creation
-      const testLaneRoots = new Array(8).fill('test_lane_root_hash');
-      const ugrHash = await this.createUGRHash(testLaneRoots);
-      if (!ugrHash || ugrHash.length !== 64) {
-        throw new Error('UGR hash creation failed');
-      }
-
-      // Test 4: Identity root hash creation
-      const identityRoot = await this.createIdentityRootHash(ugrHash, userGenesisHash, testGenesisHash);
-      if (!identityRoot || identityRoot.length !== 64) {
-        throw new Error('Identity root hash creation failed');
       }
 
       // Test 5: Deterministic hashing

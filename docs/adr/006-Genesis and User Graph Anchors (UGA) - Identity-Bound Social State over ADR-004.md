@@ -81,23 +81,17 @@ Deterministic order and tags prevent cross-type collisions and malleability.
 
 3.2 Structured Merkle for User Graph Root (UGR)
 
-UGRᵢ is a fixed-shape Merkle whose children are (in order):
+UGRᵢ is a fixed-shape Merkle whose children are ((in order, expanded to 32 lanes for future-proofing)):
 
-POSTS lane root
-
-REPLIES lane root
-
-LIKES/REACTIONS lane root
-
-FOLLOWS lane root
-
-STORIES lane root (references ADR-004 manifestRoots)
-
-PROFILE lane root
-
-REVOCATIONS lane root
-
-RESERVED (zero-hash sentinel for forward compatibility)
+1. `POSTS` lane root
+2. `REPLIES` lane root
+3. `LIKES/REACTIONS` lane root
+4. `FOLLOWS` lane root
+5. `STORIES` lane root (references ADR-004 manifestRoots)
+6. `PROFILE` lane root
+7. `REVOCATIONS` lane root
+8. `BOOKMARKS` lane root (formerly `RESERVED`)
+9. ... 32. `RESERVED` (zero-hash sentinels for forward compatibility)
 
 Each lane root is itself a Merkle over chunk roots (Chunked Merkle Array, CMA). Each chunk is a Merkle over items (append-only), and items include prev pointers for streaming UX.
 
@@ -131,6 +125,8 @@ Lane roots: H("LANE\0" || MerkleRoot(chunkRoots))
 UGR: H("UGR \0" || MerkleRoot(8 lane roots in order))
 
 Note: bodyHash, metaHash, and story content remain in off-chain storage (object store/IPFS/Arweave). Only roots/IDs go on chain.
+
+UGR: H("UGR \0" || MerkleRoot(32 lane roots in order))
 
 3.4 On-chain Commitments (normative)
 
@@ -232,15 +228,11 @@ Fetch the latest UGA tx for U. Parse (identityRootᵢ, userGenesis, glyffitiGene
 
 Check userGenesis tx exists and binds userPubKey to glyffitiGenesis (U₀ → G₀).
 
-Verify multiproof:
-
-p ∈ chunkRoot[k] (8 sibling hashes for a 256-item chunk).
-
-chunkRoot[k] ∈ laneRoot_posts (depth ≈ 2–3).
-
-laneRoot_posts ∈ UGRᵢ (depth 3 fixed-shape tree).
-
-UGRᵢ with (U₀, G₀) → identityRootᵢ. Must match on-chain.
+3. Verify multiproof:
+    * `p ∈ chunkRoot[k]` (8 sibling hashes for a 256-item chunk).
+    * `chunkRoot[k] ∈ laneRoot_posts` (depth ≈ 2–3).
+    * `laneRoot_posts ∈ UGRᵢ` (depth 5 fixed-shape tree).
+    * `UGRᵢ` with `(U₀, G₀) → identityRootᵢ`. Must match on-chain.
 
 (If story) verify ADR-004 path:
 
@@ -374,7 +366,7 @@ flowchart TD
     UGR["UserGraphRoot UGRᵢ"]
   end
 
-  subgraph UGR_Shape["UGRᵢ (fixed-shape Merkle)"]
+  subgraph UGR_Shape["UGRᵢ (fixed-shape Merkle, 32 lanes)"]
     P["POSTS lane root"]
     R["REPLIES lane root"]
     L["LIKES lane root"]
@@ -382,13 +374,14 @@ flowchart TD
     S["STORIES lane root"]
     PR["PROFILE lane root"]
     V["REVOCATIONS lane root"]
-    Z["RESERVED (zero)"]
+    B["BOOKMARKS lane root"]
+    Z["... RESERVED (24)"]
   end
 
   G0 --> U0
   U0 --> UGA
   UGA --> UGR
-  UGR --> P & R & L & F & S & PR & V & Z
+  UGR --> P & R & L & F & S & PR & V & B & Z
 
 12.2 Lane Structure
 flowchart LR
