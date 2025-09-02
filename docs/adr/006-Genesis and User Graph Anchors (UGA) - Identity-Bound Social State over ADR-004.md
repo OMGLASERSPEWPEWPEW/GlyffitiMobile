@@ -130,7 +130,7 @@ Chunk roots: H("CHNK\0" || MerkleRoot(items_in_chunk))
 Lane roots: H("LANE\0" || MerkleRoot(chunkRoots))
 UGR: H("UGR \0" || MerkleRoot(8 lane roots in order))
 
-Note: bodyHash, metaHash, and story content remain in off-chain storage (object store/IPFS/Arweave). Only roots/IDs go on chain.
+Note: Story content and other large payloads are chunked into a series of on-chain transactions (glyphs), following the pattern established in ADR-004. The `bodyHash` in an item leaf refers to the content's hash, and the full content is retrieved by assembling its on-chain glyphs.
 
 3.4 On-chain Commitments (normative)
 
