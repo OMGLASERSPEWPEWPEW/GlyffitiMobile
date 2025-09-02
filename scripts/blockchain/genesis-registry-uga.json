@@ -1,0 +1,17 @@
+{
+  "network": "devnet",
+  "transactionId": "4g12GsdfNnMdyJHvs3QWYkeiD5z3K5jbMUcGhnod3XWuUSRjJbyeJijA9wHoHTr61KnS1jkPrS7DMyP6BH1wuc8A",
+  "genesisHash": "65f4ee9e6de8d169a6a0e7f1921b55930f61e983bf4131928836184c3a6f8163",
+  "deployerAddress": "Ew5QUU5SU8a32RzettZsorLd6tranDzMpqGbRMkXXV2Z",
+  "deployedAt": "2025-08-29T19:14:46.502Z",
+  "genesisData": {
+    "kind": "glyffiti_genesis",
+    "version": "1.0.0",
+    "protocol": "glyffiti-uga",
+    "network": "devnet",
+    "timestamp": 1756494885,
+    "adr": "006"
+  },
+  "adrVersion": "006",
+  "explorerUrl": "https://explorer.solana.com/tx/4g12GsdfNnMdyJHvs3QWYkeiD5z3K5jbMUcGhnod3XWuUSRjJbyeJijA9wHoHTr61KnS1jkPrS7DMyP6BH1wuc8A?cluster=devnet"
+}

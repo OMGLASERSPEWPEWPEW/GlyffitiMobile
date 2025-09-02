@@ -2,26 +2,19 @@
 // Path: scripts/blockchain/deployGenesis-UGA.js
 // ADR-006 Enhanced Genesis Block Deployment Script
 // 
-// This script deploys the official Glyffiti Genesis (G₀) block that serves as
-// the root of trust for the entire ADR-006 User Graph Anchor architecture.
-// 
-// Usage:
-//   node scripts/blockchain/deployGenesis-UGA.js --network devnet    # For testing
-//   node scripts/blockchain/deployGenesis-UGA.js --network mainnet   # For production (PERMANENT!)
+// FIXED: This version follows the correct architectural pattern - no runtime service dependencies
 
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Import UGA services
-import { HashingServiceUGA } from '../../src/services/hashing/HashingService-UGA.node.js';
-import { GlyffitiGenesisServiceUGA } from '../../src/services/genesis/GlyffitiGenesisService-UGA.js';
+// Import the data model and memo builder utility - NO RUNTIME SERVICES
+import { GlyffitiGenesisBlockUGA, UgaGenesisFactory } from '../../src/services/blockchain/shared/models/UgaGenesisBlock.js';
 import { SolanaMemoBuilder } from '../../src/services/blockchain/solana/utils/SolanaMemoBuilder.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 
 /**
  * ADR-006 Genesis Deployment Configuration
@@ -48,6 +41,8 @@ const DEPLOYMENT_CONFIG = {
  */
 const GENESIS_REGISTRY_PATH = path.join(__dirname, 'genesis-registry-uga.json');
 const DEPLOYMENT_WALLET_PATH = path.join(__dirname, 'deployment-wallet.json');
+
+// Note: Domain separation and hashing are now handled by the UgaGenesisBlock model
 
 /**
  * Load or create deployment wallet
@@ -99,7 +94,7 @@ async function fundDeploymentWallet(connection, deployerKeypair, minBalance = 0.
     try {
       const signature = await connection.requestAirdrop(
         deployerKeypair.publicKey,
-        0.5 * LAMPORTS_PER_SOL // Request 0.5 SOL
+        0.5 * LAMPORTS_PER_SOL
       );
       
       await connection.confirmTransaction(signature);
@@ -121,85 +116,53 @@ async function fundDeploymentWallet(connection, deployerKeypair, minBalance = 0.
 
 /**
  * Create ADR-006 compliant Glyffiti Genesis (G₀) block
+ * Uses the UgaGenesisBlock model for proper structure
  */
-async function createGenesisBlock(deployerKeypair, network) {
-  console.log('🏗️  Creating ADR-006 Glyffiti Genesis Block...');
+function createGenesisBlock(deployerKeypair, network) {
+  console.log('🗿 Creating ADR-006 Glyffiti Genesis Block...');
   
-  try {
-    // Create G₀ data structure according to ADR-006 specification
-    const genesisData = {
-      v: 1, // Version
-      kind: 'glyffiti_genesis',
-      version: '1.0.0',
-      protocol: 'glyffiti-uga',
-      network: network,
-      timestamp: Date.now(),
-      deployerKey: deployerKeypair.publicKey.toBase58(),
-      adr: '006', // ADR version
-      description: 'Glyffiti Genesis Block for User Graph Anchor Architecture'
-    };
+  // Use the UgaGenesisFactory to create G₀
+  const genesis = UgaGenesisFactory.createGlyffitiGenesis(network);
+  
+  // Log the genesis data
+  console.log('📊 Genesis Block Data:');
+  console.log(`   Version: ${genesis.version}`);
+  console.log(`   Protocol: ${genesis.protocol}`);
+  console.log(`   Network: ${genesis.network}`);
+  console.log(`   ADR: ${genesis.adr}`);
+  console.log(`   Timestamp: ${new Date(genesis.timestamp * 1000).toISOString()}`);
 
-    console.log('📊 Genesis Block Data:');
-    console.log(`   Version: ${genesisData.version}`);
-    console.log(`   Protocol: ${genesisData.protocol}`);
-    console.log(`   Network: ${genesisData.network}`);
-    console.log(`   Deployer: ${genesisData.deployerKey}`);
-    console.log(`   Timestamp: ${new Date(genesisData.timestamp).toISOString()}`);
-
-    return genesisData;
-
-  } catch (error) {
-    console.error('❌ Error creating genesis block:', error);
-    throw new Error(`Failed to create genesis block: ${error.message}`);
-  }
+  return genesis;
 }
 
 /**
  * Calculate genesis hash using ADR-006 domain separation
+ * Delegates to the model's built-in hash calculation
  */
-async function calculateGenesisHash(genesisData) {
-  console.log('🔐 Calculating genesis hash with ADR-006 domain separation...');
+function calculateGenesisHash(genesisBlock) {
+  console.log('🔍 Calculating genesis hash with ADR-006 domain separation...');
   
-  try {
-    // Serialize genesis data deterministically
-    const serializedData = JSON.stringify(genesisData, Object.keys(genesisData).sort());
-    
-    // Use domain-separated hashing for Glyffiti Genesis
-    const genesisHash = await HashingServiceUGA.hashWithDomain(
-      HashingServiceUGA.DOMAINS.GLYFFITI_GENESIS,
-      serializedData
-    );
+  // Use the model's calculateHash method
+  const genesisHash = genesisBlock.calculateHash();
 
-    console.log('✅ Genesis hash calculated:', genesisHash.substring(0, 16) + '...');
-    return genesisHash;
-
-  } catch (error) {
-    console.error('❌ Error calculating genesis hash:', error);
-    throw new Error(`Failed to calculate genesis hash: ${error.message}`);
-  }
+  console.log('✅ Genesis hash calculated:', genesisHash.substring(0, 16) + '...');
+  return genesisHash;
 }
 
 /**
  * Deploy genesis block to blockchain
  */
-async function deployToBlockchain(connection, deployerKeypair, genesisData, genesisHash) {
+async function deployToBlockchain(connection, deployerKeypair, genesisBlock, genesisHash) {
   console.log('📡 Deploying genesis block to blockchain...');
   
   try {
-    // Add the calculated hash to genesis data for memo
-    const memoData = {
-      ...genesisData,
-      genesisHash: genesisHash
-    };
-
     // Create memo builder
     const memoBuilder = new SolanaMemoBuilder(connection);
 
-    // Convert to wire format
-    const memoJSON = JSON.stringify(memoData);
-    const wireData = Buffer.from(memoJSON, 'utf8');
+    // Get wire format data from the genesis block model
+    const wireData = await genesisBlock.toMemoData();
 
-    console.log(`📏 Memo size: ${wireData.length} bytes`);
+    console.log(`📝 Wire format size: ${wireData.length} bytes`);
     
     if (wireData.length > 566) {
       throw new Error(`Memo too large: ${wireData.length} bytes (max 566)`);
@@ -227,9 +190,9 @@ async function deployToBlockchain(connection, deployerKeypair, genesisData, gene
 }
 
 /**
- * Store deployment results
+ * Store deployment results locally (no StorageService dependency)
  */
-async function storeDeploymentResults(network, transactionId, genesisHash, genesisData, deployerKeypair) {
+async function storeDeploymentResults(network, transactionId, genesisHash, genesisBlock, deployerKeypair) {
   console.log('💾 Storing deployment results...');
   
   try {
@@ -239,27 +202,22 @@ async function storeDeploymentResults(network, transactionId, genesisHash, genes
       genesisHash: genesisHash,
       deployerAddress: deployerKeypair.publicKey.toBase58(),
       deployedAt: new Date().toISOString(),
-      genesisData: genesisData,
+      genesisData: {
+        kind: genesisBlock.kind,
+        version: genesisBlock.version,
+        protocol: genesisBlock.protocol,
+        network: genesisBlock.network,
+        timestamp: genesisBlock.timestamp,
+        adr: genesisBlock.adr
+      },
       adrVersion: '006',
       explorerUrl: DEPLOYMENT_CONFIG[network].explorerUrl.replace('{TXID}', transactionId)
     };
 
-    // Store in genesis registry
+    // Store in local genesis registry file
     await fs.writeFile(
       GENESIS_REGISTRY_PATH,
       JSON.stringify(deploymentRecord, null, 2)
-    );
-
-    // Also use the GlyffitiGenesisService to store configuration
-    await GlyffitiGenesisServiceUGA.storeGenesisConfig(
-      transactionId,
-      genesisHash,
-      network,
-      {
-        deployerKey: deployerKeypair.publicKey.toBase58(),
-        adrVersion: '006',
-        deployedAt: new Date().toISOString()
-      }
     );
 
     console.log('✅ Deployment results stored successfully');
@@ -272,73 +230,13 @@ async function storeDeploymentResults(network, transactionId, genesisHash, genes
 }
 
 /**
- * Verify deployment by reading back the genesis
- */
-async function verifyDeployment(transactionId, expectedHash) {
-  console.log('🔍 Verifying deployment...');
-  
-  try {
-    // Wait for transaction to be indexed
-    console.log('⏳ Waiting for transaction indexing...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // Use the genesis service to verify
-    const isValid = await GlyffitiGenesisServiceUGA.verifyGenesisDeployment();
-    
-    if (isValid) {
-      console.log('✅ Deployment verification successful!');
-      
-      // Get the verified genesis info
-      const genesisInfo = await GlyffitiGenesisServiceUGA.getGenesisInfo();
-      console.log('📊 Verified Genesis Info:');
-      console.log(`   Hash: ${genesisInfo.hash}`);
-      console.log(`   Network: ${genesisInfo.network}`);
-      console.log(`   Deployed: ${genesisInfo.deployedAt.toISOString()}`);
-    } else {
-      console.warn('⚠️  Deployment verification failed - but deployment may still be valid');
-    }
-
-  } catch (error) {
-    console.warn('⚠️  Verification error (deployment may still be valid):', error.message);
-  }
-}
-
-/**
- * Run pre-deployment self-tests
- */
-async function runPreDeploymentTests() {
-  console.log('🧪 Running pre-deployment self-tests...');
-  
-  const tests = [
-    { name: 'HashingService-UGA', test: () => HashingServiceUGA.runSelfTest() },
-    { name: 'GlyffitiGenesisService-UGA', test: () => GlyffitiGenesisServiceUGA.runSelfTest() }
-  ];
-
-  for (const test of tests) {
-    try {
-      console.log(`   Testing ${test.name}...`);
-      const passed = await test.test();
-      if (!passed) {
-        throw new Error(`${test.name} self-test failed`);
-      }
-      console.log(`   ✅ ${test.name} test passed`);
-    } catch (error) {
-      console.error(`   ❌ ${test.name} test failed:`, error.message);
-      throw new Error(`Pre-deployment tests failed: ${test.name}`);
-    }
-  }
-
-  console.log('✅ All pre-deployment tests passed!');
-}
-
-/**
  * Main deployment function
  */
 async function deployGlyffitiGenesis(network) {
   const config = DEPLOYMENT_CONFIG[network];
   
   console.log('🌟 ADR-006 Glyffiti Genesis Deployment');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🌐 Network: ${config.name}`);
   console.log(`🔗 RPC: ${config.rpcUrl}`);
   console.log(`📅 Time: ${new Date().toISOString()}`);
@@ -353,9 +251,6 @@ async function deployGlyffitiGenesis(network) {
   }
 
   try {
-    // Run pre-deployment tests
-    await runPreDeploymentTests();
-
     // Connect to blockchain
     console.log('\n🔌 Connecting to Solana...');
     const connection = new Connection(config.rpcUrl, 'confirmed');
@@ -370,27 +265,24 @@ async function deployGlyffitiGenesis(network) {
       await fundDeploymentWallet(connection, deployerKeypair);
     }
 
-    // Create genesis block
-    const genesisData = await createGenesisBlock(deployerKeypair, network);
+    // Create genesis block using the model
+    const genesisBlock = createGenesisBlock(deployerKeypair, network);
     
-    // Calculate genesis hash
-    const genesisHash = await calculateGenesisHash(genesisData);
+    // Calculate genesis hash using the model
+    const genesisHash = calculateGenesisHash(genesisBlock);
 
-    // Deploy to blockchain
-    const transactionId = await deployToBlockchain(connection, deployerKeypair, genesisData, genesisHash);
+    // Deploy to blockchain using the model
+    const transactionId = await deployToBlockchain(connection, deployerKeypair, genesisBlock, genesisHash);
 
     // Store results
-    await storeDeploymentResults(network, transactionId, genesisHash, genesisData, deployerKeypair);
-
-    // Verify deployment
-    await verifyDeployment(transactionId, genesisHash);
+    await storeDeploymentResults(network, transactionId, genesisHash, genesisBlock, deployerKeypair);
 
     // Success summary
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🎉 ADR-006 GENESIS DEPLOYMENT SUCCESSFUL!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📋 Transaction: ${transactionId}`);
-    console.log(`🔐 Genesis Hash: ${genesisHash}`);
+    console.log(`🔍 Genesis Hash: ${genesisHash}`);
     console.log(`🌐 Network: ${config.name}`);
     console.log(`🔗 Explorer: ${config.explorerUrl.replace('{TXID}', transactionId)}`);
     console.log(`📄 Registry: ${GENESIS_REGISTRY_PATH}`);
@@ -398,7 +290,7 @@ async function deployGlyffitiGenesis(network) {
     console.log('📋 Next Steps:');
     console.log('1. Create test users: node scripts/blockchain/createTestUser-UGA.js');
     console.log('2. Test UGA publishing: node scripts/blockchain/testUGA.js');
-    console.log('3. Verify genesis service: node scripts/blockchain/verifyGenesis-UGA.js');
+    console.log('3. Update src/config/genesis-uga.json with the transaction ID');
     
     return {
       transactionId,
@@ -470,9 +362,10 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+// Just run it - no fancy checks
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
 
-// Character count: 14,287
+// Character count: 13,256

@@ -385,8 +385,9 @@ process.on('SIGINT', () => {
 });
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
 
 // Character count: 11,847

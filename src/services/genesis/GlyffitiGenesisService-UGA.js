@@ -1,8 +1,8 @@
 // src/services/genesis/GlyffitiGenesisService-UGA.js
 // Path: src/services/genesis/GlyffitiGenesisService-UGA.js
 
-import { BlockchainService } from '../blockchain/BlockchainService';
-import { StorageService } from '../storage/StorageService';
+import { BlockchainService } from '../blockchain/BlockchainService.js';
+import { StorageService } from '../storage/StorageService.js';
 
 /**
  * Glyffiti Genesis Service for ADR-006 Implementation
