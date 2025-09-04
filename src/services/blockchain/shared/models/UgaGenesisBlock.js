@@ -95,28 +95,28 @@ class SecurityUtils {
   static CIPHER_KEY = new Uint8Array([0x47, 0x6C, 0x79, 0x66, 0x66, 0x69, 0x74, 0x69]);
 
   static FIELD_MAP = {
-    // Common fields
-    'kind': 'k',
-    'version': 'v',
-    'timestamp': 't',
-    
-    // G₀ specific
-    'protocol': 'p',
-    'network': 'n',
-    'adr': 'a',
-    
-    // U₀ specific  
-    'username': 'u',
-    'parentGenesis': 'pg',
-    'publicKey': 'pk',
-    
-    // UGA specific
-    'identityRoot': 'ir',
-    'userGraphRoot': 'ugr',
-    'epoch': 'e',
-    'prevUGA': 'pu',
-    'lanes': 'l'
-  };
+  // Common fields - use random letters with no connection
+  'kind': 'q',           
+  'version': 'w',         
+  'timestamp': 'r',      
+  
+  // G₀ specific
+  'protocol': 'x',       
+  'network': 'z',        
+  'adr': 'b',           
+  
+  // U₀ specific  
+  'username': 'c',       
+  'parentGenesis': 'd',  
+  'publicKey': 'f',      
+  
+  // UGA specific
+  'identityRoot': 'g',   
+  'userGraphRoot': 'h',   
+  'epoch': 'j',          
+  'prevUGA': 'k',        
+  'lanes': 'm'           
+};
 
   static REVERSE_FIELD_MAP = Object.fromEntries(
     Object.entries(SecurityUtils.FIELD_MAP).map(([k, v]) => [v, k])
@@ -429,14 +429,38 @@ export class UgaGenesisFactory {
   }
 
   static async parseFromWireData(wireData) {
-    // Peek at the data to determine type
-    // This is a simplified check - you might need more sophisticated type detection
     try {
-      const testGenesis = await GlyffitiGenesisBlockUGA.fromWireData(wireData);
-      return testGenesis;
-    } catch {
-      const testUser = await UserGenesisBlockUGA.fromWireData(wireData);
-      return testUser;
+      if (!wireData || wireData.length < 34 || wireData[0] !== 0x01) {
+        throw new Error('Invalid wire format');
+      }
+      
+      // Extract and decrypt to peek at the kind
+      const integrityHash = wireData.slice(1, 33);
+      const encryptedData = wireData.slice(33);
+      
+      // Verify integrity
+      const hashValid = await SecurityUtils.verifyIntegrityHash(encryptedData, integrityHash);
+      if (!hashValid) {
+        throw new Error('Integrity verification failed');
+      }
+      
+      // Decrypt and decompress to peek at type
+      const compressedData = SecurityUtils.decrypt(encryptedData);
+      const jsonString = CompressionService.decompress(compressedData);
+      const obfuscatedData = JSON.parse(jsonString);
+      const data = SecurityUtils.deobfuscateFields(obfuscatedData);
+      
+      // Route to appropriate parser based on kind
+      if (data.kind === 'glyffiti_genesis') {
+        return await GlyffitiGenesisBlockUGA.fromWireData(wireData);
+      } else if (data.kind === 'user_genesis') {
+        return await UserGenesisBlockUGA.fromWireData(wireData);
+      } else {
+        throw new Error(`Unknown genesis block kind: ${data.kind}`);
+      }
+    } catch (error) {
+      console.error('❌ Error parsing genesis block from wire data:', error);
+      throw new Error('Failed to parse genesis block from wire data: ' + error.message);
     }
   }
 

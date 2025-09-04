@@ -10,7 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import the data model and memo builder utility - NO RUNTIME SERVICES
-import { GlyffitiGenesisBlockUGA, UgaGenesisFactory } from '../../src/services/blockchain/shared/models/UgaGenesisBlock.js';
+import { UgaGenesisFactory } from '../../src/services/blockchain/shared/models/UgaGenesisBlock.js';
 import { SolanaMemoBuilder } from '../../src/services/blockchain/solana/utils/SolanaMemoBuilder.js';
 
 const __filename = fileURLToPath(import.meta.url);

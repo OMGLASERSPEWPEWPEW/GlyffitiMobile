@@ -1,0 +1,12 @@
+{
+  "network": "devnet",
+  "adrVersion": "006",
+  "glyffitiGenesis": {
+    "hash": "12eff8f4965709fcc16df39a2d23bd68a93825a000b2fade4c85eda104373b0a",
+    "transactionId": "3xzZHinQywPwDKiqd2CJ1Zk6LbTJW1sZTgb8oGi6nPXAJd8KiepEA2Hnt2GYTYfYSiRJKG7nrDcdspjd1RSS2sHD",
+    "deployedAt": "2025-09-04T21:02:23.299Z"
+  },
+  "rpcUrl": "https://api.devnet.solana.com",
+  "explorerBaseUrl": "https://explorer.solana.com",
+  "lastUpdated": "2025-09-04T21:23:02.821Z"
+}

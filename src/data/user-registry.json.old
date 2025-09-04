@@ -1,0 +1,48 @@
+{
+  "network": "devnet",
+  "glyffitiGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+  "users": [
+    {
+      "username": "alice",
+      "publicKey": "7mtV5uLWCS81RnTXzRXZapjvskAXEFsm7HLa7gAyG4rd",
+      "transactionHash": "4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-06T21:27:52.155Z",
+      "explorer": "https://explorer.solana.com/tx/4htDXYW1mVL8FN96HAEn3o9U7dN6vssvoYMSNUjz9rkTaQJAMb4pXn3C5a2ezALC8Dy5y5v852KM34yZCbP275b3?cluster=devnet"
+    },
+    {
+      "username": "bob",
+      "publicKey": "2AdtJ6QgCTjNBSR2cn6K1SphaGHHrhYpfqSBGG6MrW7W",
+      "transactionHash": "5WdT9AaWrfMCcyErBtaN7VBvANQiHynQSjHXQQrU2x7ZEqrnmDgGMh8XykPeZSV5LSfBchtqFY3AxqW1NLigerJz",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-07T21:08:14.931Z",
+      "explorer": "https://explorer.solana.com/tx/5WdT9AaWrfMCcyErBtaN7VBvANQiHynQSjHXQQrU2x7ZEqrnmDgGMh8XykPeZSV5LSfBchtqFY3AxqW1NLigerJz?cluster=devnet"
+    },
+    {
+      "username": "eve",
+      "publicKey": "9WAMpMNQxjKBBPsvjNR4qs7MwpwNyDNrRyEmBc5Paj4H",
+      "transactionHash": "3b8MY32jpMAsbNttA5RKDzFuuTLAPJmSspjrjxePV18SR7wLjxvcqTQuLCiUW6CKfvSEAMZVaM97TAgqLKxyqBdQ",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-07T21:08:31.724Z",
+      "explorer": "https://explorer.solana.com/tx/3b8MY32jpMAsbNttA5RKDzFuuTLAPJmSspjrjxePV18SR7wLjxvcqTQuLCiUW6CKfvSEAMZVaM97TAgqLKxyqBdQ?cluster=devnet"
+    },
+    {
+      "username": "Roy",
+      "publicKey": "FwRVeUuGfX56r3fXuCR7Aa8hsY5w1kfAL8ehG2nBbXTS",
+      "transactionHash": "5QGkYxdkWFVVpju34zTaZSRz7LGvCHphYJjg4KGAk4vsgukcirBhdsjp51fbohEqLUh9ZdBGHKzYZejFGh7PF91K",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-09T21:33:37.761Z",
+      "explorer": "https://explorer.solana.com/tx/5QGkYxdkWFVVpju34zTaZSRz7LGvCHphYJjg4KGAk4vsgukcirBhdsjp51fbohEqLUh9ZdBGHKzYZejFGh7PF91K?cluster=devnet"
+    },
+    {
+      "username": "David",
+      "publicKey": "FxS7qnbva5WgSxaZJ4fKgH26qB2HJUAfjtQqeZcGUKUx",
+      "transactionHash": "PZGQ6GXcRbzvBeiZzbSJu8Nd14jqq1syuaNcbPoKTdkb1raHgnsoFbrZB4QB4F3NvThXjUbarmBxLAt4tpnvURQ",
+      "parentGenesis": "3gR3czdawhptXjPhzbMDtys9S6UYDE7XQNFEA1T1nqPcRYKpmCBL7Dw8ew43KCHjtFmHPEzUQuB7LJcYT8Tc9oYL",
+      "createdAt": "2025-08-09T21:48:53.068Z",
+      "explorer": "https://explorer.solana.com/tx/PZGQ6GXcRbzvBeiZzbSJu8Nd14jqq1syuaNcbPoKTdkb1raHgnsoFbrZB4QB4F3NvThXjUbarmBxLAt4tpnvURQ?cluster=devnet"
+    }
+  ],
+  "createdAt": "2025-08-06T21:27:43.472Z",
+  "lastUpdated": "2025-08-09T21:48:53.068Z"
+}

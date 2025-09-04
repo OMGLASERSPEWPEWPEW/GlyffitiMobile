@@ -1,7 +1,7 @@
 // src/services/blockchain/solana/utils/SolanaMemoBuilder.js  
 // Path: src/services/blockchain/solana/utils/SolanaMemoBuilder.js
 import { Connection, Transaction, TransactionInstruction, PublicKey, Keypair } from '@solana/web3.js';
-import { GlyffitiGenesisBlock, UserGenesisBlock, GenesisBlockFactory } from '../../shared/models/GenesisBlock.js';
+import { GlyffitiGenesisBlockUGA, UserGenesisBlockUGA, UgaGenesisFactory } from '../../shared/models/UgaGenesisBlock.js';
 import { CompressionService } from '../../../compression/CompressionService.js';
 import bs58 from 'bs58';
 
@@ -40,7 +40,7 @@ export class SolanaMemoBuilder {
       }
 
       // Create the genesis block
-      const genesisBlock = new GlyffitiGenesisBlock();
+      const genesisBlock = new GlyffitiGenesisBlockUGA();
       
       // Get secure wire format data (async due to encryption)
       const wireData = await genesisBlock.toMemoData();
@@ -79,7 +79,7 @@ export class SolanaMemoBuilder {
       }
 
       // Create user genesis block
-      const userGenesis = new UserGenesisBlock(alias, glyffitiGenesisHash, userKeypair.publicKey.toBase58());
+      const userGenesis = new UserGenesisBlockUGA(alias, glyffitiGenesisHash, userKeypair.publicKey.toBase58());
       
       // Get secure wire format data
       const wireData = await userGenesis.toMemoData();
@@ -184,7 +184,7 @@ export class SolanaMemoBuilder {
       }
 
       // Finally parse it
-      return await GenesisBlockFactory.parseFromWireData(wireData);
+      return await UgaGenesisFactory.parseFromWireData(wireData);
 
     } catch (error) {
       console.error('❌ Error reading secure genesis from transaction:', error);
@@ -199,7 +199,7 @@ export class SolanaMemoBuilder {
    */
   async parseGenesisFromWireData(wireData) {
     try {
-      return await GenesisBlockFactory.parseFromWireData(wireData);
+      return await UgaGenesisFactory.parseFromWireData(wireData);
     } catch (error) {
       console.error('❌ Error parsing secure genesis from wire data:', error);
       throw new Error('Failed to parse secure genesis from wire data: ' + error.message);
@@ -376,7 +376,7 @@ export class SolanaMemoBuilder {
       }
       
       // Test 6: Genesis block factory integration
-      const factoryTest = await GenesisBlockFactory.runSelfTest();
+      const factoryTest = await UgaGenesisFactory.runSelfTest();
       if (!factoryTest) {
         throw new Error('Genesis block factory test failed');
       }
