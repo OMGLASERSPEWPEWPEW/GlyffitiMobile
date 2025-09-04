@@ -91,7 +91,9 @@ UGRᵢ is a fixed-shape Merkle whose children are ((in order, expanded to 32 lan
 6. `PROFILE` lane root
 7. `REVOCATIONS` lane root
 8. `BOOKMARKS` lane root (formerly `RESERVED`)
-9. ... 32. `RESERVED` (zero-hash sentinels for forward compatibility)
+9. `RESERVED_8` through `RESERVED_31` (zero-hash sentinels for forward compatibility)
+
+The UGR structure is expanded to 32 lanes (a power of 2) to provide substantial room for future social graph features while maintaining efficient Merkle tree operations.
 
 Each lane root is itself a Merkle over chunk roots (Chunked Merkle Array, CMA). Each chunk is a Merkle over items (append-only), and items include prev pointers for streaming UX.
 
@@ -122,11 +124,12 @@ H("ITEM\0" || "REVO" || targetKind || targetId || reasonHash || timestamp)
 
 Chunk roots: H("CHNK\0" || MerkleRoot(items_in_chunk))
 Lane roots: H("LANE\0" || MerkleRoot(chunkRoots))
-UGR: H("UGR \0" || MerkleRoot(8 lane roots in order))
-
-Note: bodyHash, metaHash, and story content remain in off-chain storage (object store/IPFS/Arweave). Only roots/IDs go on chain.
-
 UGR: H("UGR \0" || MerkleRoot(32 lane roots in order))
+
+<!-- Note: bodyHash, metaHash, and story content may go to off-chain storage (object store/IPFS/Arweave) and only roots/IDs go on chain.
+But for now, bodyHash, metaHash, and story content all go on Solana Memo field like everything else -->
+
+
 
 3.4 On-chain Commitments (normative)
 
